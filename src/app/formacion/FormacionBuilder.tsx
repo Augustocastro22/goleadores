@@ -24,6 +24,12 @@ interface Slot {
   role: "GK" | "LINE";
 }
 
+type Seleccion =
+  | { origen: "roster"; jugadorId: string }
+  | { origen: "slot"; jugadorId: string; slotId: string };
+
+const DRAG_THRESHOLD = 8;
+
 function parseFormacion(input: string): number[] | null {
   const partes = input
     .split(/[^0-9]+/)
@@ -102,6 +108,16 @@ function dibujarCancha(ctx: CanvasRenderingContext2D) {
   ctx.strokeRect(CANVAS_W / 2 - smallW / 2, CANVAS_H - margin - smallH, smallW, smallH);
 }
 
+function cargarImagen(url: string): Promise<HTMLImageElement | null> {
+  return new Promise((resolve) => {
+    const img = new window.Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => resolve(img);
+    img.onerror = () => resolve(null);
+    img.src = url;
+  });
+}
+
 export default function FormacionBuilder({ jugadores }: { jugadores: Profile[] }) {
   const [futbol, setFutbol] = useState<number>(5);
   const [formacionStr, setFormacionStr] = useState<string>(FORMACIONES_PRESET[5][0]);
@@ -109,10 +125,17 @@ export default function FormacionBuilder({ jugadores }: { jugadores: Profile[] }
   const [usandoCustom, setUsandoCustom] = useState(false);
   const [customError, setCustomError] = useState<string | null>(null);
   const [asignaciones, setAsignaciones] = useState<Record<string, string>>({});
-  const [seleccionado, setSeleccionado] = useState<string | null>(null);
-  const [drag, setDrag] = useState<{ jugadorId: string; pointerId: number; x: number; y: number } | null>(
-    null
-  );
+  const [seleccionado, setSeleccionado] = useState<Seleccion | null>(null);
+  const [descargando, setDescargando] = useState(false);
+  const [drag, setDrag] = useState<{
+    jugadorId: string;
+    origenSlotId: string | null;
+    pointerId: number;
+    startX: number;
+    startY: number;
+    x: number;
+    y: number;
+  } | null>(null);
 
   const wrapperRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -170,8 +193,33 @@ export default function FormacionBuilder({ jugadores }: { jugadores: Profile[] }
     setSeleccionado(null);
   }
 
-  function asignar(slotId: string, jugadorId: string) {
-    setAsignaciones((prev) => ({ ...prev, [slotId]: jugadorId }));
+  function moverJugador(jugadorId: string, origenSlotId: string | null, destinoSlotId: string) {
+    if (origenSlotId === destinoSlotId) {
+      setSeleccionado(null);
+      return;
+    }
+    setAsignaciones((prev) => {
+      const next = { ...prev };
+      const ocupanteDestino = next[destinoSlotId];
+      if (origenSlotId) {
+        if (ocupanteDestino) {
+          next[origenSlotId] = ocupanteDestino;
+        } else {
+          delete next[origenSlotId];
+        }
+      }
+      next[destinoSlotId] = jugadorId;
+      return next;
+    });
+    setSeleccionado(null);
+  }
+
+  function sacarDeCancha(slotId: string) {
+    setAsignaciones((prev) => {
+      const next = { ...prev };
+      delete next[slotId];
+      return next;
+    });
     setSeleccionado(null);
   }
 
@@ -181,26 +229,45 @@ export default function FormacionBuilder({ jugadores }: { jugadores: Profile[] }
   }
 
   function handleChipClick(jugadorId: string) {
-    setSeleccionado((prev) => (prev === jugadorId ? null : jugadorId));
+    setSeleccionado((prev) =>
+      prev && prev.origen === "roster" && prev.jugadorId === jugadorId
+        ? null
+        : { origen: "roster", jugadorId }
+    );
   }
 
   function handleSlotClick(slotId: string) {
-    if (asignaciones[slotId]) {
-      setAsignaciones((prev) => {
-        const next = { ...prev };
-        delete next[slotId];
-        return next;
-      });
+    const ocupante = asignaciones[slotId];
+
+    if (seleccionado) {
+      if (seleccionado.origen === "slot" && seleccionado.slotId === slotId) {
+        setSeleccionado(null);
+        return;
+      }
+      moverJugador(
+        seleccionado.jugadorId,
+        seleccionado.origen === "slot" ? seleccionado.slotId : null,
+        slotId
+      );
       return;
     }
-    if (seleccionado) {
-      asignar(slotId, seleccionado);
+
+    if (ocupante) {
+      setSeleccionado({ origen: "slot", jugadorId: ocupante, slotId });
     }
   }
 
-  function handleChipPointerDown(e: React.PointerEvent, jugadorId: string) {
+  function iniciarDrag(e: React.PointerEvent, jugadorId: string, origenSlotId: string | null) {
     (e.target as Element).setPointerCapture(e.pointerId);
-    setDrag({ jugadorId, pointerId: e.pointerId, x: e.clientX, y: e.clientY });
+    setDrag({
+      jugadorId,
+      origenSlotId,
+      pointerId: e.pointerId,
+      startX: e.clientX,
+      startY: e.clientY,
+      x: e.clientX,
+      y: e.clientY,
+    });
   }
 
   function handleWrapperPointerMove(e: React.PointerEvent) {
@@ -210,74 +277,113 @@ export default function FormacionBuilder({ jugadores }: { jugadores: Profile[] }
 
   function handleWrapperPointerUp(e: React.PointerEvent) {
     if (!drag || e.pointerId !== drag.pointerId) return;
-    const el = document.elementFromPoint(e.clientX, e.clientY);
-    const slotEl = el?.closest<HTMLElement>("[data-slot-id]");
-    if (slotEl) {
-      asignar(slotEl.dataset.slotId!, drag.jugadorId);
+    const distancia = Math.hypot(e.clientX - drag.startX, e.clientY - drag.startY);
+
+    if (distancia > DRAG_THRESHOLD) {
+      const el = document.elementFromPoint(e.clientX, e.clientY);
+      const slotEl = el?.closest<HTMLElement>("[data-slot-id]");
+      if (slotEl) {
+        moverJugador(drag.jugadorId, drag.origenSlotId, slotEl.dataset.slotId!);
+      } else if (drag.origenSlotId) {
+        sacarDeCancha(drag.origenSlotId);
+      }
     }
     setDrag(null);
   }
 
-  function descargarImagen() {
+  async function descargarImagen() {
     const canvas = canvasRef.current;
-    if (!canvas) return;
-    canvas.width = CANVAS_W;
-    canvas.height = CANVAS_H;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
+    if (!canvas || descargando) return;
+    setDescargando(true);
 
-    dibujarCancha(ctx);
+    try {
+      canvas.width = CANVAS_W;
+      canvas.height = CANVAS_H;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return;
 
-    ctx.fillStyle = "rgba(0,0,0,0.55)";
-    ctx.fillRect(0, 0, CANVAS_W, 70);
-    ctx.fillStyle = "white";
-    ctx.font = "bold 34px sans-serif";
-    ctx.textAlign = "center";
-    ctx.fillText(`Fútbol ${futbol} · ${lineas.join("-")}`, CANVAS_W / 2, 47);
+      const imagenesPorSlot = new Map<string, HTMLImageElement>();
+      await Promise.all(
+        slots.map(async (slot) => {
+          const jugadorId = asignaciones[slot.id];
+          const jugador = jugadorId ? jugadorPorId.get(jugadorId) : undefined;
+          if (!jugador?.foto_url) return;
+          const img = await cargarImagen(jugador.foto_url);
+          if (img) imagenesPorSlot.set(slot.id, img);
+        })
+      );
 
-    slots.forEach((slot) => {
-      const px = (slot.xPct / 100) * CANVAS_W;
-      const py = (slot.yPct / 100) * CANVAS_H;
-      const jugadorId = asignaciones[slot.id];
-      const jugador = jugadorId ? jugadorPorId.get(jugadorId) : undefined;
-      const radius = 46;
+      dibujarCancha(ctx);
 
-      ctx.beginPath();
-      ctx.arc(px, py, radius, 0, Math.PI * 2);
-      ctx.fillStyle = jugador ? "#e11d48" : "rgba(255,255,255,0.15)";
-      ctx.fill();
-      ctx.lineWidth = 4;
-      ctx.strokeStyle = "white";
-      ctx.stroke();
-
+      ctx.fillStyle = "rgba(0,0,0,0.55)";
+      ctx.fillRect(0, 0, CANVAS_W, 70);
       ctx.fillStyle = "white";
       ctx.font = "bold 34px sans-serif";
       ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
-      ctx.fillText(
-        jugador ? jugador.apodo.slice(0, 1).toUpperCase() : slot.role === "GK" ? "A" : "?",
-        px,
-        py + 2
+      ctx.fillText(`Fútbol ${futbol} · ${lineas.join("-")}`, CANVAS_W / 2, 47);
+
+      slots.forEach((slot) => {
+        const px = (slot.xPct / 100) * CANVAS_W;
+        const py = (slot.yPct / 100) * CANVAS_H;
+        const jugadorId = asignaciones[slot.id];
+        const jugador = jugadorId ? jugadorPorId.get(jugadorId) : undefined;
+        const foto = imagenesPorSlot.get(slot.id);
+        const radius = 46;
+
+        if (jugador && foto) {
+          ctx.save();
+          ctx.beginPath();
+          ctx.arc(px, py, radius, 0, Math.PI * 2);
+          ctx.closePath();
+          ctx.clip();
+          ctx.drawImage(foto, px - radius, py - radius, radius * 2, radius * 2);
+          ctx.restore();
+          ctx.beginPath();
+          ctx.arc(px, py, radius, 0, Math.PI * 2);
+          ctx.lineWidth = 4;
+          ctx.strokeStyle = "white";
+          ctx.stroke();
+        } else {
+          ctx.beginPath();
+          ctx.arc(px, py, radius, 0, Math.PI * 2);
+          ctx.fillStyle = jugador ? "#e11d48" : "rgba(255,255,255,0.15)";
+          ctx.fill();
+          ctx.lineWidth = 4;
+          ctx.strokeStyle = "white";
+          ctx.stroke();
+
+          ctx.fillStyle = "white";
+          ctx.font = "bold 34px sans-serif";
+          ctx.textAlign = "center";
+          ctx.textBaseline = "middle";
+          ctx.fillText(
+            jugador ? jugador.apodo.slice(0, 1).toUpperCase() : slot.role === "GK" ? "A" : "?",
+            px,
+            py + 2
+          );
+        }
+
+        const label = jugador ? jugador.apodo : slot.role === "GK" ? "Arquero" : "";
+        if (label) {
+          ctx.font = "bold 22px sans-serif";
+          ctx.textAlign = "center";
+          const textWidth = ctx.measureText(label).width;
+          ctx.fillStyle = "rgba(0,0,0,0.6)";
+          ctx.fillRect(px - textWidth / 2 - 8, py + radius + 8, textWidth + 16, 30);
+          ctx.fillStyle = "white";
+          ctx.textBaseline = "middle";
+          ctx.fillText(label, px, py + radius + 23);
+        }
+      });
+
+      ctx.fillStyle = "rgba(255,255,255,0.55)";
+      ctx.font = "20px sans-serif";
+      ctx.textAlign = "right";
+      ctx.fillText("Goleadores ⚽", CANVAS_W - 24, CANVAS_H - 20);
+
+      const blob = await new Promise<Blob | null>((resolve) =>
+        canvas.toBlob(resolve, "image/png")
       );
-
-      const label = jugador ? jugador.apodo : slot.role === "GK" ? "Arquero" : "";
-      if (label) {
-        ctx.font = "bold 22px sans-serif";
-        const textWidth = ctx.measureText(label).width;
-        ctx.fillStyle = "rgba(0,0,0,0.6)";
-        ctx.fillRect(px - textWidth / 2 - 8, py + radius + 8, textWidth + 16, 30);
-        ctx.fillStyle = "white";
-        ctx.textBaseline = "middle";
-        ctx.fillText(label, px, py + radius + 23);
-      }
-    });
-
-    ctx.fillStyle = "rgba(255,255,255,0.55)";
-    ctx.font = "20px sans-serif";
-    ctx.textAlign = "right";
-    ctx.fillText("Goleadores ⚽", CANVAS_W - 24, CANVAS_H - 20);
-
-    canvas.toBlob((blob) => {
       if (!blob) return;
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
@@ -285,7 +391,9 @@ export default function FormacionBuilder({ jugadores }: { jugadores: Profile[] }
       a.download = `formacion-futbol${futbol}-${lineas.join("-")}.png`;
       a.click();
       URL.revokeObjectURL(url);
-    }, "image/png");
+    } finally {
+      setDescargando(false);
+    }
   }
 
   const jugadorArrastrado = drag ? jugadorPorId.get(drag.jugadorId) : undefined;
@@ -378,17 +486,33 @@ export default function FormacionBuilder({ jugadores }: { jugadores: Profile[] }
         {slots.map((slot) => {
           const jugadorId = asignaciones[slot.id];
           const jugador = jugadorId ? jugadorPorId.get(jugadorId) : undefined;
+          const seleccionadoAca =
+            seleccionado?.origen === "slot" && seleccionado.slotId === slot.id;
           return (
             <div
               key={slot.id}
               data-slot-id={slot.id}
               onClick={() => handleSlotClick(slot.id)}
+              onPointerDown={
+                jugador ? (e) => iniciarDrag(e, jugador.id, slot.id) : undefined
+              }
               className="absolute flex -translate-x-1/2 -translate-y-1/2 cursor-pointer flex-col items-center gap-1"
-              style={{ left: `${slot.xPct}%`, top: `${slot.yPct}%` }}
+              style={{
+                left: `${slot.xPct}%`,
+                top: `${slot.yPct}%`,
+                touchAction: jugador ? "none" : undefined,
+              }}
             >
               {jugador ? (
                 <>
-                  <Avatar src={jugador.foto_url} alt={jugador.apodo} size={40} className="ring-2 ring-white/60" />
+                  <Avatar
+                    src={jugador.foto_url}
+                    alt={jugador.apodo}
+                    size={40}
+                    className={`ring-2 select-none ${
+                      seleccionadoAca ? "ring-primary-400" : "ring-white/60"
+                    }`}
+                  />
                   <span className="rounded bg-black/60 px-1.5 py-0.5 text-[10px] font-semibold whitespace-nowrap text-white">
                     {jugador.apodo}
                   </span>
@@ -404,17 +528,29 @@ export default function FormacionBuilder({ jugadores }: { jugadores: Profile[] }
       </div>
 
       <Card className="p-4">
-        <div className="mb-3 flex items-center justify-between">
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
           <p className="text-xs font-semibold tracking-wide text-zinc-400 uppercase">
-            Plantel disponible {seleccionado ? "· tocá una posición para ubicarlo" : ""}
+            Plantel disponible{" "}
+            {seleccionado ? "· tocá una posición para ubicarlo o moverlo" : ""}
           </p>
-          <button
-            type="button"
-            onClick={limpiarCancha}
-            className="flex items-center gap-1 text-xs font-medium text-zinc-500 hover:text-danger-400"
-          >
-            <IconTrash className="h-3.5 w-3.5" /> Limpiar
-          </button>
+          <div className="flex items-center gap-3">
+            {seleccionado?.origen === "slot" && (
+              <button
+                type="button"
+                onClick={() => sacarDeCancha(seleccionado.slotId)}
+                className="text-xs font-medium text-primary-400 hover:text-primary-300"
+              >
+                Sacar de la cancha
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={limpiarCancha}
+              className="flex items-center gap-1 text-xs font-medium text-zinc-500 hover:text-danger-400"
+            >
+              <IconTrash className="h-3.5 w-3.5" /> Limpiar
+            </button>
+          </div>
         </div>
         {disponibles.length === 0 ? (
           <p className="py-2 text-sm text-zinc-500">Todos ubicados en la cancha.</p>
@@ -425,10 +561,10 @@ export default function FormacionBuilder({ jugadores }: { jugadores: Profile[] }
                 key={j.id}
                 type="button"
                 onClick={() => handleChipClick(j.id)}
-                onPointerDown={(e) => handleChipPointerDown(e, j.id)}
+                onPointerDown={(e) => iniciarDrag(e, j.id, null)}
                 style={{ touchAction: "pan-x" }}
                 className={`flex shrink-0 flex-col items-center gap-1 rounded-xl border px-2 py-2 transition select-none ${
-                  seleccionado === j.id
+                  seleccionado?.origen === "roster" && seleccionado.jugadorId === j.id
                     ? "border-primary-500/50 bg-primary-500/10"
                     : "border-transparent hover:border-border"
                 }`}
@@ -441,8 +577,8 @@ export default function FormacionBuilder({ jugadores }: { jugadores: Profile[] }
         )}
       </Card>
 
-      <Button type="button" onClick={descargarImagen} className="w-full">
-        <IconDownload className="h-4 w-4" /> Descargar imagen
+      <Button type="button" onClick={descargarImagen} disabled={descargando} className="w-full">
+        <IconDownload className="h-4 w-4" /> {descargando ? "Generando imagen..." : "Descargar imagen"}
       </Button>
 
       <canvas ref={canvasRef} className="hidden" />
