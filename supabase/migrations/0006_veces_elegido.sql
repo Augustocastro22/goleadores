@@ -7,6 +7,9 @@
 -- get_ganadores_votacion (el ganador de UN partido puntual) no cambia: ahí
 -- sigue siendo correcto mostrar la cantidad de votos de ese partido.
 
+drop function if exists public.get_goleadores();
+drop function if exists public.get_ranking_votos(public.voto_tipo);
+
 create or replace function public.get_goleadores()
 returns table (
   jugador_id uuid,
