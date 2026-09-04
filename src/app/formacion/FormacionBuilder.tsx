@@ -426,7 +426,7 @@ export default function FormacionBuilder({ jugadores }: { jugadores: Profile[] }
                 type="button"
                 onClick={() => handleChipClick(j.id)}
                 onPointerDown={(e) => handleChipPointerDown(e, j.id)}
-                style={{ touchAction: "none" }}
+                style={{ touchAction: "pan-x" }}
                 className={`flex shrink-0 flex-col items-center gap-1 rounded-xl border px-2 py-2 transition select-none ${
                   seleccionado === j.id
                     ? "border-primary-500/50 bg-primary-500/10"
