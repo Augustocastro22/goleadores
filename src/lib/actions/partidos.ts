@@ -66,69 +66,57 @@ export async function createPartido(formData: FormData) {
   redirect(`/partidos/${partido.id}`);
 }
 
-export async function setGolesRival(formData: FormData) {
+export async function deletePartido(formData: FormData) {
   const { supabase, isAdmin } = await requireAdmin();
-  if (!isAdmin) return { error: "Solo el admin puede cargar el resultado." };
+  if (!isAdmin) return { error: "Solo el admin puede borrar partidos." };
 
   const partidoId = String(formData.get("partido_id") ?? "");
-  const golesRival = Number(formData.get("goles_rival") ?? 0);
+  if (!partidoId) return { error: "Partido inválido." };
 
-  if (!partidoId || Number.isNaN(golesRival) || golesRival < 0) {
-    return { error: "Goles del rival inválidos." };
-  }
-
-  const { error } = await supabase
-    .from("partidos")
-    .update({ goles_rival: golesRival })
-    .eq("id", partidoId);
-
+  const { error } = await supabase.from("partidos").delete().eq("id", partidoId);
   if (error) return { error: error.message };
 
-  revalidatePath(`/partidos/${partidoId}`);
-  return { success: true };
+  revalidatePath("/partidos");
+  revalidatePath("/estadisticas");
+  redirect("/partidos");
 }
 
-export async function setGolesOtros(formData: FormData) {
-  const { supabase, isAdmin } = await requireAdmin();
-  if (!isAdmin) return { error: "Solo el admin puede cargar los goles de otros." };
-
-  const partidoId = String(formData.get("partido_id") ?? "");
-  const golesOtros = Number(formData.get("goles_otros") ?? 0);
-
-  if (!partidoId || Number.isNaN(golesOtros) || golesOtros < 0) {
-    return { error: "Goles de otros inválidos." };
-  }
-
-  const { error } = await supabase
-    .from("partidos")
-    .update({ goles_otros: golesOtros })
-    .eq("id", partidoId);
-
-  if (error) return { error: error.message };
-
-  revalidatePath(`/partidos/${partidoId}`);
-  return { success: true };
+export interface GolesInput {
+  partidoId: string;
+  goles: { jugadorId: string; goles: number }[];
+  golesOtros: number;
+  golesRival: number;
 }
 
-export async function setGoles(formData: FormData) {
+export async function guardarGolesPartido({ partidoId, goles, golesOtros, golesRival }: GolesInput) {
   const { supabase, isAdmin } = await requireAdmin();
   if (!isAdmin) return { error: "Solo el admin puede cargar goles." };
 
-  const partidoId = String(formData.get("partido_id") ?? "");
-  const jugadorId = String(formData.get("jugador_id") ?? "");
-  const goles = Number(formData.get("goles") ?? 0);
-
-  if (!partidoId || !jugadorId || Number.isNaN(goles) || goles < 0) {
+  if (
+    !partidoId ||
+    Number.isNaN(golesOtros) ||
+    golesOtros < 0 ||
+    Number.isNaN(golesRival) ||
+    golesRival < 0 ||
+    goles.some((g) => Number.isNaN(g.goles) || g.goles < 0)
+  ) {
     return { error: "Datos de goles inválidos." };
   }
 
-  const { error } = await supabase
-    .from("partido_jugadores")
-    .update({ goles })
-    .eq("partido_id", partidoId)
-    .eq("jugador_id", jugadorId);
+  for (const { jugadorId, goles: cantidad } of goles) {
+    const { error } = await supabase
+      .from("partido_jugadores")
+      .update({ goles: cantidad })
+      .eq("partido_id", partidoId)
+      .eq("jugador_id", jugadorId);
+    if (error) return { error: error.message };
+  }
 
-  if (error) return { error: error.message };
+  const { error: partidoError } = await supabase
+    .from("partidos")
+    .update({ goles_otros: golesOtros, goles_rival: golesRival })
+    .eq("id", partidoId);
+  if (partidoError) return { error: partidoError.message };
 
   revalidatePath(`/partidos/${partidoId}`);
   revalidatePath("/estadisticas");

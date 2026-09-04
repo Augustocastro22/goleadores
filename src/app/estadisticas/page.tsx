@@ -13,33 +13,11 @@ export default async function EstadisticasPage() {
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const [goleadores, mvp, peor, ultimoPartido] = await Promise.all([
+  const [goleadores, mvp, peor] = await Promise.all([
     supabase.rpc("get_goleadores"),
     supabase.rpc("get_ranking_votos", { p_tipo: "MVP" }),
     supabase.rpc("get_ranking_votos", { p_tipo: "PEOR" }),
-    supabase
-      .from("partidos")
-      .select("id")
-      .order("fecha", { ascending: false })
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle(),
   ]);
-
-  const votosUltimoMvp: Record<string, number> = {};
-  const votosUltimoPeor: Record<string, number> = {};
-
-  if (ultimoPartido.data) {
-    const { data: votosUltimo } = await supabase
-      .from("votos")
-      .select("jugador_votado_id, tipo")
-      .eq("partido_id", ultimoPartido.data.id);
-
-    for (const v of votosUltimo ?? []) {
-      const bucket = v.tipo === "MVP" ? votosUltimoMvp : votosUltimoPeor;
-      bucket[v.jugador_votado_id] = (bucket[v.jugador_votado_id] ?? 0) + 1;
-    }
-  }
 
   return (
     <div className="flex flex-col gap-8">
@@ -57,20 +35,18 @@ export default async function EstadisticasPage() {
         icon={IconTrophy}
         iconClassName="bg-gold-500/15 text-gold-400"
         rows={(mvp.data ?? []) as RankingRow[]}
-        valueKey="votos"
-        valueLabel="Votos"
+        valueKey="veces_elegido"
+        valueLabel="Veces"
         onlyLideres
-        ultimoPartidoVotos={ultimoPartido.data ? votosUltimoMvp : undefined}
       />
       <RankingList
         titulo="Peor Jugador"
         icon={IconThumbsDown}
         iconClassName="bg-danger-500/15 text-danger-400"
         rows={(peor.data ?? []) as RankingRow[]}
-        valueKey="votos"
-        valueLabel="Votos"
+        valueKey="veces_elegido"
+        valueLabel="Veces"
         onlyLideres
-        ultimoPartidoVotos={ultimoPartido.data ? votosUltimoPeor : undefined}
       />
     </div>
   );
@@ -90,16 +66,14 @@ function RankingList({
   valueKey,
   valueLabel,
   onlyLideres = false,
-  ultimoPartidoVotos,
 }: {
   titulo: string;
   icon: ComponentType<SVGProps<SVGSVGElement>>;
   iconClassName: string;
   rows: RankingRow[];
-  valueKey: "goles" | "votos";
+  valueKey: "goles" | "veces_elegido";
   valueLabel: string;
   onlyLideres?: boolean;
-  ultimoPartidoVotos?: Record<string, number>;
 }) {
   let ordenadas = [...rows]
     .filter((r) => (r[valueKey] ?? 0) > 0)
@@ -143,23 +117,15 @@ function RankingList({
                 <p className="truncate font-medium text-white">
                   {row.nombre} {row.apellido}
                 </p>
-                <p className="truncate text-xs text-zinc-500">{row.apodo}</p>
+                <p className="truncate text-xs text-zinc-500">
+                  {row.apodo} · {row.partidos_jugados ?? 0}{" "}
+                  {row.partidos_jugados === 1 ? "partido" : "partidos"}
+                </p>
               </div>
               <div className="flex shrink-0 items-center gap-1">
                 <span className="text-lg font-bold tabular-nums text-white">{row[valueKey]}</span>
                 <span className="hidden text-xs text-zinc-600 sm:inline">{valueLabel}</span>
               </div>
-              {ultimoPartidoVotos && (
-                <span
-                  title="Votos en el último partido"
-                  className="flex h-9 w-9 shrink-0 flex-col items-center justify-center rounded-lg bg-white/5 leading-none"
-                >
-                  <span className="text-sm font-bold text-white">
-                    {ultimoPartidoVotos[row.jugador_id] ?? 0}
-                  </span>
-                  <span className="text-[9px] text-zinc-500">últ.</span>
-                </span>
-              )}
             </div>
           ))}
         </Card>

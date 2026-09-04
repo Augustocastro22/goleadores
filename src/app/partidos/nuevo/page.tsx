@@ -4,8 +4,8 @@ import { createPartido } from "@/lib/actions/partidos";
 import type { Profile } from "@/lib/types";
 import Card from "@/components/ui/Card";
 import { Input, Label } from "@/components/ui/Input";
-import Button from "@/components/ui/Button";
 import Avatar from "@/components/ui/Avatar";
+import SubmitButton from "@/components/SubmitButton";
 
 export default async function NuevoPartidoPage() {
   const supabase = await createClient();
@@ -86,9 +86,9 @@ export default async function NuevoPartidoPage() {
             </div>
           </div>
 
-          <Button type="submit" className="mt-2">
+          <SubmitButton pendingText="Creando..." className="mt-2">
             Crear partido
-          </Button>
+          </SubmitButton>
         </form>
       </Card>
     </div>

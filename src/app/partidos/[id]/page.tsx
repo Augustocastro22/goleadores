@@ -1,13 +1,14 @@
 import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { setGoles, setGolesOtros, setGolesRival } from "@/lib/actions/partidos";
+import { deletePartido } from "@/lib/actions/partidos";
 import { votar } from "@/lib/actions/votos";
 import { votacionCerrada } from "@/lib/votacion";
-import type { EstadoVotacion, Profile } from "@/lib/types";
+import type { EstadoVotacion, Profile, RankingRow } from "@/lib/types";
 import Card from "@/components/ui/Card";
-import Avatar from "@/components/ui/Avatar";
 import Button from "@/components/ui/Button";
-import { IconChevronRight, IconGoal } from "@/components/icons";
+import ConfirmSubmitButton from "@/components/ConfirmSubmitButton";
+import { IconChevronRight } from "@/components/icons";
+import GolesEditor from "./GolesEditor";
 
 interface ParticipanteRow {
   jugador_id: string;
@@ -75,8 +76,16 @@ export default async function PartidoDetailPage({
     votosPeor,
   });
 
-  const golesEquipo1 = equipo1.reduce((total, p) => total + p.goles, 0) + partido.goles_otros;
-  const golesEquipo2 = equipo2.reduce((total, p) => total + p.goles, 0) + partido.goles_rival;
+  let ganadoresMvp: RankingRow[] = [];
+  let ganadoresPeor: RankingRow[] = [];
+  if (cerrada) {
+    const [mvpRes, peorRes] = await Promise.all([
+      supabase.rpc("get_ganadores_votacion", { p_partido_id: id, p_tipo: "MVP" }),
+      supabase.rpc("get_ganadores_votacion", { p_partido_id: id, p_tipo: "PEOR" }),
+    ]);
+    ganadoresMvp = (mvpRes.data ?? []) as RankingRow[];
+    ganadoresPeor = (peorRes.data ?? []) as RankingRow[];
+  }
 
   const fecha = new Date(partido.fecha + "T00:00:00").toLocaleDateString("es-AR", {
     weekday: "long",
@@ -84,186 +93,89 @@ export default async function PartidoDetailPage({
     month: "long",
   });
 
+  const toJugador = (p: ParticipanteRow) => ({
+    jugadorId: p.jugador_id,
+    nombre: p.profiles.nombre,
+    apellido: p.profiles.apellido,
+    apodo: p.profiles.apodo,
+    fotoUrl: p.profiles.foto_url,
+    goles: p.goles,
+  });
+
   return (
     <div className="flex flex-col gap-8">
-      <Card className="p-6">
-        <div className="flex items-center justify-between gap-2 text-xs font-medium text-zinc-500">
-          <span className="truncate capitalize">{fecha}</span>
-          <span className="truncate">{partido.lugar}</span>
-        </div>
-        <div className="mt-4 flex items-center justify-center gap-4 sm:gap-6">
-          <p className="flex-1 truncate text-right text-sm font-semibold text-zinc-300 sm:text-base">
-            Nosotros
-          </p>
-          <div className="flex shrink-0 items-center gap-3 rounded-2xl bg-white/5 px-5 py-2.5">
-            <span className="text-3xl font-extrabold tabular-nums text-white">{golesEquipo1}</span>
-            <span className="text-lg font-bold text-zinc-600">–</span>
-            <span className="text-3xl font-extrabold tabular-nums text-white">{golesEquipo2}</span>
-          </div>
-          <p className="flex-1 truncate text-left text-sm font-semibold text-zinc-300 sm:text-base">
-            {partido.rival}
-          </p>
-        </div>
-      </Card>
-
-      <section className="flex flex-col gap-6">
-        <div>
-          <h2 className="mb-3 flex items-center gap-2 text-lg font-bold text-white">
-            <IconGoal className="h-5 w-5 text-primary-400" /> Goles · Equipo 1 (Nosotros)
-          </h2>
-          <Card className="divide-y divide-border overflow-hidden py-1">
-            {equipo1.map((p) => (
-              <GolRow key={p.jugador_id} p={p} isAdmin={isAdmin} partidoId={id} />
-            ))}
-            <div className="flex items-center justify-between gap-3 px-4 py-3">
-              <span className="text-sm text-zinc-500">
-                Invitados no registrados{" "}
-                <span className="text-zinc-600">(no cuentan para la tabla)</span>
-              </span>
-              {isAdmin ? (
-                <GolForm
-                  action={setGolesOtros}
-                  hidden={{ partido_id: id }}
-                  fieldName="goles_otros"
-                  defaultValue={partido.goles_otros}
-                />
-              ) : (
-                <span className="text-lg font-bold tabular-nums text-white">
-                  {partido.goles_otros}
-                </span>
-              )}
-            </div>
-          </Card>
-        </div>
-
-        <div>
-          <h2 className="mb-3 flex items-center gap-2 text-lg font-bold text-white">
-            <IconGoal className="h-5 w-5 text-gold-400" /> Goles · Equipo 2 ({partido.rival})
-          </h2>
-          <Card className="divide-y divide-border overflow-hidden py-1">
-            {equipo2.length === 0 && (
-              <p className="px-4 py-3 text-sm text-zinc-500">Ningún jugador del grupo jugó acá.</p>
-            )}
-            {equipo2.map((p) => (
-              <GolRow key={p.jugador_id} p={p} isAdmin={isAdmin} partidoId={id} />
-            ))}
-            <div className="flex items-center justify-between gap-3 px-4 py-3">
-              <span className="text-sm text-zinc-500">
-                Invitados no registrados{" "}
-                <span className="text-zinc-600">(no cuentan para la tabla)</span>
-              </span>
-              {isAdmin ? (
-                <GolForm
-                  action={setGolesRival}
-                  hidden={{ partido_id: id }}
-                  fieldName="goles_rival"
-                  defaultValue={partido.goles_rival}
-                />
-              ) : (
-                <span className="text-lg font-bold tabular-nums text-white">
-                  {partido.goles_rival}
-                </span>
-              )}
-            </div>
-          </Card>
-        </div>
-      </section>
+      <GolesEditor
+        partidoId={id}
+        rival={partido.rival}
+        fecha={fecha}
+        lugar={partido.lugar}
+        equipo1={equipo1.map(toJugador)}
+        equipo2={equipo2.map(toJugador)}
+        golesOtrosInit={partido.goles_otros}
+        golesRivalInit={partido.goles_rival}
+        isAdmin={isAdmin}
+      />
 
       {soyParticipante && (
         <section>
           <h2 className="mb-3 text-lg font-bold text-white">Votación</h2>
           {cerrada ? (
-            <Card className="px-4 py-3 text-sm text-zinc-500">
-              La votación de este partido está cerrada.
-            </Card>
-          ) : (
             <div className="flex flex-col gap-3">
-              <p className="text-xs text-zinc-500">
-                {votosMvp}/{totalParticipantes} votaron Mejor Jugador ·{" "}
-                {votosPeor}/{totalParticipantes} votaron Peor Jugador
-              </p>
-              <VotacionForm
-                partidoId={id}
-                candidatos={candidatos}
-                yaVoteMvp={yaVoteMvp}
-                yaVotePeor={yaVotePeor}
-              />
+              <GanadorCard label="Mejor Jugador" ganadores={ganadoresMvp} />
+              <GanadorCard label="Peor Jugador" ganadores={ganadoresPeor} />
             </div>
+          ) : (
+            <VotacionForm
+              partidoId={id}
+              candidatos={candidatos}
+              yaVoteMvp={yaVoteMvp}
+              yaVotePeor={yaVotePeor}
+            />
           )}
+        </section>
+      )}
+
+      {isAdmin && (
+        <section>
+          <form
+            action={async (formData) => {
+              "use server";
+              await deletePartido(formData);
+            }}
+          >
+            <input type="hidden" name="partido_id" value={id} />
+            <ConfirmSubmitButton
+              confirmMessage="¿Seguro que querés borrar este partido? Se pierden los goles y los votos cargados."
+              className="w-full rounded-xl border border-danger-500/20 bg-danger-500/10 px-4 py-2.5 text-sm font-semibold text-danger-400 transition hover:bg-danger-500/20"
+            >
+              Eliminar partido
+            </ConfirmSubmitButton>
+          </form>
         </section>
       )}
     </div>
   );
 }
 
-function GolRow({
-  p,
-  isAdmin,
-  partidoId,
-}: {
-  p: ParticipanteRow;
-  isAdmin: boolean;
-  partidoId: string;
-}) {
-  return (
-    <div className="flex items-center justify-between gap-3 px-4 py-3">
-      <div className="flex min-w-0 items-center gap-3">
-        <Avatar src={p.profiles.foto_url} alt={p.profiles.apodo} size={32} />
-        <span className="truncate text-sm text-zinc-200">
-          {p.profiles.nombre} {p.profiles.apellido}{" "}
-          <span className="text-zinc-500">({p.profiles.apodo})</span>
-        </span>
-      </div>
-      {isAdmin ? (
-        <GolForm
-          action={setGoles}
-          hidden={{ partido_id: partidoId, jugador_id: p.jugador_id }}
-          fieldName="goles"
-          defaultValue={p.goles}
-        />
-      ) : (
-        <span className="text-lg font-bold tabular-nums text-white">{p.goles}</span>
-      )}
-    </div>
-  );
-}
+function GanadorCard({ label, ganadores }: { label: string; ganadores: RankingRow[] }) {
+  if (ganadores.length === 0) {
+    return (
+      <Card className="px-4 py-3 text-sm text-zinc-500">
+        {label}: nadie votó a tiempo en este partido.
+      </Card>
+    );
+  }
 
-function GolForm({
-  action,
-  hidden,
-  fieldName,
-  defaultValue,
-}: {
-  action: (formData: FormData) => Promise<unknown>;
-  hidden: Record<string, string>;
-  fieldName: string;
-  defaultValue: number;
-}) {
+  const nombres = ganadores
+    .map((g) => `${g.nombre} ${g.apellido} (${g.apodo})`)
+    .join(" y ");
+  const votos = ganadores[0].votos ?? 0;
+
   return (
-    <form
-      action={async (formData) => {
-        "use server";
-        await action(formData);
-      }}
-      className="flex shrink-0 items-center gap-2"
-    >
-      {Object.entries(hidden).map(([name, value]) => (
-        <input key={name} type="hidden" name={name} value={value} />
-      ))}
-      <input
-        type="number"
-        name={fieldName}
-        min={0}
-        defaultValue={defaultValue}
-        className="w-14 rounded-lg border border-border bg-white/5 px-2 py-1.5 text-center text-sm text-white outline-none focus:border-primary-400/60 focus:ring-2 focus:ring-primary-400/20"
-      />
-      <button
-        type="submit"
-        className="rounded-lg bg-white/10 px-2.5 py-1.5 text-xs font-semibold text-white transition hover:bg-white/20"
-      >
-        OK
-      </button>
-    </form>
+    <Card className="px-4 py-3 text-sm text-zinc-200">
+      <span className="font-semibold text-white">{label}:</span> {nombres} — {votos}{" "}
+      {votos === 1 ? "voto" : "votos"}
+    </Card>
   );
 }
 

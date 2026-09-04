@@ -55,4 +55,6 @@ export interface RankingRow {
   foto_url: string | null;
   goles?: number;
   votos?: number;
+  veces_elegido?: number;
+  partidos_jugados?: number;
 }
