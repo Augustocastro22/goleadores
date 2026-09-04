@@ -19,8 +19,9 @@ export default function Avatar({
         width={size}
         height={size}
         unoptimized
-        className={`shrink-0 rounded-full object-cover ring-1 ring-white/10 ${className}`}
-        style={{ width: size, height: size }}
+        draggable={false}
+        className={`shrink-0 rounded-full object-cover ring-1 ring-white/10 select-none ${className}`}
+        style={{ width: size, height: size, WebkitUserDrag: "none" } as React.CSSProperties}
       />
     );
   }

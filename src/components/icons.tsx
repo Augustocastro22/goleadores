@@ -82,6 +82,46 @@ export function IconChevronRight(props: SVGProps<SVGSVGElement>) {
   );
 }
 
+export function IconFormation(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" strokeWidth={1.8} stroke="currentColor" {...props}>
+      <rect x="4" y="2.5" width="16" height="19" rx="1.5" />
+      <path d="M4 12h16" strokeLinecap="round" />
+      <circle cx="12" cy="12" r="2.4" />
+      <path d="M8.5 2.5h7v3h-7zM8.5 21.5v-3h7v3" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+export function IconDownload(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" strokeWidth={1.8} stroke="currentColor" {...props}>
+      <path d="M12 3v12m0 0-4-4m4 4 4-4" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+export function IconTrash(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" strokeWidth={1.8} stroke="currentColor" {...props}>
+      <path d="M4 7h16M9 7V4.5A1.5 1.5 0 0 1 10.5 3h3A1.5 1.5 0 0 1 15 4.5V7m2 0v12a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2V7" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M10 11v6M14 11v6" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+export function IconUsers(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" strokeWidth={1.8} stroke="currentColor" {...props}>
+      <circle cx="9" cy="8" r="3" />
+      <path d="M3.5 19c1.1-3 3.2-4.5 5.5-4.5s4.4 1.5 5.5 4.5" strokeLinecap="round" strokeLinejoin="round" />
+      <circle cx="17" cy="8.5" r="2.4" />
+      <path d="M15.5 14.2c1.9.3 3.4 1.7 4.3 4.3" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
 export function IconCamera(props: SVGProps<SVGSVGElement>) {
   return (
     <svg viewBox="0 0 24 24" fill="none" strokeWidth={1.8} stroke="currentColor" {...props}>
