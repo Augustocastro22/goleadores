@@ -4,7 +4,7 @@ import { useState } from "react";
 import Card from "@/components/ui/Card";
 import { Input, Label } from "@/components/ui/Input";
 import Button from "@/components/ui/Button";
-import { actualizarPassword } from "@/lib/actions/auth";
+import { actualizarPassword, logout } from "@/lib/actions/auth";
 
 export default function ActualizarPasswordPage() {
   const [error, setError] = useState<string | null>(null);
@@ -42,6 +42,12 @@ export default function ActualizarPasswordPage() {
           </Button>
         </form>
       </Card>
+
+      <form action={logout} className="mt-6">
+        <button type="submit" className="text-sm text-zinc-500 hover:text-zinc-300">
+          Cancelar
+        </button>
+      </form>
     </div>
   );
 }

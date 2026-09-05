@@ -1,5 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import { isRecoverySession } from "@/lib/recovery";
 
 const PUBLIC_PATHS = ["/login", "/signup", "/recuperar", "/auth/callback"];
 
@@ -41,6 +42,19 @@ export async function updateSession(request: NextRequest) {
     const url = request.nextUrl.clone();
     url.pathname = "/partidos";
     return NextResponse.redirect(url);
+  }
+
+  // Una sesión creada por el link de "recuperar contraseña" no debe poder
+  // navegar el resto de la app hasta que se defina la contraseña nueva.
+  if (user) {
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    if (isRecoverySession(session?.access_token) && request.nextUrl.pathname !== "/actualizar-password") {
+      const url = request.nextUrl.clone();
+      url.pathname = "/actualizar-password";
+      return NextResponse.redirect(url);
+    }
   }
 
   return supabaseResponse;

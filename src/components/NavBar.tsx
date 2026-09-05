@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { logout } from "@/lib/actions/auth";
+import { isRecoverySession } from "@/lib/recovery";
 import Avatar from "./ui/Avatar";
 import NavLinks from "./NavLinks";
 import BottomNav from "./BottomNav";
@@ -13,6 +14,11 @@ export default async function NavBar() {
   } = await supabase.auth.getUser();
 
   if (!user) return null;
+
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+  if (isRecoverySession(session?.access_token)) return null;
 
   const { data: profile } = await supabase
     .from("profiles")

@@ -81,10 +81,20 @@ export async function actualizarPassword(formData: FormData) {
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) return { error: "El link de recuperación venció. Pedí uno nuevo." };
+  if (!user?.email) return { error: "El link de recuperación venció. Pedí uno nuevo." };
 
   const { error } = await supabase.auth.updateUser({ password });
   if (error) return { error: error.message };
+
+  // La sesión de recuperación queda marcada como tal para siempre; la
+  // reemplazamos por una sesión normal para que no quede atrapado en esta
+  // pantalla después de definir la contraseña.
+  await supabase.auth.signOut();
+  const { error: signInError } = await supabase.auth.signInWithPassword({
+    email: user.email,
+    password,
+  });
+  if (signInError) redirect("/login");
 
   redirect("/partidos");
 }
