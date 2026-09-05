@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Card from "@/components/ui/Card";
 import { Input, Label } from "@/components/ui/Input";
 import Button from "@/components/ui/Button";
@@ -12,8 +12,15 @@ export default function ActualizarPasswordPage() {
   );
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const procesado = useRef(false);
 
   useEffect(() => {
+    // Este efecto lee y borra el fragmento de la URL, así que solo puede
+    // correr una vez: si se ejecutara dos veces (p. ej. doble-render de
+    // desarrollo), la segunda vez ya no encontraría el hash.
+    if (procesado.current) return;
+    procesado.current = true;
+
     // El link del mail trae el token en el fragmento de la URL (después
     // del #), que nunca llega al servidor: lo leemos acá directamente,
     // sin depender de que ningún cliente lo "detecte" solo.
