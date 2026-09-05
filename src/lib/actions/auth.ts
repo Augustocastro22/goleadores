@@ -112,7 +112,9 @@ export async function actualizarPassword(formData: FormData) {
   if (!user?.email) return { error: "El link de recuperación venció. Pedí uno nuevo." };
 
   const { error } = await supabase.auth.updateUser({ password });
-  if (error) return { error: error.message };
+  // Si ya tenía esa contraseña, Supabase lo rechaza (same_password) — no
+  // hace falta tratarlo como error, total ya es la que quiere usar.
+  if (error && error.code !== "same_password") return { error: error.message };
 
   // La sesión de recuperación queda marcada como tal para siempre; la
   // reemplazamos por una sesión normal para que no quede atrapado en esta
