@@ -5,36 +5,32 @@ import Card from "@/components/ui/Card";
 import { Input, Label } from "@/components/ui/Input";
 import Button from "@/components/ui/Button";
 import { actualizarPassword, logout } from "@/lib/actions/auth";
-import { createClient } from "@/lib/supabase/client";
 
 export default function ActualizarPasswordPage() {
-  const [estado, setEstado] = useState<"verificando" | "listo" | "error">("verificando");
+  const [tokens, setTokens] = useState<{ accessToken: string; refreshToken: string } | null>(
+    null
+  );
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     // El link del mail trae el token en el fragmento de la URL (después
-    // del #), que nunca llega al servidor. El cliente de Supabase lo
-    // detecta solo al inicializarse; getSession() espera a que termine.
+    // del #), que nunca llega al servidor: lo leemos acá directamente,
+    // sin depender de que ningún cliente lo "detecte" solo.
     const hash = new URLSearchParams(window.location.hash.replace(/^#/, ""));
     const hashError = hash.get("error_description");
+    const accessToken = hash.get("access_token");
+    const refreshToken = hash.get("refresh_token");
+    const type = hash.get("type");
 
-    Promise.resolve().then(async () => {
+    window.history.replaceState(null, "", window.location.pathname);
+
+    Promise.resolve().then(() => {
       if (hashError) {
-        setEstado("error");
         setError(decodeURIComponent(hashError.replace(/\+/g, " ")));
-        return;
-      }
-
-      const supabase = createClient();
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-      if (session) {
-        window.history.replaceState(null, "", window.location.pathname);
-        setEstado("listo");
+      } else if (accessToken && refreshToken && type === "recovery") {
+        setTokens({ accessToken, refreshToken });
       } else {
-        setEstado("error");
         setError("El link de recuperación venció o no es válido.");
       }
     });
@@ -57,11 +53,11 @@ export default function ActualizarPasswordPage() {
       </div>
 
       <Card className="w-full max-w-sm p-6">
-        {estado === "verificando" && (
+        {!tokens && !error && (
           <p className="text-center text-sm text-zinc-500">Verificando el link...</p>
         )}
 
-        {estado === "error" && (
+        {!tokens && error && (
           <div className="flex flex-col gap-4">
             <p className="rounded-xl border border-danger-500/20 bg-danger-500/10 px-3.5 py-2.5 text-sm text-danger-400">
               {error}
@@ -75,7 +71,7 @@ export default function ActualizarPasswordPage() {
           </div>
         )}
 
-        {estado === "listo" && (
+        {tokens && (
           <>
             {error && (
               <p className="mb-4 rounded-xl border border-danger-500/20 bg-danger-500/10 px-3.5 py-2.5 text-sm text-danger-400">
@@ -83,6 +79,8 @@ export default function ActualizarPasswordPage() {
               </p>
             )}
             <form action={handleSubmit} className="flex flex-col gap-4">
+              <input type="hidden" name="access_token" value={tokens.accessToken} />
+              <input type="hidden" name="refresh_token" value={tokens.refreshToken} />
               <Label>
                 Contraseña nueva
                 <Input type="password" name="password" required minLength={6} />
@@ -95,7 +93,7 @@ export default function ActualizarPasswordPage() {
         )}
       </Card>
 
-      {estado === "listo" && (
+      {tokens && (
         <form action={logout} className="mt-6">
           <button type="submit" className="text-sm text-zinc-500 hover:text-zinc-300">
             Cancelar

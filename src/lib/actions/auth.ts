@@ -1,6 +1,7 @@
 "use server";
 
 import { redirect } from "next/navigation";
+import { createClient as createSupabaseJsClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import { getSiteUrl } from "@/lib/site-url";
 
@@ -62,8 +63,20 @@ export async function solicitarRecuperacion(formData: FormData) {
   const email = String(formData.get("email") ?? "").trim();
   if (!email) return { error: "Ingresá tu email." };
 
-  const supabase = await createClient();
   const siteUrl = await getSiteUrl();
+
+  // @supabase/ssr fuerza flowType "pkce" en sus clientes sin importar qué
+  // opción le pases, y ese modo necesita una cookie guardada en el mismo
+  // navegador que pidió el reset (falla si el link se abre en otro
+  // navegador/dispositivo/app de mail). Para el link de recuperación
+  // usamos el cliente base de supabase-js, que sí respeta flowType
+  // "implicit": el link resultante trae el token en el propio link, sin
+  // depender de nada guardado localmente.
+  const supabase = createSupabaseJsClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    { auth: { flowType: "implicit", persistSession: false } }
+  );
 
   await supabase.auth.resetPasswordForEmail(email, {
     redirectTo: `${siteUrl}/actualizar-password`,
@@ -75,9 +88,24 @@ export async function solicitarRecuperacion(formData: FormData) {
 
 export async function actualizarPassword(formData: FormData) {
   const password = String(formData.get("password") ?? "");
+  const accessToken = String(formData.get("access_token") ?? "");
+  const refreshToken = String(formData.get("refresh_token") ?? "");
   if (password.length < 6) return { error: "La contraseña tiene que tener al menos 6 caracteres." };
+  if (!accessToken || !refreshToken) {
+    return { error: "El link de recuperación venció. Pedí uno nuevo." };
+  }
 
   const supabase = await createClient();
+
+  // Estos tokens vienen del link (fragmento de la URL, nunca pasó por
+  // nuestro servidor todavía) y son autosuficientes: al establecerlos acá
+  // el cliente SSR los guarda como cookies normales de sesión.
+  const { error: setSessionError } = await supabase.auth.setSession({
+    access_token: accessToken,
+    refresh_token: refreshToken,
+  });
+  if (setSessionError) return { error: "El link de recuperación venció. Pedí uno nuevo." };
+
   const {
     data: { user },
   } = await supabase.auth.getUser();
