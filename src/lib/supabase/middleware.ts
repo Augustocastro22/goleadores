@@ -2,7 +2,20 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { isRecoverySession } from "@/lib/recovery";
 
-const PUBLIC_PATHS = ["/login", "/signup", "/recuperar", "/auth/callback"];
+// No requieren sesión para poder verse.
+const NO_AUTH_REQUIRED_PATHS = [
+  "/login",
+  "/signup",
+  "/recuperar",
+  "/auth/callback",
+  "/actualizar-password",
+];
+// Si ya hay una sesión normal, no tiene sentido quedarse ahí (se manda a
+// /partidos). "/actualizar-password" queda afuera a propósito: durante el
+// primer render todavía no hay sesión (el token viaja en el fragmento de
+// la URL, el navegador la crea recién al procesar el link), y una vez
+// creada tampoco queremos sacarlo de esa pantalla hasta que termine.
+const REDIRECT_IF_LOGGED_IN_PATHS = ["/login", "/signup", "/recuperar"];
 
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request });
@@ -30,15 +43,20 @@ export async function updateSession(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const isPublicPath = PUBLIC_PATHS.some((path) => request.nextUrl.pathname.startsWith(path));
+  const noAuthRequired = NO_AUTH_REQUIRED_PATHS.some((path) =>
+    request.nextUrl.pathname.startsWith(path)
+  );
+  const redirectIfLoggedIn = REDIRECT_IF_LOGGED_IN_PATHS.some((path) =>
+    request.nextUrl.pathname.startsWith(path)
+  );
 
-  if (!user && !isPublicPath) {
+  if (!user && !noAuthRequired) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     return NextResponse.redirect(url);
   }
 
-  if (user && isPublicPath) {
+  if (user && redirectIfLoggedIn) {
     const url = request.nextUrl.clone();
     url.pathname = "/partidos";
     return NextResponse.redirect(url);

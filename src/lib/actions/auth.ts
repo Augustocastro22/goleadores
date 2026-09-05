@@ -66,7 +66,7 @@ export async function solicitarRecuperacion(formData: FormData) {
   const siteUrl = await getSiteUrl();
 
   await supabase.auth.resetPasswordForEmail(email, {
-    redirectTo: `${siteUrl}/auth/callback`,
+    redirectTo: `${siteUrl}/actualizar-password`,
   });
 
   // No confirmamos ni negamos si el email existe, por seguridad.
