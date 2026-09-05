@@ -38,6 +38,12 @@ export default async function LoginPage({
             Entrar
           </Button>
         </form>
+        <Link
+          href="/recuperar"
+          className="mt-3 block text-center text-sm text-zinc-500 hover:text-zinc-300"
+        >
+          ¿Olvidaste tu contraseña?
+        </Link>
       </Card>
 
       <p className="mt-6 text-sm text-zinc-500">
