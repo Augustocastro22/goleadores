@@ -28,7 +28,17 @@ type Seleccion =
   | { origen: "roster"; jugadorId: string }
   | { origen: "slot"; jugadorId: string; slotId: string };
 
+type DragState =
+  | { kind: "roster"; jugadorId: string; pointerId: number; startX: number; startY: number; x: number; y: number }
+  | { kind: "slot"; slotId: string; pointerId: number; moved: boolean };
+
 const DRAG_THRESHOLD = 8;
+const POS_MIN = 5;
+const POS_MAX = 95;
+
+function clamp(v: number, min: number, max: number) {
+  return Math.min(max, Math.max(min, v));
+}
 
 function parseFormacion(input: string): number[] | null {
   const partes = input
@@ -125,20 +135,21 @@ export default function FormacionBuilder({ jugadores }: { jugadores: Profile[] }
   const [usandoCustom, setUsandoCustom] = useState(false);
   const [customError, setCustomError] = useState<string | null>(null);
   const [asignaciones, setAsignaciones] = useState<Record<string, string>>({});
+  const [posiciones, setPosiciones] = useState<Record<string, { xPct: number; yPct: number }>>({});
   const [seleccionado, setSeleccionado] = useState<Seleccion | null>(null);
   const [descargando, setDescargando] = useState(false);
-  const [drag, setDrag] = useState<{
-    jugadorId: string;
-    origenSlotId: string | null;
-    pointerId: number;
-    startX: number;
-    startY: number;
-    x: number;
-    y: number;
-  } | null>(null);
+  const [drag, setDrag] = useState<DragState | null>(null);
 
-  const wrapperRef = useRef<HTMLDivElement>(null);
+  const pitchRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const justDraggedRef = useRef(false);
+
+  function marcarJustDragged() {
+    justDraggedRef.current = true;
+    setTimeout(() => {
+      justDraggedRef.current = false;
+    }, 0);
+  }
 
   const outfield = futbol - 1;
 
@@ -147,7 +158,12 @@ export default function FormacionBuilder({ jugadores }: { jugadores: Profile[] }
     return parsed ?? [outfield];
   }, [formacionStr, outfield]);
 
-  const slots = useMemo(() => buildSlots(lineas), [lineas]);
+  const slotsBase = useMemo(() => buildSlots(lineas), [lineas]);
+
+  const slots = useMemo(
+    () => slotsBase.map((s) => ({ ...s, ...(posiciones[s.id] ?? {}) })),
+    [slotsBase, posiciones]
+  );
 
   const jugadorPorId = useMemo(() => {
     const map = new Map<string, Profile>();
@@ -165,6 +181,7 @@ export default function FormacionBuilder({ jugadores }: { jugadores: Profile[] }
     setUsandoCustom(false);
     setCustomError(null);
     setAsignaciones({});
+    setPosiciones({});
     setSeleccionado(null);
   }
 
@@ -173,6 +190,7 @@ export default function FormacionBuilder({ jugadores }: { jugadores: Profile[] }
     setUsandoCustom(false);
     setCustomError(null);
     setAsignaciones({});
+    setPosiciones({});
     setSeleccionado(null);
   }
 
@@ -190,6 +208,7 @@ export default function FormacionBuilder({ jugadores }: { jugadores: Profile[] }
     setCustomError(null);
     setFormacionStr(customInput);
     setAsignaciones({});
+    setPosiciones({});
     setSeleccionado(null);
   }
 
@@ -228,7 +247,15 @@ export default function FormacionBuilder({ jugadores }: { jugadores: Profile[] }
     setSeleccionado(null);
   }
 
+  function restablecerPosiciones() {
+    setPosiciones({});
+  }
+
   function handleChipClick(jugadorId: string) {
+    if (justDraggedRef.current) {
+      justDraggedRef.current = false;
+      return;
+    }
     setSeleccionado((prev) =>
       prev && prev.origen === "roster" && prev.jugadorId === jugadorId
         ? null
@@ -237,6 +264,10 @@ export default function FormacionBuilder({ jugadores }: { jugadores: Profile[] }
   }
 
   function handleSlotClick(slotId: string) {
+    if (justDraggedRef.current) {
+      justDraggedRef.current = false;
+      return;
+    }
     const ocupante = asignaciones[slotId];
 
     if (seleccionado) {
@@ -257,11 +288,11 @@ export default function FormacionBuilder({ jugadores }: { jugadores: Profile[] }
     }
   }
 
-  function iniciarDrag(e: React.PointerEvent, jugadorId: string, origenSlotId: string | null) {
+  function iniciarDragRoster(e: React.PointerEvent, jugadorId: string) {
     (e.target as Element).setPointerCapture(e.pointerId);
     setDrag({
+      kind: "roster",
       jugadorId,
-      origenSlotId,
       pointerId: e.pointerId,
       startX: e.clientX,
       startY: e.clientY,
@@ -270,24 +301,44 @@ export default function FormacionBuilder({ jugadores }: { jugadores: Profile[] }
     });
   }
 
+  function iniciarDragSlot(e: React.PointerEvent, slotId: string) {
+    (e.target as Element).setPointerCapture(e.pointerId);
+    setDrag({ kind: "slot", slotId, pointerId: e.pointerId, moved: false });
+  }
+
   function handleWrapperPointerMove(e: React.PointerEvent) {
     if (!drag || e.pointerId !== drag.pointerId) return;
-    setDrag((d) => (d ? { ...d, x: e.clientX, y: e.clientY } : d));
+
+    if (drag.kind === "roster") {
+      setDrag((d) => (d && d.kind === "roster" ? { ...d, x: e.clientX, y: e.clientY } : d));
+      return;
+    }
+
+    const rect = pitchRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    const xPct = clamp(((e.clientX - rect.left) / rect.width) * 100, POS_MIN, POS_MAX);
+    const yPct = clamp(((e.clientY - rect.top) / rect.height) * 100, POS_MIN, POS_MAX);
+    setPosiciones((prev) => ({ ...prev, [drag.slotId]: { xPct, yPct } }));
+    if (!drag.moved) setDrag((d) => (d && d.kind === "slot" ? { ...d, moved: true } : d));
   }
 
   function handleWrapperPointerUp(e: React.PointerEvent) {
     if (!drag || e.pointerId !== drag.pointerId) return;
-    const distancia = Math.hypot(e.clientX - drag.startX, e.clientY - drag.startY);
 
-    if (distancia > DRAG_THRESHOLD) {
-      const el = document.elementFromPoint(e.clientX, e.clientY);
-      const slotEl = el?.closest<HTMLElement>("[data-slot-id]");
-      if (slotEl) {
-        moverJugador(drag.jugadorId, drag.origenSlotId, slotEl.dataset.slotId!);
-      } else if (drag.origenSlotId) {
-        sacarDeCancha(drag.origenSlotId);
+    if (drag.kind === "roster") {
+      const distancia = Math.hypot(e.clientX - drag.startX, e.clientY - drag.startY);
+      if (distancia > DRAG_THRESHOLD) {
+        marcarJustDragged();
+        const el = document.elementFromPoint(e.clientX, e.clientY);
+        const slotEl = el?.closest<HTMLElement>("[data-slot-id]");
+        if (slotEl) {
+          moverJugador(drag.jugadorId, null, slotEl.dataset.slotId!);
+        }
       }
+    } else if (drag.moved) {
+      marcarJustDragged();
     }
+
     setDrag(null);
   }
 
@@ -396,11 +447,11 @@ export default function FormacionBuilder({ jugadores }: { jugadores: Profile[] }
     }
   }
 
-  const jugadorArrastrado = drag ? jugadorPorId.get(drag.jugadorId) : undefined;
+  const jugadorArrastrado = drag?.kind === "roster" ? jugadorPorId.get(drag.jugadorId) : undefined;
+  const hayPosicionesCustom = Object.keys(posiciones).length > 0;
 
   return (
     <div
-      ref={wrapperRef}
       onPointerMove={handleWrapperPointerMove}
       onPointerUp={handleWrapperPointerUp}
       onPointerCancel={() => setDrag(null)}
@@ -478,53 +529,66 @@ export default function FormacionBuilder({ jugadores }: { jugadores: Profile[] }
         </div>
       </Card>
 
-      <div
-        className="relative mx-auto w-full max-w-sm overflow-hidden rounded-2xl border border-border shadow-xl shadow-black/30"
-        style={{ aspectRatio: "5 / 7", background: "#1e7a3d" }}
-      >
-        <PitchLines />
-        {slots.map((slot) => {
-          const jugadorId = asignaciones[slot.id];
-          const jugador = jugadorId ? jugadorPorId.get(jugadorId) : undefined;
-          const seleccionadoAca =
-            seleccionado?.origen === "slot" && seleccionado.slotId === slot.id;
-          return (
-            <div
-              key={slot.id}
-              data-slot-id={slot.id}
-              onClick={() => handleSlotClick(slot.id)}
-              onPointerDown={
-                jugador ? (e) => iniciarDrag(e, jugador.id, slot.id) : undefined
-              }
-              className="absolute flex -translate-x-1/2 -translate-y-1/2 cursor-pointer flex-col items-center gap-1"
-              style={{
-                left: `${slot.xPct}%`,
-                top: `${slot.yPct}%`,
-                touchAction: jugador ? "none" : undefined,
-              }}
+      <div>
+        <div
+          ref={pitchRef}
+          className="relative mx-auto w-full max-w-sm overflow-hidden rounded-2xl border border-border shadow-xl shadow-black/30"
+          style={{ aspectRatio: "5 / 7", background: "#1e7a3d" }}
+        >
+          <PitchLines />
+          {slots.map((slot) => {
+            const jugadorId = asignaciones[slot.id];
+            const jugador = jugadorId ? jugadorPorId.get(jugadorId) : undefined;
+            const seleccionadoAca =
+              seleccionado?.origen === "slot" && seleccionado.slotId === slot.id;
+            return (
+              <div
+                key={slot.id}
+                data-slot-id={slot.id}
+                onClick={() => handleSlotClick(slot.id)}
+                onPointerDown={(e) => iniciarDragSlot(e, slot.id)}
+                className="absolute flex -translate-x-1/2 -translate-y-1/2 cursor-grab flex-col items-center gap-1 active:cursor-grabbing"
+                style={{
+                  left: `${slot.xPct}%`,
+                  top: `${slot.yPct}%`,
+                  touchAction: "none",
+                }}
+              >
+                {jugador ? (
+                  <>
+                    <Avatar
+                      src={jugador.foto_url}
+                      alt={jugador.apodo}
+                      size={40}
+                      className={`ring-2 select-none ${
+                        seleccionadoAca ? "ring-primary-400" : "ring-white/60"
+                      }`}
+                    />
+                    <span className="rounded bg-black/60 px-1.5 py-0.5 text-[10px] font-semibold whitespace-nowrap text-white">
+                      {jugador.apodo}
+                    </span>
+                  </>
+                ) : (
+                  <div className="flex h-10 w-10 items-center justify-center rounded-full border-2 border-dashed border-white/50 bg-black/15 text-[10px] font-semibold text-white/70">
+                    {slot.role === "GK" ? "ARQ" : "+"}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+        <div className="mt-2 flex items-center justify-between px-1">
+          <p className="text-xs text-zinc-500">Arrastrá cada posición para acomodarla a tu gusto.</p>
+          {hayPosicionesCustom && (
+            <button
+              type="button"
+              onClick={restablecerPosiciones}
+              className="text-xs font-medium text-zinc-500 hover:text-white"
             >
-              {jugador ? (
-                <>
-                  <Avatar
-                    src={jugador.foto_url}
-                    alt={jugador.apodo}
-                    size={40}
-                    className={`ring-2 select-none ${
-                      seleccionadoAca ? "ring-primary-400" : "ring-white/60"
-                    }`}
-                  />
-                  <span className="rounded bg-black/60 px-1.5 py-0.5 text-[10px] font-semibold whitespace-nowrap text-white">
-                    {jugador.apodo}
-                  </span>
-                </>
-              ) : (
-                <div className="flex h-10 w-10 items-center justify-center rounded-full border-2 border-dashed border-white/50 bg-black/15 text-[10px] font-semibold text-white/70">
-                  {slot.role === "GK" ? "ARQ" : "+"}
-                </div>
-              )}
-            </div>
-          );
-        })}
+              Restablecer posiciones
+            </button>
+          )}
+        </div>
       </div>
 
       <Card className="p-4">
@@ -561,7 +625,7 @@ export default function FormacionBuilder({ jugadores }: { jugadores: Profile[] }
                 key={j.id}
                 type="button"
                 onClick={() => handleChipClick(j.id)}
-                onPointerDown={(e) => iniciarDrag(e, j.id, null)}
+                onPointerDown={(e) => iniciarDragRoster(e, j.id)}
                 style={{ touchAction: "pan-x" }}
                 className={`flex shrink-0 flex-col items-center gap-1 rounded-xl border px-2 py-2 transition select-none ${
                   seleccionado?.origen === "roster" && seleccionado.jugadorId === j.id
@@ -583,7 +647,7 @@ export default function FormacionBuilder({ jugadores }: { jugadores: Profile[] }
 
       <canvas ref={canvasRef} className="hidden" />
 
-      {drag && jugadorArrastrado && (
+      {drag?.kind === "roster" && jugadorArrastrado && (
         <div
           className="pointer-events-none fixed z-50 flex -translate-x-1/2 -translate-y-1/2 flex-col items-center gap-1"
           style={{ left: drag.x, top: drag.y }}
