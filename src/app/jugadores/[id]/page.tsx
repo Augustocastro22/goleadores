@@ -2,12 +2,13 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { ComponentType, SVGProps } from "react";
 import { createClient } from "@/lib/supabase/server";
-import type { Profile, RankingRow } from "@/lib/types";
+import { votacionCerrada } from "@/lib/votacion";
+import type { EstadoVotacion, Profile, RankingRow } from "@/lib/types";
 import { calcularResultado, RESULTADO_CLASS, type Resultado } from "@/lib/resultado";
 import Card from "@/components/ui/Card";
 import Avatar from "@/components/ui/Avatar";
 import Badge from "@/components/ui/Badge";
-import { IconChevronRight, IconGoal, IconThumbsDown, IconTrophy } from "@/components/icons";
+import { IconChevronRight, IconGoal, IconThumbsDown, IconTrophy, IconUsers } from "@/components/icons";
 
 interface PartidoJugadoRow {
   partido_id: string;
@@ -47,7 +48,7 @@ export default async function JugadorDetallePage({
     .single<Profile>();
   if (!jugador) notFound();
 
-  const [goleadoresRes, mvpRes, peorRes, misPartidosRes, totalPartidosRes] = await Promise.all([
+  const [goleadoresRes, mvpRes, peorRes, misPartidosRes, todosPartidosRes] = await Promise.all([
     supabase.rpc("get_goleadores"),
     supabase.rpc("get_ranking_votos", { p_tipo: "MVP" }),
     supabase.rpc("get_ranking_votos", { p_tipo: "PEOR" }),
@@ -55,7 +56,7 @@ export default async function JugadorDetallePage({
       .from("partido_jugadores")
       .select("partido_id, goles, equipo, partidos(fecha, rival, lugar, goles_rival, goles_otros)")
       .eq("jugador_id", id),
-    supabase.from("partidos").select("id", { count: "exact", head: true }),
+    supabase.from("partidos").select("id, fecha").order("fecha", { ascending: true }),
   ]);
 
   const goleadores = (goleadoresRes.data ?? []) as RankingRow[];
@@ -67,11 +68,6 @@ export default async function JugadorDetallePage({
   const partidosJugados = misStats?.partidos_jugados ?? 0;
   const vecesMvp = mvpRows.find((r) => r.jugador_id === id)?.veces_elegido ?? 0;
   const vecesPeor = peorRows.find((r) => r.jugador_id === id)?.veces_elegido ?? 0;
-
-  const maxGoles = Math.max(0, ...goleadores.map((r) => r.goles ?? 0));
-  const esMaximoGoleador = goles > 0 && goles === maxGoles;
-  const totalPartidosGrupo = totalPartidosRes.count ?? 0;
-  const presenciaPerfecta = totalPartidosGrupo > 0 && partidosJugados === totalPartidosGrupo;
 
   const misPartidos = (misPartidosRes.data ?? []) as unknown as PartidoJugadoRow[];
   misPartidos.sort((a, b) => b.partidos.fecha.localeCompare(a.partidos.fecha));
@@ -102,42 +98,87 @@ export default async function JugadorDetallePage({
     }
   }
 
-  let rachaActual = 0;
-  let rachaMax = 0;
+  // Racha goleadora: partidos consecutivos (propios) convirtiendo al menos un gol.
+  let rachaGolActual = 0;
+  let rachaGolMax = 0;
   for (const mp of [...misPartidos].reverse()) {
     if (mp.goles > 0) {
-      rachaActual += 1;
-      rachaMax = Math.max(rachaMax, rachaActual);
+      rachaGolActual += 1;
+      rachaGolMax = Math.max(rachaGolMax, rachaGolActual);
     } else {
-      rachaActual = 0;
+      rachaGolActual = 0;
+    }
+  }
+
+  // Racha de presencia: partidos consecutivos del grupo (en orden) sin faltar.
+  const misPartidosIds = new Set(misPartidos.map((mp) => mp.partido_id));
+  let rachaPresenciaActual = 0;
+  let rachaPresenciaMax = 0;
+  for (const p of todosPartidosRes.data ?? []) {
+    if (misPartidosIds.has(p.id)) {
+      rachaPresenciaActual += 1;
+      rachaPresenciaMax = Math.max(rachaPresenciaMax, rachaPresenciaActual);
+    } else {
+      rachaPresenciaActual = 0;
+    }
+  }
+
+  // Racha de MVP: partidos consecutivos (propios, con votación cerrada) elegido Mejor Jugador.
+  const misPartidosAsc = [...misPartidos].sort((a, b) => a.partidos.fecha.localeCompare(b.partidos.fecha));
+  const fueMvpPorPartido = await Promise.all(
+    misPartidosAsc.map(async (mp) => {
+      const { data: estado } = await supabase
+        .rpc("get_estado_votacion", { p_partido_id: mp.partido_id })
+        .single<EstadoVotacion>();
+      const cerrada = votacionCerrada({
+        fechaPartido: mp.partidos.fecha,
+        totalParticipantes: estado?.total_participantes ?? 0,
+        votosMvp: estado?.votos_mvp ?? 0,
+        votosPeor: estado?.votos_peor ?? 0,
+      });
+      if (!cerrada) return false;
+      const { data: ganadores } = await supabase.rpc("get_ganadores_votacion", {
+        p_partido_id: mp.partido_id,
+        p_tipo: "MVP",
+      });
+      return ((ganadores ?? []) as RankingRow[]).some((g) => g.jugador_id === id);
+    })
+  );
+
+  let rachaMvpActual = 0;
+  let rachaMvpMax = 0;
+  for (const fueMvp of fueMvpPorPartido) {
+    if (fueMvp) {
+      rachaMvpActual += 1;
+      rachaMvpMax = Math.max(rachaMvpMax, rachaMvpActual);
+    } else {
+      rachaMvpActual = 0;
     }
   }
 
   const logrosCandidatos: (Logro | null)[] = [
-    esMaximoGoleador
-      ? { icon: IconGoal, titulo: "Máximo goleador", detalle: `Lidera la tabla con ${goles} goles.` }
-      : null,
-    vecesMvp >= 2
-      ? { icon: IconTrophy, titulo: "MVP recurrente", detalle: `Elegido Mejor Jugador ${vecesMvp} veces.` }
-      : null,
     partidosJugados > 0 && vecesPeor === 0
       ? { icon: IconThumbsDown, titulo: "Nunca la remó", detalle: "Nunca fue elegido Peor Jugador." }
       : null,
-    vecesPeor >= 2
+    rachaGolMax >= 3
       ? {
-          icon: IconThumbsDown,
-          titulo: "Peor jugador serial",
-          detalle: `Elegido Peor Jugador ${vecesPeor} veces.`,
+          icon: IconGoal,
+          titulo: "Racha goleadora",
+          detalle: `${rachaGolMax} partidos seguidos convirtiendo gol.`,
         }
       : null,
-    rachaMax >= 3
-      ? { icon: IconGoal, titulo: "En racha", detalle: `${rachaMax} partidos seguidos convirtiendo gol.` }
+    rachaPresenciaMax >= 5
+      ? {
+          icon: IconUsers,
+          titulo: "Siempre presente",
+          detalle: `${rachaPresenciaMax} partidos seguidos sin faltar.`,
+        }
       : null,
-    presenciaPerfecta
+    rachaMvpMax >= 3
       ? {
           icon: IconTrophy,
-          titulo: "Presencia perfecta",
-          detalle: `Jugó los ${totalPartidosGrupo} partidos del grupo.`,
+          titulo: "Racha de MVP",
+          detalle: `${rachaMvpMax} partidos seguidos elegido Mejor Jugador.`,
         }
       : null,
   ];
