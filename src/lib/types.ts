@@ -20,6 +20,8 @@ export interface Partido {
   goles_otros: number;
   created_by: string | null;
   created_at: string;
+  votacion_abierta_notificada: boolean;
+  votacion_cerrada_notificada: boolean;
 }
 
 export type Equipo = 1 | 2;
@@ -45,6 +47,15 @@ export interface EstadoVotacion {
   total_participantes: number;
   votos_mvp: number;
   votos_peor: number;
+}
+
+export interface PushSubscriptionRow {
+  id: string;
+  user_id: string;
+  endpoint: string;
+  p256dh: string;
+  auth: string;
+  created_at: string;
 }
 
 export interface RankingRow {

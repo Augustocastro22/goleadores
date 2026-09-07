@@ -3,6 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { votacionCerrada } from "@/lib/votacion";
+import { enviarPush } from "@/lib/push/send";
+import { createAdminClient } from "@/lib/supabase/admin";
 import type { EstadoVotacion } from "@/lib/types";
 
 export async function votar(formData: FormData) {
@@ -22,7 +24,7 @@ export async function votar(formData: FormData) {
 
   const { data: partido } = await supabase
     .from("partidos")
-    .select("fecha")
+    .select("fecha, rival, votacion_cerrada_notificada")
     .eq("id", partidoId)
     .single();
   if (!partido) return { error: "Partido no encontrado." };
@@ -55,6 +57,44 @@ export async function votar(formData: FormData) {
       return { error: "Ya votaste en esta categoría para este partido." };
     }
     return { error: error.message };
+  }
+
+  if (!partido.votacion_cerrada_notificada) {
+    const { data: estadoNuevo } = await supabase
+      .rpc("get_estado_votacion", { p_partido_id: partidoId })
+      .single<EstadoVotacion>();
+
+    const cerradaAhora =
+      estadoNuevo &&
+      votacionCerrada({
+        fechaPartido: partido.fecha,
+        totalParticipantes: estadoNuevo.total_participantes,
+        votosMvp: estadoNuevo.votos_mvp,
+        votosPeor: estadoNuevo.votos_peor,
+      });
+
+    if (cerradaAhora) {
+      const { data: participantes } = await supabase
+        .from("partido_jugadores")
+        .select("jugador_id")
+        .eq("partido_id", partidoId);
+
+      await enviarPush(
+        (participantes ?? []).map((p) => p.jugador_id),
+        {
+          title: "Se cerró la votación",
+          body: `Ya se puede ver quién ganó Mejor Jugador y Peor Jugador vs ${partido.rival}.`,
+          url: `/partidos/${partidoId}`,
+        }
+      );
+
+      // Un jugador cualquiera (no admin) puede ser quien complete la votación,
+      // y la tabla partidos solo se puede actualizar como admin vía RLS.
+      await createAdminClient()
+        .from("partidos")
+        .update({ votacion_cerrada_notificada: true })
+        .eq("id", partidoId);
+    }
   }
 
   revalidatePath(`/partidos/${partidoId}`);

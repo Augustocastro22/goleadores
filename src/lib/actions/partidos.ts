@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { enviarPush } from "@/lib/push/send";
 
 async function requireAdmin() {
   const supabase = await createClient();
@@ -62,6 +63,19 @@ export async function createPartido(formData: FormData) {
 
   if (pjError) return { error: pjError.message };
 
+  const fechaFormateada = new Date(fecha + "T00:00:00").toLocaleDateString("es-AR", {
+    day: "numeric",
+    month: "long",
+  });
+  const destinatarios = participantes
+    .map((p) => p.jugador_id)
+    .filter((id) => id !== userId);
+  await enviarPush(destinatarios, {
+    title: "Nuevo partido",
+    body: `${fechaFormateada} vs ${rival} en ${lugar}. ¡Ya estás convocado!`,
+    url: `/partidos/${partido.id}`,
+  });
+
   revalidatePath("/partidos");
   redirect(`/partidos/${partido.id}`);
 }
@@ -103,6 +117,13 @@ export async function guardarGolesPartido({ partidoId, goles, golesOtros, golesR
     return { error: "Datos de goles inválidos." };
   }
 
+  const { data: partido } = await supabase
+    .from("partidos")
+    .select("rival, votacion_abierta_notificada")
+    .eq("id", partidoId)
+    .single();
+  if (!partido) return { error: "Partido no encontrado." };
+
   for (const { jugadorId, goles: cantidad } of goles) {
     const { error } = await supabase
       .from("partido_jugadores")
@@ -117,6 +138,27 @@ export async function guardarGolesPartido({ partidoId, goles, golesOtros, golesR
     .update({ goles_otros: golesOtros, goles_rival: golesRival })
     .eq("id", partidoId);
   if (partidoError) return { error: partidoError.message };
+
+  if (!partido.votacion_abierta_notificada) {
+    const { data: participantes } = await supabase
+      .from("partido_jugadores")
+      .select("jugador_id")
+      .eq("partido_id", partidoId);
+
+    await enviarPush(
+      (participantes ?? []).map((p) => p.jugador_id),
+      {
+        title: "¡Se abrió la votación!",
+        body: `Votá Mejor Jugador y Peor Jugador del partido vs ${partido.rival}.`,
+        url: `/partidos/${partidoId}`,
+      }
+    );
+
+    await supabase
+      .from("partidos")
+      .update({ votacion_abierta_notificada: true })
+      .eq("id", partidoId);
+  }
 
   revalidatePath(`/partidos/${partidoId}`);
   revalidatePath("/estadisticas");

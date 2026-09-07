@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import PerfilForm from "./PerfilForm";
+import PushSubscribe from "@/components/PushSubscribe";
 
 export default async function PerfilPage() {
   const supabase = await createClient();
@@ -20,7 +21,10 @@ export default async function PerfilPage() {
   return (
     <div className="mx-auto max-w-sm">
       <h1 className="mb-6 text-2xl font-extrabold tracking-tight text-white">Mi perfil</h1>
-      <PerfilForm profile={profile} />
+      <div className="flex flex-col gap-5">
+        <PerfilForm profile={profile} />
+        <PushSubscribe />
+      </div>
     </div>
   );
 }

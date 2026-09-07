@@ -65,12 +65,26 @@ Para el resto de tus amigos: cada uno se registra solo desde `/signup`, no hace 
 
 No hace falta configurar nada más del lado de Supabase para producción: la misma URL/keys sirven para local y para Vercel.
 
+## 6. Notificaciones push
+
+La app manda una notificación push (Web Push, sin app nativa) cuando: se crea un partido nuevo, se abre la votación (al cargar los goles) y se cierra la votación (cuando termina de votar todo el mundo, o a los 7 días si no votaron todos).
+
+1. Ejecutá la migración [`0008_push_notifications.sql`](supabase/migrations/0008_push_notifications.sql) en el SQL Editor de Supabase (agrega la tabla de suscripciones y los flags de notificación en `partidos`).
+2. En **Project Settings → API** de Supabase copiá la **service_role secret key** y ponela en `SUPABASE_SERVICE_ROLE_KEY` (local: `.env.local`; producción: variables de entorno de Vercel). **Nunca** la expongas al cliente ni la subas a git.
+3. Las claves VAPID (`NEXT_PUBLIC_VAPID_PUBLIC_KEY` y `VAPID_PRIVATE_KEY`) y el `CRON_SECRET` ya vienen generados en `.env.local`; para producción, copiá esos mismos valores a las variables de entorno de Vercel (o generá un par nuevo con `npx web-push generate-vapid-keys` si preferís).
+4. En Vercel, el cron que cierra votaciones vencidas (`vercel.json`) se activa solo al hacer deploy; no requiere nada adicional.
+5. Cada jugador activa las notificaciones desde **Perfil → Notificaciones**, aceptando el permiso del navegador.
+
+**iPhone:** Safari solo entrega push a partir de iOS 16.4, y únicamente si la app fue agregada a la pantalla de inicio (Compartir → Agregar a inicio). Si solo la tienen abierta en una pestaña normal, no les va a llegar nada. En Android/Chrome funciona directo, sin instalar nada.
+
 ## Estructura del proyecto
 
 ```
 supabase/migrations/0001_init.sql   Esquema completo (tablas, RLS, triggers, funciones, storage)
 src/lib/supabase/                   Clientes de Supabase (browser, server, middleware/proxy)
-src/lib/actions/                    Server actions (auth, perfil, partidos, votos)
+src/lib/actions/                    Server actions (auth, perfil, partidos, votos, push)
+src/lib/push/                       Envío de notificaciones push (web-push)
+public/sw.js, public/manifest.json  Service worker y manifest de la PWA
 src/app/login, /signup              Autenticación
 src/app/perfil                      Editar perfil y foto
 src/app/partidos                    Listado, alta (admin) y detalle (goles + votación)
