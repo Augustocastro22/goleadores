@@ -26,7 +26,10 @@ export default async function PartidosPage() {
     .order("fecha", { ascending: false })
     .returns<Partido[]>();
 
-  const resultadosPorPartido = new Map<string, Resultado>();
+  const resumenPorPartido = new Map<
+    string,
+    { golesEquipo1: number; golesEquipo2: number; resultado: Resultado }
+  >();
   if (partidos && partidos.length > 0) {
     const { data: pj } = await supabase
       .from("partido_jugadores")
@@ -48,11 +51,15 @@ export default async function PartidosPage() {
       const acc = golesPorEquipo.get(partido.id) ?? { e1: 0, e2: 0 };
       const golesEquipo1 = acc.e1 + partido.goles_otros;
       const golesEquipo2 = acc.e2 + partido.goles_rival;
-      resultadosPorPartido.set(partido.id, calcularResultado(golesEquipo1, golesEquipo2));
+      resumenPorPartido.set(partido.id, {
+        golesEquipo1,
+        golesEquipo2,
+        resultado: calcularResultado(golesEquipo1, golesEquipo2),
+      });
     }
   }
 
-  const resultados = [...resultadosPorPartido.values()];
+  const resultados = [...resumenPorPartido.values()].map((r) => r.resultado);
   const ganados = resultados.filter((r) => r === "G").length;
   const empatados = resultados.filter((r) => r === "E").length;
   const perdidos = resultados.filter((r) => r === "P").length;
@@ -83,7 +90,7 @@ export default async function PartidosPage() {
           <div className="flex flex-col gap-3">
             {partidos.map((partido) => {
               const fecha = new Date(partido.fecha + "T00:00:00");
-              const resultado = resultadosPorPartido.get(partido.id);
+              const resumen = resumenPorPartido.get(partido.id);
               return (
                 <Link key={partido.id} href={`/partidos/${partido.id}`} className="block">
                   <Card className="flex items-center justify-between gap-4 px-4 py-4 transition hover:border-border-strong hover:bg-surface-2/80">
@@ -100,12 +107,17 @@ export default async function PartidosPage() {
                       </div>
                     </div>
                     <div className="flex shrink-0 items-center gap-3">
-                      {resultado && (
-                        <span
-                          className={`flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold ${RESULTADO_CLASS[resultado]}`}
-                        >
-                          {resultado}
-                        </span>
+                      {resumen && (
+                        <>
+                          <span className="text-sm font-bold tabular-nums text-white">
+                            {resumen.golesEquipo1}-{resumen.golesEquipo2}
+                          </span>
+                          <span
+                            className={`flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold ${RESULTADO_CLASS[resumen.resultado]}`}
+                          >
+                            {resumen.resultado}
+                          </span>
+                        </>
                       )}
                       <IconChevronRight className="h-5 w-5 text-zinc-600" />
                     </div>
