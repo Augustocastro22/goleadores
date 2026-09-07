@@ -122,6 +122,8 @@ export default async function JugadorDetallePage({
       rachaPresenciaActual = 0;
     }
   }
+  const totalPartidosGrupo = (todosPartidosRes.data ?? []).length;
+  const presenciaPerfecta = totalPartidosGrupo > 0 && partidosJugados === totalPartidosGrupo;
 
   // Racha de MVP: partidos consecutivos (propios, con votación cerrada) elegido Mejor Jugador.
   const misPartidosAsc = [...misPartidos].sort((a, b) => a.partidos.fecha.localeCompare(b.partidos.fecha));
@@ -167,13 +169,19 @@ export default async function JugadorDetallePage({
           detalle: `${rachaGolMax} partidos seguidos convirtiendo gol.`,
         }
       : null,
-    rachaPresenciaMax >= 5
+    presenciaPerfecta
       ? {
           icon: IconUsers,
-          titulo: "Siempre presente",
-          detalle: `${rachaPresenciaMax} partidos seguidos sin faltar.`,
+          titulo: "Presencia perfecta",
+          detalle: `Jugó los ${totalPartidosGrupo} partidos del grupo.`,
         }
-      : null,
+      : rachaPresenciaMax >= 5
+        ? {
+            icon: IconUsers,
+            titulo: "Siempre presente",
+            detalle: `${rachaPresenciaMax} partidos seguidos sin faltar.`,
+          }
+        : null,
     rachaMvpMax >= 3
       ? {
           icon: IconTrophy,
