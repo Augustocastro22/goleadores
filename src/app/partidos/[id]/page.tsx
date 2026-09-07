@@ -76,15 +76,15 @@ export default async function PartidoDetailPage({
     votosPeor,
   });
 
-  let ganadoresMvp: RankingRow[] = [];
-  let ganadoresPeor: RankingRow[] = [];
+  let desgloseMvp: RankingRow[] = [];
+  let desglosePeor: RankingRow[] = [];
   if (cerrada) {
     const [mvpRes, peorRes] = await Promise.all([
-      supabase.rpc("get_ganadores_votacion", { p_partido_id: id, p_tipo: "MVP" }),
-      supabase.rpc("get_ganadores_votacion", { p_partido_id: id, p_tipo: "PEOR" }),
+      supabase.rpc("get_desglose_votos", { p_partido_id: id, p_tipo: "MVP" }),
+      supabase.rpc("get_desglose_votos", { p_partido_id: id, p_tipo: "PEOR" }),
     ]);
-    ganadoresMvp = (mvpRes.data ?? []) as RankingRow[];
-    ganadoresPeor = (peorRes.data ?? []) as RankingRow[];
+    desgloseMvp = (mvpRes.data ?? []) as RankingRow[];
+    desglosePeor = (peorRes.data ?? []) as RankingRow[];
   }
 
   const fecha = new Date(partido.fecha + "T00:00:00").toLocaleDateString("es-AR", {
@@ -121,8 +121,8 @@ export default async function PartidoDetailPage({
           <h2 className="mb-3 text-lg font-bold text-white">Votación</h2>
           {cerrada ? (
             <div className="flex flex-col gap-3">
-              <GanadorCard label="Mejor Jugador" ganadores={ganadoresMvp} />
-              <GanadorCard label="Peor Jugador" ganadores={ganadoresPeor} />
+              <DesgloseVotos label="Mejor Jugador" filas={desgloseMvp} />
+              <DesgloseVotos label="Peor Jugador" filas={desglosePeor} />
             </div>
           ) : (
             <VotacionForm
@@ -157,8 +157,8 @@ export default async function PartidoDetailPage({
   );
 }
 
-function GanadorCard({ label, ganadores }: { label: string; ganadores: RankingRow[] }) {
-  if (ganadores.length === 0) {
+function DesgloseVotos({ label, filas }: { label: string; filas: RankingRow[] }) {
+  if (filas.length === 0) {
     return (
       <Card className="px-4 py-3 text-sm text-zinc-500">
         {label}: nadie votó a tiempo en este partido.
@@ -166,15 +166,28 @@ function GanadorCard({ label, ganadores }: { label: string; ganadores: RankingRo
     );
   }
 
-  const nombres = ganadores
-    .map((g) => `${g.nombre} ${g.apellido} (${g.apodo})`)
-    .join(" y ");
-  const votos = ganadores[0].votos ?? 0;
+  const maxVotos = filas[0].votos ?? 0;
 
   return (
-    <Card className="px-4 py-3 text-sm text-zinc-200">
-      <span className="font-semibold text-white">{label}:</span> {nombres} — {votos}{" "}
-      {votos === 1 ? "voto" : "votos"}
+    <Card className="p-4">
+      <p className="mb-2 text-sm font-semibold text-white">{label}</p>
+      <div className="flex flex-col gap-1.5">
+        {filas.map((f) => {
+          const esGanador = (f.votos ?? 0) === maxVotos;
+          return (
+            <div key={f.jugador_id} className="flex items-center justify-between gap-3 text-sm">
+              <span className={esGanador ? "font-semibold text-white" : "text-zinc-400"}>
+                {f.nombre} {f.apellido} <span className="text-zinc-500">({f.apodo})</span>
+              </span>
+              <span
+                className={`shrink-0 font-bold tabular-nums ${esGanador ? "text-primary-400" : "text-zinc-500"}`}
+              >
+                {f.votos}
+              </span>
+            </div>
+          );
+        })}
+      </div>
     </Card>
   );
 }
