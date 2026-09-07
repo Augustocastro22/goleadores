@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import type { RankingRow } from "@/lib/types";
+import { votacionCerrada } from "@/lib/votacion";
+import type { EstadoVotacion, RankingRow } from "@/lib/types";
 import Card from "@/components/ui/Card";
 import Avatar from "@/components/ui/Avatar";
 import { IconGoal, IconThumbsDown, IconTrophy } from "@/components/icons";
@@ -13,11 +14,51 @@ export default async function EstadisticasPage() {
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const [goleadores, mvp, peor] = await Promise.all([
+  const [goleadores, mvp, peor, partidosRes] = await Promise.all([
     supabase.rpc("get_goleadores"),
     supabase.rpc("get_ranking_votos", { p_tipo: "MVP" }),
     supabase.rpc("get_ranking_votos", { p_tipo: "PEOR" }),
+    supabase
+      .from("partidos")
+      .select("id, fecha")
+      .order("fecha", { ascending: false })
+      .order("created_at", { ascending: false })
+      .limit(10),
   ]);
+
+  let ultimoPartidoCerradoId: string | null = null;
+  for (const partido of partidosRes.data ?? []) {
+    const { data: estado } = await supabase
+      .rpc("get_estado_votacion", { p_partido_id: partido.id })
+      .single<EstadoVotacion>();
+    const cerrada = votacionCerrada({
+      fechaPartido: partido.fecha,
+      totalParticipantes: estado?.total_participantes ?? 0,
+      votosMvp: estado?.votos_mvp ?? 0,
+      votosPeor: estado?.votos_peor ?? 0,
+    });
+    if (cerrada) {
+      ultimoPartidoCerradoId = partido.id;
+      break;
+    }
+  }
+
+  let ultimoMvp: RankingRow[] = [];
+  let ultimoPeor: RankingRow[] = [];
+  if (ultimoPartidoCerradoId) {
+    const [ultimoMvpRes, ultimoPeorRes] = await Promise.all([
+      supabase.rpc("get_ganadores_votacion", {
+        p_partido_id: ultimoPartidoCerradoId,
+        p_tipo: "MVP",
+      }),
+      supabase.rpc("get_ganadores_votacion", {
+        p_partido_id: ultimoPartidoCerradoId,
+        p_tipo: "PEOR",
+      }),
+    ]);
+    ultimoMvp = (ultimoMvpRes.data ?? []) as RankingRow[];
+    ultimoPeor = (ultimoPeorRes.data ?? []) as RankingRow[];
+  }
 
   return (
     <div className="flex flex-col gap-8">
@@ -38,6 +79,7 @@ export default async function EstadisticasPage() {
         valueKey="veces_elegido"
         valueLabel="Veces"
         onlyLideres
+        ultimoPartidoGanadores={ultimoMvp}
       />
       <RankingList
         titulo="Peor Jugador"
@@ -47,6 +89,7 @@ export default async function EstadisticasPage() {
         valueKey="veces_elegido"
         valueLabel="Veces"
         onlyLideres
+        ultimoPartidoGanadores={ultimoPeor}
       />
     </div>
   );
@@ -66,6 +109,7 @@ function RankingList({
   valueKey,
   valueLabel,
   onlyLideres = false,
+  ultimoPartidoGanadores,
 }: {
   titulo: string;
   icon: ComponentType<SVGProps<SVGSVGElement>>;
@@ -74,6 +118,7 @@ function RankingList({
   valueKey: "goles" | "veces_elegido";
   valueLabel: string;
   onlyLideres?: boolean;
+  ultimoPartidoGanadores?: RankingRow[];
 }) {
   let ordenadas = [...rows]
     .filter((r) => (r[valueKey] ?? 0) > 0)
@@ -86,7 +131,7 @@ function RankingList({
 
   return (
     <section>
-      <div className="mb-3 flex items-center gap-2.5">
+      <div className="mb-1 flex items-center gap-2.5">
         <span className={`flex h-8 w-8 items-center justify-center rounded-lg ${iconClassName}`}>
           <Icon className="h-4 w-4" />
         </span>
@@ -99,6 +144,16 @@ function RankingList({
           )}
         </div>
       </div>
+      {ultimoPartidoGanadores && ultimoPartidoGanadores.length > 0 && (
+        <p className="mb-3 pl-10 text-xs text-zinc-500">
+          Último partido:{" "}
+          <span className="text-zinc-400">
+            {ultimoPartidoGanadores.map((g) => g.apodo).join(" y ")}
+          </span>{" "}
+          con {ultimoPartidoGanadores[0].votos}{" "}
+          {ultimoPartidoGanadores[0].votos === 1 ? "voto" : "votos"}
+        </p>
+      )}
       {ordenadas.length === 0 ? (
         <Card className="px-5 py-8 text-center text-sm text-zinc-500">Todavía no hay datos.</Card>
       ) : (
