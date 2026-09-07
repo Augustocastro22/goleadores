@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import type { Profile, RankingRow } from "@/lib/types";
@@ -50,30 +51,29 @@ export default async function JugadoresPage() {
       ) : (
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
           {jugadores.map((j) => (
-            <Card
-              key={j.id}
-              className="flex min-w-0 flex-col items-center gap-3 p-5 text-center"
-            >
-              <Avatar src={j.foto_url} alt={j.apodo} size={72} />
-              <div className="w-full min-w-0">
-                <p className="truncate font-semibold text-white">
-                  {j.nombre} {j.apellido}
+            <Link key={j.id} href={`/jugadores/${j.id}`} className="block">
+              <Card className="flex min-w-0 flex-col items-center gap-3 p-5 text-center transition hover:border-border-strong hover:bg-surface-2/80">
+                <Avatar src={j.foto_url} alt={j.apodo} size={72} />
+                <div className="w-full min-w-0">
+                  <p className="truncate font-semibold text-white">
+                    {j.nombre} {j.apellido}
+                  </p>
+                  <p className="truncate text-sm text-zinc-500">{j.apodo}</p>
+                </div>
+                <Badge variant={j.rol === "admin" ? "gold" : "neutral"}>
+                  {j.rol === "admin" ? "Admin" : "Jugador"}
+                </Badge>
+                <div className="mt-1 grid w-full grid-cols-3 divide-x divide-border border-t border-border pt-3">
+                  <Stat icon={IconGoal} value={goles.get(j.id) ?? 0} label="Goles" />
+                  <Stat icon={IconTrophy} value={vecesMvp.get(j.id) ?? 0} label="MVP" />
+                  <Stat icon={IconThumbsDown} value={vecesPeor.get(j.id) ?? 0} label="Peor" />
+                </div>
+                <p className="text-[11px] text-zinc-600">
+                  {partidosJugados.get(j.id) ?? 0}{" "}
+                  {(partidosJugados.get(j.id) ?? 0) === 1 ? "partido jugado" : "partidos jugados"}
                 </p>
-                <p className="truncate text-sm text-zinc-500">{j.apodo}</p>
-              </div>
-              <Badge variant={j.rol === "admin" ? "gold" : "neutral"}>
-                {j.rol === "admin" ? "Admin" : "Jugador"}
-              </Badge>
-              <div className="mt-1 grid w-full grid-cols-3 divide-x divide-border border-t border-border pt-3">
-                <Stat icon={IconGoal} value={goles.get(j.id) ?? 0} label="Goles" />
-                <Stat icon={IconTrophy} value={vecesMvp.get(j.id) ?? 0} label="MVP" />
-                <Stat icon={IconThumbsDown} value={vecesPeor.get(j.id) ?? 0} label="Peor" />
-              </div>
-              <p className="text-[11px] text-zinc-600">
-                {partidosJugados.get(j.id) ?? 0}{" "}
-                {(partidosJugados.get(j.id) ?? 0) === 1 ? "partido jugado" : "partidos jugados"}
-              </p>
-            </Card>
+              </Card>
+            </Link>
           ))}
         </div>
       )}
