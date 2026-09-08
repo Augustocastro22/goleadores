@@ -19,7 +19,8 @@ export async function GET(request: NextRequest) {
   const { data: partidos, error } = await supabase
     .from("partidos")
     .select("id, fecha, rival")
-    .eq("votacion_cerrada_notificada", false);
+    .eq("votacion_cerrada_notificada", false)
+    .eq("jugado", true);
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 

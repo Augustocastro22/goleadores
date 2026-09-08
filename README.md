@@ -52,8 +52,8 @@ Para el resto de tus amigos: cada uno se registra solo desde `/signup`, no hace 
 ## 4. Cómo se usa
 
 - **Perfil**: cada jugador edita su nombre, apellido, apodo y foto (se redimensiona y comprime en el navegador antes de subirse, y siempre reemplaza la foto anterior).
-- **Partidos**: el admin carga fecha, lugar, rival y quiénes jugaron. Desde el detalle del partido el admin carga los goles de cada jugador.
-- **Votación**: dentro del detalle de un partido, cualquier jugador que haya participado puede votar Mejor Jugador y Peor Jugador (una vez por categoría y partido, y no puede votarse a sí mismo).
+- **Partidos**: el admin carga fecha, hora, lugar, rival y los convocados, normalmente antes de jugarse. Hasta que se cargan los goles, el partido es solo un evento (fecha/hora/lugar/convocados, sin resultado ni votación). Cuando termina de jugarse, el admin entra al detalle y carga los goles de cada jugador; recién ahí el partido pasa a "jugado", se calcula el resultado y se abre la votación.
+- **Votación**: una vez jugado el partido, cualquier jugador que haya participado puede votar Mejor Jugador y Peor Jugador (una vez por categoría y partido, y no puede votarse a sí mismo).
 - **Estadísticas**: tabla de goleadores históricos, ranking de MVP y ranking de Peor Jugador, calculadas siempre en vivo con funciones agregadas (no hay contadores guardados que se puedan desincronizar).
 
 ## 5. Deploy en Vercel

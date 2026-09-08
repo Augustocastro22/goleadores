@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import type { Partido } from "@/lib/types";
 import { calcularResultado, RESULTADO_CLASS, type Resultado } from "@/lib/resultado";
 import Card from "@/components/ui/Card";
+import Badge from "@/components/ui/Badge";
 import { buttonClass } from "@/components/ui/Button";
 import { IconChevronRight, IconPlus } from "@/components/icons";
 
@@ -48,6 +49,7 @@ export default async function PartidosPage() {
     }
 
     for (const partido of partidos) {
+      if (!partido.jugado) continue;
       const acc = golesPorEquipo.get(partido.id) ?? { e1: 0, e2: 0 };
       const golesEquipo1 = acc.e1 + partido.goles_otros;
       const golesEquipo2 = acc.e2 + partido.goles_rival;
@@ -110,7 +112,7 @@ export default async function PartidosPage() {
                       </div>
                     </div>
                     <div className="flex shrink-0 items-center gap-3">
-                      {resumen && (
+                      {resumen ? (
                         <>
                           <span className="text-sm font-bold tabular-nums text-white">
                             {resumen.golesEquipo1}-{resumen.golesEquipo2}
@@ -121,6 +123,8 @@ export default async function PartidosPage() {
                             {resumen.resultado}
                           </span>
                         </>
+                      ) : (
+                        <Badge>Programado</Badge>
                       )}
                       <IconChevronRight className="h-5 w-5 text-zinc-600" />
                     </div>

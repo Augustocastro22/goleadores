@@ -6,6 +6,8 @@ import { votacionCerrada } from "@/lib/votacion";
 import type { EstadoVotacion, Profile, RankingRow } from "@/lib/types";
 import Card from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
+import Badge from "@/components/ui/Badge";
+import Avatar from "@/components/ui/Avatar";
 import ConfirmSubmitButton from "@/components/ConfirmSubmitButton";
 import { IconChevronRight } from "@/components/icons";
 import GolesEditor from "./GolesEditor";
@@ -63,28 +65,31 @@ export default async function PartidoDetailPage({
   const yaVotePeor = (misVotos ?? []).some((v) => v.tipo === "PEOR");
   const candidatos = participantes.filter((p) => p.jugador_id !== user.id);
 
-  const { data: estadoVotacion } = await supabase
-    .rpc("get_estado_votacion", { p_partido_id: id })
-    .single<EstadoVotacion>();
-  const totalParticipantes = estadoVotacion?.total_participantes ?? participantes.length;
-  const votosMvp = estadoVotacion?.votos_mvp ?? 0;
-  const votosPeor = estadoVotacion?.votos_peor ?? 0;
-  const cerrada = votacionCerrada({
-    fechaPartido: partido.fecha,
-    totalParticipantes,
-    votosMvp,
-    votosPeor,
-  });
-
+  let cerrada = false;
   let desgloseMvp: RankingRow[] = [];
   let desglosePeor: RankingRow[] = [];
-  if (cerrada) {
-    const [mvpRes, peorRes] = await Promise.all([
-      supabase.rpc("get_desglose_votos", { p_partido_id: id, p_tipo: "MVP" }),
-      supabase.rpc("get_desglose_votos", { p_partido_id: id, p_tipo: "PEOR" }),
-    ]);
-    desgloseMvp = (mvpRes.data ?? []) as RankingRow[];
-    desglosePeor = (peorRes.data ?? []) as RankingRow[];
+  if (partido.jugado) {
+    const { data: estadoVotacion } = await supabase
+      .rpc("get_estado_votacion", { p_partido_id: id })
+      .single<EstadoVotacion>();
+    const totalParticipantes = estadoVotacion?.total_participantes ?? participantes.length;
+    const votosMvp = estadoVotacion?.votos_mvp ?? 0;
+    const votosPeor = estadoVotacion?.votos_peor ?? 0;
+    cerrada = votacionCerrada({
+      fechaPartido: partido.fecha,
+      totalParticipantes,
+      votosMvp,
+      votosPeor,
+    });
+
+    if (cerrada) {
+      const [mvpRes, peorRes] = await Promise.all([
+        supabase.rpc("get_desglose_votos", { p_partido_id: id, p_tipo: "MVP" }),
+        supabase.rpc("get_desglose_votos", { p_partido_id: id, p_tipo: "PEOR" }),
+      ]);
+      desgloseMvp = (mvpRes.data ?? []) as RankingRow[];
+      desglosePeor = (peorRes.data ?? []) as RankingRow[];
+    }
   }
 
   const fecha =
@@ -105,19 +110,29 @@ export default async function PartidoDetailPage({
 
   return (
     <div className="flex flex-col gap-8">
-      <GolesEditor
-        partidoId={id}
-        rival={partido.rival}
-        fecha={fecha}
-        lugar={partido.lugar}
-        equipo1={equipo1.map(toJugador)}
-        equipo2={equipo2.map(toJugador)}
-        golesOtrosInit={partido.goles_otros}
-        golesRivalInit={partido.goles_rival}
-        isAdmin={isAdmin}
-      />
+      {partido.jugado || isAdmin ? (
+        <GolesEditor
+          partidoId={id}
+          rival={partido.rival}
+          fecha={fecha}
+          lugar={partido.lugar}
+          equipo1={equipo1.map(toJugador)}
+          equipo2={equipo2.map(toJugador)}
+          golesOtrosInit={partido.goles_otros}
+          golesRivalInit={partido.goles_rival}
+          isAdmin={isAdmin}
+        />
+      ) : (
+        <EventoProgramado
+          rival={partido.rival}
+          fecha={fecha}
+          lugar={partido.lugar}
+          equipo1={equipo1}
+          equipo2={equipo2}
+        />
+      )}
 
-      {soyParticipante && (
+      {soyParticipante && partido.jugado && (
         <section>
           <h2 className="mb-3 text-lg font-bold text-white">Votación</h2>
           {cerrada ? (
@@ -154,6 +169,59 @@ export default async function PartidoDetailPage({
           </form>
         </section>
       )}
+    </div>
+  );
+}
+
+function EventoProgramado({
+  rival,
+  fecha,
+  lugar,
+  equipo1,
+  equipo2,
+}: {
+  rival: string;
+  fecha: string;
+  lugar: string;
+  equipo1: ParticipanteRow[];
+  equipo2: ParticipanteRow[];
+}) {
+  return (
+    <div className="flex flex-col gap-6">
+      <Card className="p-6">
+        <div className="flex items-center justify-between gap-2 text-xs font-medium text-zinc-500">
+          <span className="truncate capitalize">{fecha}</span>
+          <span className="truncate">{lugar}</span>
+        </div>
+        <div className="mt-4 flex flex-col items-center gap-2">
+          <Badge>Partido programado</Badge>
+          <p className="text-lg font-bold text-white">vs {rival}</p>
+        </div>
+      </Card>
+
+      <ConvocadosList titulo="Convocados · Equipo 1 (Nosotros)" jugadores={equipo1} />
+      {equipo2.length > 0 && (
+        <ConvocadosList titulo={`Convocados · Equipo 2 (${rival})`} jugadores={equipo2} />
+      )}
+    </div>
+  );
+}
+
+function ConvocadosList({ titulo, jugadores }: { titulo: string; jugadores: ParticipanteRow[] }) {
+  return (
+    <div>
+      <h2 className="mb-3 text-lg font-bold text-white">{titulo}</h2>
+      <Card className="divide-y divide-border overflow-hidden py-1">
+        {jugadores.map((p) => (
+          <div key={p.jugador_id} className="flex items-center gap-3 px-4 py-3">
+            <Avatar src={p.profiles.foto_url} alt={p.profiles.apodo} size={32} />
+            <span className="truncate text-sm text-zinc-200">
+              {p.profiles.nombre} {p.profiles.apellido}{" "}
+              <span className="text-zinc-500">({p.profiles.apodo})</span>
+            </span>
+          </div>
+        ))}
+      </Card>
     </div>
   );
 }

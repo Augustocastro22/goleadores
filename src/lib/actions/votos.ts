@@ -24,10 +24,11 @@ export async function votar(formData: FormData) {
 
   const { data: partido } = await supabase
     .from("partidos")
-    .select("fecha, rival, votacion_cerrada_notificada")
+    .select("fecha, rival, jugado, votacion_cerrada_notificada")
     .eq("id", partidoId)
     .single();
   if (!partido) return { error: "Partido no encontrado." };
+  if (!partido.jugado) return { error: "Todavía no se cargaron los resultados de este partido." };
 
   const { data: estado } = await supabase
     .rpc("get_estado_votacion", { p_partido_id: partidoId })

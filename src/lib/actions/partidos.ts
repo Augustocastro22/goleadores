@@ -69,9 +69,7 @@ export async function createPartido(formData: FormData) {
     month: "long",
   });
   const horaFormateada = hora ? ` a las ${hora.slice(0, 5)}` : "";
-  const destinatarios = participantes
-    .map((p) => p.jugador_id)
-    .filter((id) => id !== userId);
+  const destinatarios = participantes.map((p) => p.jugador_id);
   await enviarPush(destinatarios, {
     title: "Nuevo partido",
     body: `${fechaFormateada}${horaFormateada} vs ${rival} en ${lugar}. ¡Ya estás convocado!`,
@@ -137,7 +135,7 @@ export async function guardarGolesPartido({ partidoId, goles, golesOtros, golesR
 
   const { error: partidoError } = await supabase
     .from("partidos")
-    .update({ goles_otros: golesOtros, goles_rival: golesRival })
+    .update({ goles_otros: golesOtros, goles_rival: golesRival, jugado: true })
     .eq("id", partidoId);
   if (partidoError) return { error: partidoError.message };
 

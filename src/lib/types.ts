@@ -23,6 +23,7 @@ export interface Partido {
   created_at: string;
   votacion_abierta_notificada: boolean;
   votacion_cerrada_notificada: boolean;
+  jugado: boolean;
 }
 
 export type Equipo = 1 | 2;
