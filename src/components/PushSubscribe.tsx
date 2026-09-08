@@ -22,6 +22,14 @@ export default function PushSubscribe() {
         <p className="text-sm text-zinc-500">Tu navegador no soporta notificaciones push.</p>
       )}
 
+      {estado === "requiere-instalar" && (
+        <p className="text-sm text-zinc-500">
+          En iPhone, Safari solo entrega notificaciones a apps agregadas a la pantalla de inicio.
+          Tocá <span className="text-zinc-300">Compartir → Agregar a inicio</span>, abrí la app
+          desde ese ícono y volvé acá para activarlas.
+        </p>
+      )}
+
       {estado === "denegado" && (
         <p className="text-sm text-zinc-500">
           Bloqueaste las notificaciones para este sitio. Para activarlas, habilitalas desde los
@@ -47,11 +55,6 @@ export default function PushSubscribe() {
           {working ? "Desactivando..." : "Desactivar notificaciones"}
         </Button>
       )}
-
-      <p className="text-xs text-zinc-600">
-        En iPhone: agregá esta app a la pantalla de inicio (Compartir → Agregar a inicio) para
-        poder recibir notificaciones.
-      </p>
 
       {error && <p className="text-sm text-danger-400">{error}</p>}
     </Card>

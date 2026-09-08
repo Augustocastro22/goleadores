@@ -3,13 +3,31 @@
 import { useEffect, useState } from "react";
 import { suscribirPush, desuscribirPush } from "@/lib/actions/push";
 
-export type PushEstado = "cargando" | "no-soportado" | "denegado" | "activo" | "inactivo";
+export type PushEstado =
+  | "cargando"
+  | "no-soportado"
+  | "requiere-instalar"
+  | "denegado"
+  | "activo"
+  | "inactivo";
 
 function urlBase64ToUint8Array(base64String: string) {
   const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
   const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
   const rawData = atob(base64);
   return Uint8Array.from([...rawData].map((c) => c.charCodeAt(0)));
+}
+
+/** iOS solo entrega push a una PWA agregada a la pantalla de inicio: en una
+ * pestaña normal de Safari (o Chrome/iOS, que también es WebKit) el pedido
+ * de permiso falla en silencio o nunca aparece. */
+function requiereInstalarEnIOS() {
+  const esIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
+  if (!esIOS) return false;
+  const esStandalone =
+    window.matchMedia("(display-mode: standalone)").matches ||
+    (navigator as unknown as { standalone?: boolean }).standalone === true;
+  return !esStandalone;
 }
 
 /** Estado y acciones de la suscripción push del dispositivo actual. */
@@ -22,6 +40,10 @@ export function usePushSubscription() {
     async function check() {
       if (!("serviceWorker" in navigator) || !("PushManager" in window) || !("Notification" in window)) {
         setEstado("no-soportado");
+        return;
+      }
+      if (requiereInstalarEnIOS()) {
+        setEstado("requiere-instalar");
         return;
       }
       if (Notification.permission === "denied") {
@@ -39,6 +61,10 @@ export function usePushSubscription() {
     setWorking(true);
     setError(null);
     try {
+      if (requiereInstalarEnIOS()) {
+        setEstado("requiere-instalar");
+        return;
+      }
       const permiso = await Notification.requestPermission();
       if (permiso !== "granted") {
         setEstado("denegado");

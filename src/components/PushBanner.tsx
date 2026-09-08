@@ -20,7 +20,7 @@ export default function PushBanner() {
     cargar();
   }, []);
 
-  if (estado !== "inactivo" || dismissed) return null;
+  if ((estado !== "inactivo" && estado !== "requiere-instalar") || dismissed) return null;
 
   function ocultar() {
     localStorage.setItem(DISMISSED_KEY, "1");
@@ -32,14 +32,18 @@ export default function PushBanner() {
       <div className="min-w-0 flex-1">
         <p className="text-sm font-semibold text-white">Activá las notificaciones</p>
         <p className="mt-0.5 text-xs text-zinc-500">
-          Enterate al toque cuando se arma un partido o se abre la votación.
+          {estado === "requiere-instalar"
+            ? "En iPhone: tocá Compartir → Agregar a inicio y abrí la app desde ese ícono para poder activarlas."
+            : "Enterate al toque cuando se arma un partido o se abre la votación."}
         </p>
         {error && <p className="mt-1 text-xs text-danger-400">{error}</p>}
       </div>
       <div className="flex shrink-0 items-center gap-2">
-        <Button type="button" size="sm" onClick={activar} disabled={working}>
-          {working ? "Activando..." : "Activar"}
-        </Button>
+        {estado === "inactivo" && (
+          <Button type="button" size="sm" onClick={activar} disabled={working}>
+            {working ? "Activando..." : "Activar"}
+          </Button>
+        )}
         <button
           type="button"
           onClick={ocultar}
