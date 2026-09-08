@@ -21,6 +21,7 @@ export default async function EstadisticasPage() {
     supabase
       .from("partidos")
       .select("id, fecha")
+      .eq("jugado", true)
       .order("fecha", { ascending: false })
       .order("created_at", { ascending: false })
       .limit(10),

@@ -54,9 +54,10 @@ export default async function JugadorDetallePage({
     supabase.rpc("get_ranking_votos", { p_tipo: "PEOR" }),
     supabase
       .from("partido_jugadores")
-      .select("partido_id, goles, equipo, partidos(fecha, rival, lugar, goles_rival, goles_otros)")
-      .eq("jugador_id", id),
-    supabase.from("partidos").select("id, fecha").order("fecha", { ascending: true }),
+      .select("partido_id, goles, equipo, partidos!inner(fecha, rival, lugar, goles_rival, goles_otros, jugado)")
+      .eq("jugador_id", id)
+      .eq("partidos.jugado", true),
+    supabase.from("partidos").select("id, fecha").eq("jugado", true).order("fecha", { ascending: true }),
   ]);
 
   const goleadores = (goleadoresRes.data ?? []) as RankingRow[];
