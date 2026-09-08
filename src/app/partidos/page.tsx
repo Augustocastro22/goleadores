@@ -7,6 +7,7 @@ import Card from "@/components/ui/Card";
 import Badge from "@/components/ui/Badge";
 import { buttonClass } from "@/components/ui/Button";
 import { IconChevronRight, IconPlus } from "@/components/icons";
+import PushBanner from "@/components/PushBanner";
 
 export default async function PartidosPage() {
   const supabase = await createClient();
@@ -68,6 +69,8 @@ export default async function PartidosPage() {
 
   return (
     <div>
+      <PushBanner />
+
       <div className="mb-6 flex items-center justify-between">
         <h1 className="text-2xl font-extrabold tracking-tight text-white">Partidos</h1>
         {profile?.rol === "admin" && (
