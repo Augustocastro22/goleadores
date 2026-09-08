@@ -26,6 +26,7 @@ export async function createPartido(formData: FormData) {
   if (!isAdmin) return { error: "Solo el admin puede cargar partidos." };
 
   const fecha = String(formData.get("fecha") ?? "");
+  const hora = String(formData.get("hora") ?? "").trim() || null;
   const lugar = String(formData.get("lugar") ?? "").trim();
   const rival = String(formData.get("rival") ?? "").trim();
 
@@ -46,7 +47,7 @@ export async function createPartido(formData: FormData) {
 
   const { data: partido, error } = await supabase
     .from("partidos")
-    .insert({ fecha, lugar, rival, created_by: userId })
+    .insert({ fecha, hora, lugar, rival, created_by: userId })
     .select()
     .single();
 
@@ -67,12 +68,13 @@ export async function createPartido(formData: FormData) {
     day: "numeric",
     month: "long",
   });
+  const horaFormateada = hora ? ` a las ${hora.slice(0, 5)}` : "";
   const destinatarios = participantes
     .map((p) => p.jugador_id)
     .filter((id) => id !== userId);
   await enviarPush(destinatarios, {
     title: "Nuevo partido",
-    body: `${fechaFormateada} vs ${rival} en ${lugar}. ¡Ya estás convocado!`,
+    body: `${fechaFormateada}${horaFormateada} vs ${rival} en ${lugar}. ¡Ya estás convocado!`,
     url: `/partidos/${partido.id}`,
   });
 

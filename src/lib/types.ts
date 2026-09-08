@@ -14,6 +14,7 @@ export interface Profile {
 export interface Partido {
   id: string;
   fecha: string;
+  hora: string | null;
   lugar: string;
   rival: string;
   goles_rival: number;

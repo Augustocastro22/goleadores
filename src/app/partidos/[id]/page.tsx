@@ -87,11 +87,12 @@ export default async function PartidoDetailPage({
     desglosePeor = (peorRes.data ?? []) as RankingRow[];
   }
 
-  const fecha = new Date(partido.fecha + "T00:00:00").toLocaleDateString("es-AR", {
-    weekday: "long",
-    day: "numeric",
-    month: "long",
-  });
+  const fecha =
+    new Date(partido.fecha + "T00:00:00").toLocaleDateString("es-AR", {
+      weekday: "long",
+      day: "numeric",
+      month: "long",
+    }) + (partido.hora ? ` · ${partido.hora.slice(0, 5)}hs` : "");
 
   const toJugador = (p: ParticipanteRow) => ({
     jugadorId: p.jugador_id,

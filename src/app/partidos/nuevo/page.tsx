@@ -38,10 +38,16 @@ export default async function NuevoPartidoPage() {
           }}
           className="flex flex-col gap-4"
         >
-          <Label>
-            Fecha
-            <Input type="date" name="fecha" required />
-          </Label>
+          <div className="flex gap-3">
+            <Label className="flex-1">
+              Fecha
+              <Input type="date" name="fecha" required />
+            </Label>
+            <Label className="w-28 shrink-0">
+              Hora
+              <Input type="time" name="hora" />
+            </Label>
+          </div>
           <Label>
             Lugar
             <Input type="text" name="lugar" required />

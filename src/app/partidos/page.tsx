@@ -103,7 +103,10 @@ export default async function PartidosPage() {
                       </div>
                       <div className="min-w-0">
                         <p className="truncate font-semibold text-white">vs {partido.rival}</p>
-                        <p className="truncate text-sm text-zinc-500">{partido.lugar}</p>
+                        <p className="truncate text-sm text-zinc-500">
+                          {partido.lugar}
+                          {partido.hora && ` · ${partido.hora.slice(0, 5)}hs`}
+                        </p>
                       </div>
                     </div>
                     <div className="flex shrink-0 items-center gap-3">
