@@ -22,16 +22,45 @@ export default function ConvocadosEditor({
   equipo2IdsInit: string[];
 }) {
   const router = useRouter();
-  const [asignaciones, setAsignaciones] = useState<Record<string, Equipo>>(() => {
+  const asignacionesIniciales = useMemo(() => {
     const inicial: Record<string, Equipo> = {};
     for (const id of equipo1IdsInit) inicial[id] = 1;
     for (const id of equipo2IdsInit) inicial[id] = 2;
     return inicial;
-  });
+  }, [equipo1IdsInit, equipo2IdsInit]);
+
+  const [editando, setEditando] = useState(false);
+  const [asignaciones, setAsignaciones] = useState(asignacionesIniciales);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ type: "ok" | "error"; text: string } | null>(null);
 
   const cantidad = useMemo(() => Object.keys(asignaciones).length, [asignaciones]);
+
+  const jugadorPorId = useMemo(() => {
+    const map = new Map<string, Profile>();
+    jugadores.forEach((j) => map.set(j.id, j));
+    return map;
+  }, [jugadores]);
+
+  const convocadosActuales = useMemo(
+    () =>
+      [...equipo1IdsInit, ...equipo2IdsInit]
+        .map((id) => jugadorPorId.get(id))
+        .filter((j): j is Profile => Boolean(j)),
+    [equipo1IdsInit, equipo2IdsInit, jugadorPorId]
+  );
+
+  function empezarEdicion() {
+    setMessage(null);
+    setAsignaciones(asignacionesIniciales);
+    setEditando(true);
+  }
+
+  function cancelarEdicion() {
+    setMessage(null);
+    setAsignaciones(asignacionesIniciales);
+    setEditando(false);
+  }
 
   function elegir(jugadorId: string, equipo: Equipo) {
     setMessage(null);
@@ -61,8 +90,52 @@ export default function ConvocadosEditor({
       setMessage({ type: "error", text: result.error });
     } else {
       setMessage({ type: "ok", text: "Convocatoria guardada." });
+      setEditando(false);
       router.refresh();
     }
+  }
+
+  if (!editando) {
+    return (
+      <div>
+        <div className="mb-3 flex items-center justify-between gap-2">
+          <h2 className="text-lg font-bold text-white">Convocatoria</h2>
+          <button
+            type="button"
+            onClick={empezarEdicion}
+            className="text-xs font-semibold text-primary-400 hover:text-primary-300"
+          >
+            Editar
+          </button>
+        </div>
+        <Card className="divide-y divide-border overflow-hidden py-1">
+          {convocadosActuales.length === 0 ? (
+            <p className="px-4 py-3 text-sm text-zinc-500">Todavía no hay nadie convocado.</p>
+          ) : (
+            convocadosActuales.map((jugador) => (
+              <div key={jugador.id} className="flex items-center gap-3 px-4 py-3">
+                <Avatar src={jugador.foto_url} alt={jugador.apodo} size={32} />
+                <span className="truncate text-sm text-zinc-200">
+                  {jugador.nombre} {jugador.apellido}{" "}
+                  <span className="text-zinc-500">({jugador.apodo})</span>
+                </span>
+              </div>
+            ))
+          )}
+        </Card>
+        {message && (
+          <p
+            className={`mt-2 rounded-xl border px-3.5 py-2.5 text-sm ${
+              message.type === "ok"
+                ? "border-primary-500/20 bg-primary-500/10 text-primary-400"
+                : "border-danger-500/20 bg-danger-500/10 text-danger-400"
+            }`}
+          >
+            {message.text}
+          </p>
+        )}
+      </div>
+    );
   }
 
   return (
@@ -118,9 +191,19 @@ export default function ConvocadosEditor({
         </div>
 
         <div className="mt-4 flex flex-col gap-2">
-          <Button type="button" onClick={handleGuardar} disabled={saving} className="w-full">
-            {saving ? "Guardando..." : `Guardar convocatoria (${cantidad})`}
-          </Button>
+          <div className="flex gap-2">
+            <Button type="button" onClick={handleGuardar} disabled={saving} className="flex-1">
+              {saving ? "Guardando..." : `Guardar convocatoria (${cantidad})`}
+            </Button>
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={cancelarEdicion}
+              disabled={saving}
+            >
+              Cancelar
+            </Button>
+          </div>
           {message && (
             <p
               className={`rounded-xl border px-3.5 py-2.5 text-sm ${
