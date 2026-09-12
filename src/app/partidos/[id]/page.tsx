@@ -1,9 +1,9 @@
 import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { deletePartido } from "@/lib/actions/partidos";
-import { votar } from "@/lib/actions/votos";
+import { votar, votarDesempate } from "@/lib/actions/votos";
 import { votacionCerrada } from "@/lib/votacion";
-import type { EstadoVotacion, Profile, RankingRow } from "@/lib/types";
+import type { Desempate, EstadoVotacion, Profile, RankingRow } from "@/lib/types";
 import Card from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
 import Badge from "@/components/ui/Badge";
@@ -55,6 +55,7 @@ export default async function PartidoDetailPage({
   const equipo2 = participantes.filter((p) => p.equipo === 2);
 
   const soyParticipante = participantes.some((p) => p.jugador_id === user.id);
+  const jugadorPorId = new Map(participantes.map((p) => [p.jugador_id, p.profiles]));
 
   let todosLosJugadores: Profile[] = [];
   if (isAdmin && !partido.jugado) {
@@ -79,6 +80,8 @@ export default async function PartidoDetailPage({
   let cerrada = false;
   let desgloseMvp: RankingRow[] = [];
   let desglosePeor: RankingRow[] = [];
+  let desempates: Desempate[] = [];
+  let misVotosDesempate: string[] = [];
   if (partido.jugado) {
     const { data: estadoVotacion } = await supabase
       .rpc("get_estado_votacion", { p_partido_id: id })
@@ -94,12 +97,27 @@ export default async function PartidoDetailPage({
     });
 
     if (cerrada) {
-      const [mvpRes, peorRes] = await Promise.all([
+      const [mvpRes, peorRes, desempatesRes] = await Promise.all([
         supabase.rpc("get_desglose_votos", { p_partido_id: id, p_tipo: "MVP" }),
         supabase.rpc("get_desglose_votos", { p_partido_id: id, p_tipo: "PEOR" }),
+        supabase.from("desempates").select("*").eq("partido_id", id).returns<Desempate[]>(),
       ]);
       desgloseMvp = (mvpRes.data ?? []) as RankingRow[];
       desglosePeor = (peorRes.data ?? []) as RankingRow[];
+      desempates = desempatesRes.data ?? [];
+
+      const pendientes = desempates.filter((d) => !d.resuelto);
+      if (pendientes.length > 0) {
+        const { data: misVotosDesempateRaw } = await supabase
+          .from("desempate_votos")
+          .select("desempate_id")
+          .eq("jugador_que_vota_id", user.id)
+          .in(
+            "desempate_id",
+            pendientes.map((d) => d.id)
+          );
+        misVotosDesempate = (misVotosDesempateRaw ?? []).map((v) => v.desempate_id);
+      }
     }
   }
 
@@ -158,7 +176,19 @@ export default async function PartidoDetailPage({
           {cerrada ? (
             <div className="flex flex-col gap-3">
               <DesgloseVotos label="Mejor Jugador" filas={desgloseMvp} />
+              <DesempateInfo
+                desempate={desempates.find((d) => d.tipo === "MVP") ?? null}
+                yaVote={misVotosDesempate}
+                miId={user.id}
+                jugadorPorId={jugadorPorId}
+              />
               <DesgloseVotos label="Peor Jugador" filas={desglosePeor} />
+              <DesempateInfo
+                desempate={desempates.find((d) => d.tipo === "PEOR") ?? null}
+                yaVote={misVotosDesempate}
+                miId={user.id}
+                jugadorPorId={jugadorPorId}
+              />
             </div>
           ) : (
             <VotacionForm
@@ -277,6 +307,87 @@ function DesgloseVotos({ label, filas }: { label: string; filas: RankingRow[] })
           );
         })}
       </div>
+    </Card>
+  );
+}
+
+function DesempateInfo({
+  desempate,
+  yaVote,
+  miId,
+  jugadorPorId,
+}: {
+  desempate: Desempate | null;
+  yaVote: string[];
+  miId: string;
+  jugadorPorId: Map<string, Profile>;
+}) {
+  if (!desempate) return null;
+
+  const nombreDe = (id: string) => {
+    const j = jugadorPorId.get(id);
+    return j ? j.apodo : "?";
+  };
+  const nombresEmpatados = desempate.candidatos.map(nombreDe).join(" y ");
+
+  if (desempate.resuelto) {
+    return (
+      <Card className="px-4 py-3 text-sm text-zinc-400">
+        Empate entre {nombresEmpatados}: se definió por revotación y ganó{" "}
+        <span className="font-semibold text-white">
+          {desempate.ganador_id ? nombreDe(desempate.ganador_id) : "nadie (quedó sin resolver)"}
+        </span>
+        .
+      </Card>
+    );
+  }
+
+  const puedoDefinir = desempate.elegibles.includes(miId) && !yaVote.includes(desempate.id);
+
+  if (!puedoDefinir) {
+    return (
+      <Card className="px-4 py-3 text-sm text-zinc-500">
+        Empate entre {nombresEmpatados}: todavía falta que lo definan.
+      </Card>
+    );
+  }
+
+  return (
+    <Card className="flex flex-col gap-3 p-4">
+      <p className="text-sm text-zinc-300">
+        Empate entre {nombresEmpatados}. Como no votaste a ninguno de los dos, tu voto define quién
+        gana.
+      </p>
+      <form
+        action={async (formData) => {
+          "use server";
+          await votarDesempate(formData);
+        }}
+        className="flex flex-col gap-3 sm:flex-row sm:items-center"
+      >
+        <input type="hidden" name="desempate_id" value={desempate.id} />
+        <div className="relative flex-1">
+          <select
+            name="jugador_votado_id"
+            required
+            defaultValue=""
+            className="w-full appearance-none rounded-xl border border-border bg-white/5 py-2.5 pr-9 pl-3.5 text-sm text-white outline-none focus:border-primary-400/60 focus:ring-2 focus:ring-primary-400/20"
+          >
+            <option value="" disabled className="bg-surface">
+              Elegí un jugador...
+            </option>
+            {desempate.candidatos.map((cid) => (
+              <option key={cid} value={cid} className="bg-surface">
+                {nombreDe(cid)}
+              </option>
+            ))}
+          </select>
+          <IconChevronRight className="pointer-events-none absolute top-1/2 right-3 h-4 w-4 -translate-y-1/2 rotate-90 text-zinc-500" />
+        </div>
+        <Button type="submit" size="sm">
+          Definir
+        </Button>
+      </form>
     </Card>
   );
 }

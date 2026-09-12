@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { enviarPush } from "@/lib/push/send";
 import { fechaLimiteVotacion } from "@/lib/votacion";
+import { revisarEmpates } from "@/lib/actions/votos";
 
 /**
  * Corre una vez por día (ver vercel.json). Cierra por vencimiento las
@@ -48,6 +49,8 @@ export async function GET(request: NextRequest) {
       .from("partidos")
       .update({ votacion_cerrada_notificada: true })
       .eq("id", partido.id);
+
+    await revisarEmpates(partido.id);
   }
 
   return NextResponse.json({ cerrados: vencidos.length });

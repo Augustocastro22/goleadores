@@ -36,6 +36,25 @@ export interface PartidoJugador {
   equipo: Equipo;
 }
 
+export interface Desempate {
+  id: string;
+  partido_id: string;
+  tipo: TipoVoto;
+  candidatos: string[];
+  elegibles: string[];
+  resuelto: boolean;
+  ganador_id: string | null;
+  created_at: string;
+}
+
+export interface DesempateVoto {
+  id: string;
+  desempate_id: string;
+  jugador_votado_id: string;
+  jugador_que_vota_id: string;
+  created_at: string;
+}
+
 export interface Voto {
   id: string;
   partido_id: string;
