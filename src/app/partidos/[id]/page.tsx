@@ -11,6 +11,7 @@ import Avatar from "@/components/ui/Avatar";
 import ConfirmSubmitButton from "@/components/ConfirmSubmitButton";
 import { IconChevronRight } from "@/components/icons";
 import GolesEditor from "./GolesEditor";
+import ConvocadosEditor from "./ConvocadosEditor";
 
 interface ParticipanteRow {
   jugador_id: string;
@@ -54,6 +55,16 @@ export default async function PartidoDetailPage({
   const equipo2 = participantes.filter((p) => p.equipo === 2);
 
   const soyParticipante = participantes.some((p) => p.jugador_id === user.id);
+
+  let todosLosJugadores: Profile[] = [];
+  if (isAdmin && !partido.jugado) {
+    const { data } = await supabase
+      .from("profiles")
+      .select("*")
+      .order("nombre")
+      .returns<Profile[]>();
+    todosLosJugadores = data ?? [];
+  }
 
   const { data: misVotos } = await supabase
     .from("votos")
@@ -110,6 +121,15 @@ export default async function PartidoDetailPage({
 
   return (
     <div className="flex flex-col gap-8">
+      {isAdmin && !partido.jugado && (
+        <ConvocadosEditor
+          partidoId={id}
+          jugadores={todosLosJugadores}
+          equipo1IdsInit={equipo1.map((p) => p.jugador_id)}
+          equipo2IdsInit={equipo2.map((p) => p.jugador_id)}
+        />
+      )}
+
       {partido.jugado || isAdmin ? (
         <GolesEditor
           partidoId={id}

@@ -95,6 +95,104 @@ export async function deletePartido(formData: FormData) {
   redirect("/partidos");
 }
 
+export interface ConvocadosInput {
+  partidoId: string;
+  participantes: { jugadorId: string; equipo: 1 | 2 }[];
+}
+
+export async function actualizarConvocados({ partidoId, participantes }: ConvocadosInput) {
+  const { supabase, isAdmin } = await requireAdmin();
+  if (!isAdmin) return { error: "Solo el admin puede editar la convocatoria." };
+  if (!partidoId) return { error: "Partido inválido." };
+  if (!participantes.some((p) => p.equipo === 1)) {
+    return { error: "Tiene que haber al menos un jugador en el Equipo 1 (nuestro equipo)." };
+  }
+
+  const { data: partido } = await supabase
+    .from("partidos")
+    .select("rival, fecha, hora, lugar, jugado")
+    .eq("id", partidoId)
+    .single();
+  if (!partido) return { error: "Partido no encontrado." };
+  if (partido.jugado) {
+    return { error: "El partido ya se jugó, no se puede editar la convocatoria." };
+  }
+
+  const { data: actualesRaw } = await supabase
+    .from("partido_jugadores")
+    .select("jugador_id, equipo")
+    .eq("partido_id", partidoId);
+  const actuales = actualesRaw ?? [];
+  const actualesPorId = new Map(actuales.map((a) => [a.jugador_id, a.equipo]));
+  const nuevosIds = new Set(participantes.map((p) => p.jugadorId));
+
+  const aBorrar = actuales.filter((a) => !nuevosIds.has(a.jugador_id)).map((a) => a.jugador_id);
+  const aAgregar = participantes.filter((p) => !actualesPorId.has(p.jugadorId));
+  const aActualizar = participantes.filter(
+    (p) => actualesPorId.has(p.jugadorId) && actualesPorId.get(p.jugadorId) !== p.equipo
+  );
+
+  if (aBorrar.length > 0) {
+    const { error } = await supabase
+      .from("partido_jugadores")
+      .delete()
+      .eq("partido_id", partidoId)
+      .in("jugador_id", aBorrar);
+    if (error) return { error: error.message };
+  }
+
+  if (aAgregar.length > 0) {
+    const { error } = await supabase.from("partido_jugadores").insert(
+      aAgregar.map(({ jugadorId, equipo }) => ({
+        partido_id: partidoId,
+        jugador_id: jugadorId,
+        equipo,
+        goles: 0,
+      }))
+    );
+    if (error) return { error: error.message };
+  }
+
+  for (const { jugadorId, equipo } of aActualizar) {
+    const { error } = await supabase
+      .from("partido_jugadores")
+      .update({ equipo })
+      .eq("partido_id", partidoId)
+      .eq("jugador_id", jugadorId);
+    if (error) return { error: error.message };
+  }
+
+  if (aAgregar.length > 0 || aBorrar.length > 0) {
+    const fechaFormateada = new Date(partido.fecha + "T00:00:00").toLocaleDateString("es-AR", {
+      day: "numeric",
+      month: "long",
+    });
+    const horaFormateada = partido.hora ? ` a las ${partido.hora.slice(0, 5)}` : "";
+
+    if (aAgregar.length > 0) {
+      await enviarPush(
+        aAgregar.map((p) => p.jugadorId),
+        {
+          title: "Nuevo partido",
+          body: `${fechaFormateada}${horaFormateada} vs ${partido.rival} en ${partido.lugar}. ¡Ya estás convocado!`,
+          url: `/partidos/${partidoId}`,
+        }
+      );
+    }
+
+    if (aBorrar.length > 0) {
+      await enviarPush(aBorrar, {
+        title: "Ya no estás convocado",
+        body: `Te bajaron del partido vs ${partido.rival} del ${fechaFormateada}${horaFormateada}.`,
+        url: `/partidos/${partidoId}`,
+      });
+    }
+  }
+
+  revalidatePath(`/partidos/${partidoId}`);
+  return { success: true };
+}
+
 export interface GolesInput {
   partidoId: string;
   goles: { jugadorId: string; goles: number }[];
