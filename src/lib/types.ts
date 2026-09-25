@@ -24,6 +24,7 @@ export interface Partido {
   votacion_abierta_notificada: boolean;
   votacion_cerrada_notificada: boolean;
   jugado: boolean;
+  con_votacion: boolean;
 }
 
 export type Equipo = 1 | 2;

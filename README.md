@@ -77,6 +77,12 @@ La app manda una notificación push (Web Push, sin app nativa) cuando: se crea u
 
 **iPhone:** Safari solo entrega push a partir de iOS 16.4, y únicamente si la app fue agregada a la pantalla de inicio (Compartir → Agregar a inicio). Si solo la tienen abierta en una pestaña normal, no les va a llegar nada. En Android/Chrome funciona directo, sin instalar nada.
 
+## 7. Panel de admin
+
+En `/admin` (ícono de ajustes arriba a la derecha, solo visible para admins) se configura la app, se editan los datos de los partidos (fecha, hora, lugar, rival) y se ven los usuarios registrados con su email y último ingreso, pudiendo dar o quitar el rol de admin.
+
+Requiere ejecutar la migración [`0015_admin_config.sql`](supabase/migrations/0015_admin_config.sql) en el SQL Editor de Supabase (agrega la tabla `config` y la columna `partidos.con_votacion`).
+
 ## Estructura del proyecto
 
 ```
@@ -89,4 +95,5 @@ src/app/login, /signup              Autenticación
 src/app/perfil                      Editar perfil y foto
 src/app/partidos                    Listado, alta (admin) y detalle (goles + votación)
 src/app/estadisticas                Las tres tablas de estadísticas
+src/app/admin                       Configuración, edición de partidos y usuarios (admin)
 ```

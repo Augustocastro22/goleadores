@@ -118,11 +118,14 @@ export async function votar(formData: FormData) {
 
   const { data: partido } = await supabase
     .from("partidos")
-    .select("fecha, rival, jugado, votacion_cerrada_notificada")
+    .select("fecha, rival, jugado, con_votacion, votacion_cerrada_notificada")
     .eq("id", partidoId)
     .single();
   if (!partido) return { error: "Partido no encontrado." };
   if (!partido.jugado) return { error: "Todavía no se cargaron los resultados de este partido." };
+  if (!partido.con_votacion) {
+    return { error: "Este partido no tiene votación: jugaron menos jugadores que el mínimo." };
+  }
 
   const { data: estado } = await supabase
     .rpc("get_estado_votacion", { p_partido_id: partidoId })

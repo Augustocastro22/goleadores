@@ -21,7 +21,8 @@ export async function GET(request: NextRequest) {
     .from("partidos")
     .select("id, fecha, rival")
     .eq("votacion_cerrada_notificada", false)
-    .eq("jugado", true);
+    .eq("jugado", true)
+    .eq("con_votacion", true);
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 

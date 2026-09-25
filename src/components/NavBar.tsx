@@ -5,7 +5,7 @@ import { isRecoverySession } from "@/lib/recovery";
 import Avatar from "./ui/Avatar";
 import NavLinks from "./NavLinks";
 import BottomNav from "./BottomNav";
-import { IconLogout } from "./icons";
+import { IconLogout, IconSettings } from "./icons";
 
 export default async function NavBar() {
   const supabase = await createClient();
@@ -22,7 +22,7 @@ export default async function NavBar() {
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("apodo, foto_url")
+    .select("apodo, foto_url, rol")
     .eq("id", user.id)
     .single();
 
@@ -40,6 +40,15 @@ export default async function NavBar() {
             <NavLinks />
           </div>
           <div className="flex items-center gap-2">
+            {profile?.rol === "admin" && (
+              <Link
+                href="/admin"
+                title="Admin"
+                className="flex h-9 w-9 items-center justify-center rounded-full text-zinc-500 transition hover:bg-white/5 hover:text-white"
+              >
+                <IconSettings className="h-5 w-5" />
+              </Link>
+            )}
             <Link
               href="/perfil"
               className="flex items-center gap-2 rounded-full py-1 pr-3 pl-1 text-sm font-medium text-zinc-300 transition hover:bg-white/5 hover:text-white"

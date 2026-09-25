@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { enviarPush } from "@/lib/push/send";
+import { getConfig, tieneVotacion } from "@/lib/config";
 
 async function requireAdmin() {
   const supabase = await createClient();
@@ -217,10 +218,25 @@ export async function guardarGolesPartido({ partidoId, goles, golesOtros, golesR
 
   const { data: partido } = await supabase
     .from("partidos")
-    .select("rival, votacion_abierta_notificada")
+    .select("rival, jugado, con_votacion, votacion_abierta_notificada")
     .eq("id", partidoId)
     .single();
   if (!partido) return { error: "Partido no encontrado." };
+
+  // La primera vez que se cargan los goles se decide si el partido tiene
+  // votación de Mejor/Peor, según el mínimo de jugadores configurado en
+  // /admin. Después ya no se reevalúa (ver 0015_admin_config.sql).
+  let conVotacion = partido.con_votacion;
+  if (!partido.jugado) {
+    const [{ count }, config] = await Promise.all([
+      supabase
+        .from("partido_jugadores")
+        .select("id", { count: "exact", head: true })
+        .eq("partido_id", partidoId),
+      getConfig(supabase),
+    ]);
+    conVotacion = tieneVotacion(count ?? 0, config.min_jugadores_votacion);
+  }
 
   for (const { jugadorId, goles: cantidad } of goles) {
     const { error } = await supabase
@@ -233,11 +249,18 @@ export async function guardarGolesPartido({ partidoId, goles, golesOtros, golesR
 
   const { error: partidoError } = await supabase
     .from("partidos")
-    .update({ goles_otros: golesOtros, goles_rival: golesRival, jugado: true })
+    .update({
+      goles_otros: golesOtros,
+      goles_rival: golesRival,
+      jugado: true,
+      con_votacion: conVotacion,
+      // Sin votación no hay nada que avisar (ni apertura ni cierre).
+      ...(conVotacion ? {} : { votacion_abierta_notificada: true, votacion_cerrada_notificada: true }),
+    })
     .eq("id", partidoId);
   if (partidoError) return { error: partidoError.message };
 
-  if (!partido.votacion_abierta_notificada) {
+  if (conVotacion && !partido.votacion_abierta_notificada) {
     const { data: participantes } = await supabase
       .from("partido_jugadores")
       .select("jugador_id")

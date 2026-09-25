@@ -83,7 +83,7 @@ export default async function PartidoDetailPage({
   let desglosePeor: RankingRow[] = [];
   let desempates: Desempate[] = [];
   let misVotosDesempate: string[] = [];
-  if (partido.jugado) {
+  if (partido.jugado && partido.con_votacion) {
     const { data: estadoVotacion } = await supabase
       .rpc("get_estado_votacion", { p_partido_id: id })
       .single<EstadoVotacion>();
@@ -177,7 +177,12 @@ export default async function PartidoDetailPage({
       {soyParticipante && partido.jugado && (
         <section>
           <h2 className="mb-3 text-lg font-bold text-white">Votación</h2>
-          {cerrada ? (
+          {!partido.con_votacion ? (
+            <Card className="px-4 py-3 text-sm text-zinc-500">
+              Jugaron {participantes.length}, menos que el mínimo para votar Mejor y Peor Jugador,
+              así que este partido no tiene votación.
+            </Card>
+          ) : cerrada ? (
             <div className="flex flex-col gap-3">
               <DesgloseVotos label="Mejor Jugador" filas={desgloseMvp} />
               <DesempateInfo
