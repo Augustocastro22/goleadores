@@ -8,6 +8,7 @@ const links = [
   { href: "/jugadores", label: "Jugadores" },
   { href: "/formacion", label: "Formación" },
   { href: "/estadisticas", label: "Estadísticas" },
+  { href: "/encuestas", label: "Encuestas" },
 ];
 
 export default function NavLinks() {

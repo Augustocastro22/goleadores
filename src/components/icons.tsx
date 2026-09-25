@@ -130,6 +130,20 @@ export function IconClose(props: SVGProps<SVGSVGElement>) {
   );
 }
 
+export function IconPoll(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" strokeWidth={1.8} stroke="currentColor" {...props}>
+      <rect x="3.5" y="3.5" width="17" height="17" rx="2.5" />
+      <circle cx="7.5" cy="8" r="1" fill="currentColor" stroke="none" />
+      <path d="M10.5 8h7" strokeLinecap="round" />
+      <circle cx="7.5" cy="12" r="1" fill="currentColor" stroke="none" />
+      <path d="M10.5 12h4.5" strokeLinecap="round" />
+      <circle cx="7.5" cy="16" r="1" fill="currentColor" stroke="none" />
+      <path d="M10.5 16h6" strokeLinecap="round" />
+    </svg>
+  );
+}
+
 export function IconCamera(props: SVGProps<SVGSVGElement>) {
   return (
     <svg viewBox="0 0 24 24" fill="none" strokeWidth={1.8} stroke="currentColor" {...props}>

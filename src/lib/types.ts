@@ -36,6 +36,26 @@ export interface PartidoJugador {
   equipo: Equipo;
 }
 
+export interface Encuesta {
+  id: string;
+  pregunta: string;
+  creado_por: string;
+  cierra_en: string;
+  created_at: string;
+}
+
+export interface EncuestaOpcion {
+  id: string;
+  encuesta_id: string;
+  texto: string;
+  orden: number;
+}
+
+export interface ResultadoEncuesta {
+  opcion_id: string;
+  votos: number;
+}
+
 export type DisponibilidadTipo = "puntual" | "rango" | "recurrente";
 
 export interface Bloqueo {

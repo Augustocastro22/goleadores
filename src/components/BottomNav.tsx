@@ -2,13 +2,14 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { IconFormation, IconMatches, IconStats, IconUsers } from "./icons";
+import { IconFormation, IconMatches, IconPoll, IconStats, IconUsers } from "./icons";
 
 const items = [
   { href: "/partidos", label: "Partidos", Icon: IconMatches },
   { href: "/jugadores", label: "Jugadores", Icon: IconUsers },
   { href: "/formacion", label: "Formación", Icon: IconFormation },
   { href: "/estadisticas", label: "Stats", Icon: IconStats },
+  { href: "/encuestas", label: "Encuestas", Icon: IconPoll },
 ];
 
 export default function BottomNav() {
