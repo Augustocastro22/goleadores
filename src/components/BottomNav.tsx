@@ -17,9 +17,12 @@ export default function BottomNav() {
   return (
     <nav
       className="fixed inset-x-0 bottom-0 z-20 border-t border-border bg-surface/95 backdrop-blur-lg md:hidden"
-      style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
+      // Mínimo de 14px abajo aunque el navegador no informe safe area, para
+      // no quedar pegado a la barra de inicio del iPhone.
+      style={{ paddingBottom: "max(env(safe-area-inset-bottom), 14px)" }}
     >
-      <div className="mx-auto flex max-w-3xl items-stretch justify-around">
+      {/* Margen a los costados para que las esquinas redondeadas de la pantalla no corten las etiquetas. */}
+      <div className="mx-auto flex max-w-3xl items-stretch justify-around px-4">
         {items.map(({ href, label, Icon }) => {
           const active = pathname === href || pathname.startsWith(href + "/");
           return (
