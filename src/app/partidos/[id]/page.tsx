@@ -3,7 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { deletePartido } from "@/lib/actions/partidos";
 import { votar, votarDesempate } from "@/lib/actions/votos";
 import { votacionCerrada } from "@/lib/votacion";
-import type { Desempate, EstadoVotacion, Profile, RankingRow } from "@/lib/types";
+import type { Bloqueo, Desempate, EstadoVotacion, Profile, RankingRow } from "@/lib/types";
 import Card from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
 import Badge from "@/components/ui/Badge";
@@ -58,13 +58,14 @@ export default async function PartidoDetailPage({
   const jugadorPorId = new Map(participantes.map((p) => [p.jugador_id, p.profiles]));
 
   let todosLosJugadores: Profile[] = [];
+  let bloqueos: Bloqueo[] = [];
   if (isAdmin && !partido.jugado) {
-    const { data } = await supabase
-      .from("profiles")
-      .select("*")
-      .order("nombre")
-      .returns<Profile[]>();
-    todosLosJugadores = data ?? [];
+    const [{ data: jugadoresData }, { data: bloqueosData }] = await Promise.all([
+      supabase.from("profiles").select("*").order("nombre").returns<Profile[]>(),
+      supabase.from("bloqueos_disponibilidad").select("*").returns<Bloqueo[]>(),
+    ]);
+    todosLosJugadores = jugadoresData ?? [];
+    bloqueos = bloqueosData ?? [];
   }
 
   const { data: misVotos } = await supabase
@@ -145,6 +146,9 @@ export default async function PartidoDetailPage({
           jugadores={todosLosJugadores}
           equipo1IdsInit={equipo1.map((p) => p.jugador_id)}
           equipo2IdsInit={equipo2.map((p) => p.jugador_id)}
+          partidoFecha={partido.fecha}
+          partidoHora={partido.hora}
+          bloqueos={bloqueos}
         />
       )}
 

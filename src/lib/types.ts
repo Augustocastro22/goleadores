@@ -36,6 +36,21 @@ export interface PartidoJugador {
   equipo: Equipo;
 }
 
+export type DisponibilidadTipo = "puntual" | "rango" | "recurrente";
+
+export interface Bloqueo {
+  id: string;
+  jugador_id: string;
+  tipo: DisponibilidadTipo;
+  fecha_desde: string | null;
+  fecha_hasta: string | null;
+  dia_semana: number | null;
+  hora_desde: string | null;
+  hora_hasta: string | null;
+  nota: string | null;
+  created_at: string;
+}
+
 export interface Desempate {
   id: string;
   partido_id: string;

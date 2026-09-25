@@ -2,7 +2,8 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import type { Profile } from "@/lib/types";
+import type { Bloqueo, Profile } from "@/lib/types";
+import { bloqueaFecha, describirBloqueo } from "@/lib/disponibilidad";
 import Card from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
 import Avatar from "@/components/ui/Avatar";
@@ -15,11 +16,17 @@ export default function ConvocadosEditor({
   jugadores,
   equipo1IdsInit,
   equipo2IdsInit,
+  partidoFecha,
+  partidoHora,
+  bloqueos,
 }: {
   partidoId: string;
   jugadores: Profile[];
   equipo1IdsInit: string[];
   equipo2IdsInit: string[];
+  partidoFecha: string;
+  partidoHora: string | null;
+  bloqueos: Bloqueo[];
 }) {
   const router = useRouter();
   const asignacionesIniciales = useMemo(() => {
@@ -49,6 +56,16 @@ export default function ConvocadosEditor({
         .filter((j): j is Profile => Boolean(j)),
     [equipo1IdsInit, equipo2IdsInit, jugadorPorId]
   );
+
+  const bloqueoPorJugador = useMemo(() => {
+    const map = new Map<string, Bloqueo>();
+    for (const b of bloqueos) {
+      if (!map.has(b.jugador_id) && bloqueaFecha(b, partidoFecha, partidoHora)) {
+        map.set(b.jugador_id, b);
+      }
+    }
+    return map;
+  }, [bloqueos, partidoFecha, partidoHora]);
 
   function empezarEdicion() {
     setMessage(null);
@@ -112,15 +129,26 @@ export default function ConvocadosEditor({
           {convocadosActuales.length === 0 ? (
             <p className="px-4 py-3 text-sm text-zinc-500">Todavía no hay nadie convocado.</p>
           ) : (
-            convocadosActuales.map((jugador) => (
-              <div key={jugador.id} className="flex items-center gap-3 px-4 py-3">
-                <Avatar src={jugador.foto_url} alt={jugador.apodo} size={32} />
-                <span className="truncate text-sm text-zinc-200">
-                  {jugador.nombre} {jugador.apellido}{" "}
-                  <span className="text-zinc-500">({jugador.apodo})</span>
-                </span>
-              </div>
-            ))
+            convocadosActuales.map((jugador) => {
+              const bloqueo = bloqueoPorJugador.get(jugador.id);
+              return (
+                <div key={jugador.id} className="flex items-center gap-3 px-4 py-3">
+                  <Avatar src={jugador.foto_url} alt={jugador.apodo} size={32} />
+                  <div className="min-w-0">
+                    <span className="truncate text-sm text-zinc-200">
+                      {jugador.nombre} {jugador.apellido}{" "}
+                      <span className="text-zinc-500">({jugador.apodo})</span>
+                    </span>
+                    {bloqueo && (
+                      <p className="truncate text-xs text-gold-400">
+                        ⚠ Dijo que no puede: {describirBloqueo(bloqueo)}
+                        {bloqueo.nota ? ` (${bloqueo.nota})` : ""}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              );
+            })
           )}
         </Card>
         {message && (
@@ -149,6 +177,7 @@ export default function ConvocadosEditor({
         <div className="flex flex-col gap-2">
           {jugadores.map((jugador) => {
             const equipo = asignaciones[jugador.id];
+            const bloqueo = bloqueoPorJugador.get(jugador.id);
             return (
               <div
                 key={jugador.id}
@@ -156,10 +185,18 @@ export default function ConvocadosEditor({
               >
                 <div className="flex min-w-0 items-center gap-3">
                   <Avatar src={jugador.foto_url} alt={jugador.apodo} size={28} />
-                  <span className="truncate text-sm text-zinc-200">
-                    {jugador.nombre} {jugador.apellido}{" "}
-                    <span className="text-zinc-500">({jugador.apodo})</span>
-                  </span>
+                  <div className="min-w-0">
+                    <span className="truncate text-sm text-zinc-200">
+                      {jugador.nombre} {jugador.apellido}{" "}
+                      <span className="text-zinc-500">({jugador.apodo})</span>
+                    </span>
+                    {bloqueo && (
+                      <p className="truncate text-xs text-gold-400">
+                        ⚠ Dijo que no puede: {describirBloqueo(bloqueo)}
+                        {bloqueo.nota ? ` (${bloqueo.nota})` : ""}
+                      </p>
+                    )}
+                  </div>
                 </div>
                 <div className="flex shrink-0 gap-1.5">
                   <button
