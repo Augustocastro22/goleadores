@@ -82,17 +82,6 @@ export function IconChevronRight(props: SVGProps<SVGSVGElement>) {
   );
 }
 
-export function IconFormation(props: SVGProps<SVGSVGElement>) {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" strokeWidth={1.8} stroke="currentColor" {...props}>
-      <rect x="4" y="2.5" width="16" height="19" rx="1.5" />
-      <path d="M4 12h16" strokeLinecap="round" />
-      <circle cx="12" cy="12" r="2.4" />
-      <path d="M8.5 2.5h7v3h-7zM8.5 21.5v-3h7v3" strokeLinejoin="round" />
-    </svg>
-  );
-}
-
 export function IconDownload(props: SVGProps<SVGSVGElement>) {
   return (
     <svg viewBox="0 0 24 24" fill="none" strokeWidth={1.8} stroke="currentColor" {...props}>
