@@ -117,11 +117,18 @@ export async function cancelarSolicitud(formData: FormData) {
   return { success: true };
 }
 
+// Secciones a las que se puede volver después de cambiar de grupo (las que
+// muestran "lo del grupo activo"). Desde cualquier otra pantalla, por ejemplo
+// el detalle de un partido del grupo anterior, se va a Partidos.
+const SECCIONES_POR_GRUPO = ["/partidos", "/jugadores", "/estadisticas", "/encuestas", "/admin"];
+
 export async function cambiarGrupo(formData: FormData) {
   const grupoId = String(formData.get("grupo_id") ?? "");
   if (!grupoId) return;
+  const volverA = String(formData.get("volver_a") ?? "");
   await activarGrupo(grupoId);
-  redirect("/partidos");
+  // /admin redirige solo a /partidos si en el grupo nuevo no es admin.
+  redirect(SECCIONES_POR_GRUPO.includes(volverA) ? volverA : "/partidos");
 }
 
 export async function salirDelGrupo(formData: FormData) {
@@ -141,9 +148,26 @@ export async function salirDelGrupo(formData: FormData) {
   const yo = (miembros ?? []).find((m) => m.jugador_id === user.id);
   if (!yo) return { error: "No sos miembro de ese grupo." };
 
-  const otrosAdmins = (miembros ?? []).filter((m) => m.rol === "admin" && m.jugador_id !== user.id);
-  if (yo.rol === "admin" && otrosAdmins.length === 0 && (miembros ?? []).length > 1) {
-    return { error: "Sos el único admin: antes de irte, hacé admin a otro miembro." };
+  const otros = (miembros ?? []).filter((m) => m.jugador_id !== user.id);
+
+  // Último miembro: un grupo sin nadie no le sirve a nadie, así que se borra
+  // entero (partidos, estadísticas, encuestas, escudo). La pantalla de grupos
+  // ya se lo avisa antes. Con la service role porque no hay política de
+  // borrado de grupos para usuarios: el permiso se chequea acá arriba.
+  if (otros.length === 0) {
+    const admin = createAdminClient();
+    await admin.storage.from("logos").remove([`${grupoId}/logo.png`]);
+    const { error } = await admin.from("grupos").delete().eq("id", grupoId);
+    if (error) return { error: error.message };
+    revalidatePath("/", "layout");
+    return { success: true };
+  }
+
+  // Con más gente, el grupo no puede quedar sin admin.
+  if (yo.rol === "admin" && !otros.some((m) => m.rol === "admin")) {
+    return {
+      error: "Sos el único admin: antes de salir, hacé admin a otro miembro desde Admin → Miembros.",
+    };
   }
 
   const { error } = await supabase

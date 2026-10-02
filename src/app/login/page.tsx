@@ -7,19 +7,29 @@ import Button from "@/components/ui/Button";
 export default async function LoginPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string; next?: string }>;
+  searchParams: Promise<{ error?: string; aviso?: string; next?: string }>;
 }) {
-  const { error, next } = await searchParams;
+  const { error, aviso, next } = await searchParams;
+  const vieneDeInvitacion = next?.startsWith("/unirse/");
 
   return (
     <div className="flex min-h-[70vh] flex-col items-center justify-center">
       <div className="mb-8 flex flex-col items-center gap-2 text-center">
         <span className="text-4xl">⚽</span>
         <h1 className="text-2xl font-extrabold tracking-tight text-white">Goleadores</h1>
-        <p className="text-sm text-zinc-500">Entrá para ver partidos y estadísticas</p>
+        <p className="text-sm text-zinc-500">
+          {vieneDeInvitacion
+            ? "Entrá con tu cuenta para sumarte al grupo"
+            : "Entrá para ver partidos y estadísticas"}
+        </p>
       </div>
 
       <Card className="w-full max-w-sm p-6">
+        {aviso && (
+          <p className="mb-4 rounded-xl border border-primary-500/20 bg-primary-500/10 px-3.5 py-2.5 text-sm text-primary-400">
+            {aviso}
+          </p>
+        )}
         {error && (
           <p className="mb-4 rounded-xl border border-danger-500/20 bg-danger-500/10 px-3.5 py-2.5 text-sm text-danger-400">
             {error}

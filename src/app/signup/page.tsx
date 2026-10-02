@@ -10,13 +10,18 @@ export default async function SignupPage({
   searchParams: Promise<{ error?: string; next?: string }>;
 }) {
   const { error, next } = await searchParams;
+  const vieneDeInvitacion = next?.startsWith("/unirse/");
 
   return (
     <div className="flex min-h-[70vh] flex-col items-center justify-center">
       <div className="mb-8 flex flex-col items-center gap-2 text-center">
         <span className="text-4xl">⚽</span>
         <h1 className="text-2xl font-extrabold tracking-tight text-white">Crear cuenta</h1>
-        <p className="text-sm text-zinc-500">Sumate para votar y ver tus estadísticas</p>
+        <p className="text-sm text-zinc-500">
+          {vieneDeInvitacion
+            ? "Creá tu cuenta y te sumamos al grupo"
+            : "Sumate para votar y ver tus estadísticas"}
+        </p>
       </div>
 
       <Card className="w-full max-w-sm p-6">

@@ -42,23 +42,46 @@ export async function signup(formData: FormData) {
   }
 
   const supabase = await createClient();
+  const siteUrl = await getSiteUrl();
   const { data, error } = await supabase.auth.signUp({
     email,
     password,
-    options: { data: { nombre, apellido, apodo } },
+    options: {
+      data: { nombre, apellido, apodo },
+      // El link del mail de confirmación vuelve a donde iba (por ejemplo la
+      // invitación a un grupo) pasando por /auth/callback, que abre la sesión.
+      emailRedirectTo: `${siteUrl}/auth/callback?next=${encodeURIComponent(destino(formData))}`,
+    },
   });
 
   if (error) {
     redirect(conNext(`/signup?error=${encodeURIComponent(error.message)}`, formData));
   }
 
-  if (!data.session) {
-    // El proyecto tiene "Confirm email" activado: la cuenta se creó pero
-    // todavía no hay sesión hasta que confirme el mail.
+  // Con "Confirm email" activado, si el email ya tenía cuenta Supabase no da
+  // error (para no revelar qué emails existen): devuelve un usuario sin
+  // identidades y no manda ningún mail. Acá sí conviene decirlo, si no la
+  // persona se queda esperando un mail que nunca llega.
+  if (data.user && data.user.identities?.length === 0) {
     redirect(
       conNext(
         "/login?error=" +
-          encodeURIComponent("Cuenta creada. Revisá tu email para confirmarla antes de entrar."),
+          encodeURIComponent(
+            "Ya hay una cuenta con ese email. Entrá con tu contraseña, o recuperala si no te acordás."
+          ),
+        formData
+      )
+    );
+  }
+
+  if (!data.session) {
+    // La cuenta se creó pero todavía no hay sesión hasta que confirme el mail.
+    redirect(
+      conNext(
+        "/login?aviso=" +
+          encodeURIComponent(
+            `Te mandamos un mail a ${email}. Tocá el link de confirmación y entrás directo.`
+          ),
         formData
       )
     );

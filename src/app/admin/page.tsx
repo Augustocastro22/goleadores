@@ -104,6 +104,7 @@ async function GrupoTab({ grupo }: { grupo: MiGrupo }) {
         <ActionForm action={regenerarInvitacion} className="mt-3 flex flex-col gap-1">
           <ConfirmSubmitButton
             confirmMessage="¿Generar un link nuevo? El link actual deja de funcionar (los que ya se sumaron siguen en el grupo)."
+            confirmLabel="Generar"
             className={buttonClass("ghost", "sm", "self-start !px-2 text-xs")}
           >
             Generar link nuevo
@@ -310,6 +311,7 @@ async function UsuariosTab({ grupoId, miId }: { grupoId: string; miId: string })
                     <input type="hidden" name="jugador_id" value={j!.id} />
                     <ConfirmSubmitButton
                       confirmMessage={`¿Rechazar a ${j!.apodo}?`}
+                      confirmLabel="Rechazar"
                       className={buttonClass("ghost", "sm", "!px-2 text-xs")}
                     >
                       Rechazar
@@ -358,6 +360,7 @@ async function UsuariosTab({ grupoId, miId }: { grupoId: string; miId: string })
                           ? `¿Sacarle el rol de admin a ${j.apodo}?`
                           : `¿Hacer admin a ${j.apodo}? Va a poder cargar partidos y cambiar la configuración.`
                       }
+                      confirmLabel={esAdmin ? "Quitar admin" : "Hacer admin"}
                       className={buttonClass("ghost", "sm", "!px-2 !py-0.5 text-xs")}
                     >
                       {esAdmin ? "Quitar admin" : "Hacer admin"}
@@ -369,6 +372,7 @@ async function UsuariosTab({ grupoId, miId }: { grupoId: string; miId: string })
                     <input type="hidden" name="jugador_id" value={j.id} />
                     <ConfirmSubmitButton
                       confirmMessage={`¿Sacar a ${j.apodo} del grupo? Sus partidos jugados quedan en el historial.`}
+                      confirmLabel="Sacar"
                       className={buttonClass("ghost", "sm", "!px-2 !py-0.5 text-xs !text-danger-400")}
                     >
                       Sacar del grupo

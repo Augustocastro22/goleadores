@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getContexto } from "@/lib/grupo";
 import {
@@ -18,6 +19,7 @@ import ActionForm from "@/components/ActionForm";
 import ReglasFields from "@/components/ReglasFields";
 import { CONFIG_DEFAULTS } from "@/lib/config";
 import { IconChevronRight } from "@/components/icons";
+import { urlConGrupo } from "@/lib/grupo-cookie";
 
 export default async function GruposPage() {
   const { supabase, user, grupos, grupo: activo } = await getContexto();
@@ -32,6 +34,26 @@ export default async function GruposPage() {
     grupo_id: string;
     grupos: { nombre: string; logo_url: string | null } | null;
   }[];
+
+  // Cuántos miembros y admins tiene cada grupo, para saber qué pasa si sale:
+  // si es el último se borra el grupo; si es el único admin, primero tiene
+  // que nombrar a otro.
+  const { data: membresias } = grupos.length
+    ? await supabase
+        .from("grupo_miembros")
+        .select("grupo_id, rol")
+        .in(
+          "grupo_id",
+          grupos.map((g) => g.id)
+        )
+    : { data: [] };
+  const conteo = new Map<string, { miembros: number; admins: number }>();
+  for (const m of membresias ?? []) {
+    const c = conteo.get(m.grupo_id) ?? { miembros: 0, admins: 0 };
+    c.miembros += 1;
+    if (m.rol === "admin") c.admins += 1;
+    conteo.set(m.grupo_id, c);
+  }
 
   return (
     <div className="mx-auto flex max-w-md flex-col gap-6">
@@ -52,6 +74,9 @@ export default async function GruposPage() {
         <Card className="divide-y divide-border overflow-hidden py-1">
           {grupos.map((g) => {
             const esActivo = g.id === activo?.id;
+            const { miembros, admins } = conteo.get(g.id) ?? { miembros: 1, admins: 0 };
+            const soyElUnico = miembros <= 1;
+            const soyUnicoAdmin = !soyElUnico && g.rol === "admin" && admins <= 1;
             return (
               <div
                 key={g.id}
@@ -67,15 +92,30 @@ export default async function GruposPage() {
                       {g.rol === "admin" ? "Admin" : "Jugador"}
                     </Badge>
                     {esActivo && <Badge variant="primary">Viendo ahora</Badge>}
-                    <ActionForm action={salirDelGrupo} className="flex items-center gap-1.5">
-                      <input type="hidden" name="grupo_id" value={g.id} />
-                      <ConfirmSubmitButton
-                        confirmMessage={`¿Salir de ${g.nombre}? Para volver vas a necesitar un link de invitación.`}
-                        className="px-1.5 text-xs text-zinc-500 transition hover:text-danger-400"
+                    {soyUnicoAdmin ? (
+                      // El grupo no puede quedar sin admin: lo lleva a Miembros de ese grupo.
+                      <Link
+                        href={urlConGrupo("/admin?tab=usuarios", g.id)}
+                        className="px-1.5 text-xs text-zinc-500 transition hover:text-white"
                       >
-                        Salir del grupo
-                      </ConfirmSubmitButton>
-                    </ActionForm>
+                        Para salir, nombrá otro admin
+                      </Link>
+                    ) : (
+                      <ActionForm action={salirDelGrupo} className="flex items-center gap-1.5">
+                        <input type="hidden" name="grupo_id" value={g.id} />
+                        <ConfirmSubmitButton
+                          confirmMessage={
+                            soyElUnico
+                              ? `Sos el único miembro de ${g.nombre}. Si salís, el grupo se borra con todos sus partidos, estadísticas y encuestas. No se puede deshacer.`
+                              : `¿Salir de ${g.nombre}? Para volver vas a necesitar un link de invitación.`
+                          }
+                          confirmLabel={soyElUnico ? "Salir y borrar" : "Salir"}
+                          className="px-1.5 text-xs text-zinc-500 transition hover:text-danger-400"
+                        >
+                          Salir del grupo
+                        </ConfirmSubmitButton>
+                      </ActionForm>
+                    )}
                   </div>
                 </div>
                 {!esActivo && (
@@ -109,6 +149,7 @@ export default async function GruposPage() {
                   <input type="hidden" name="grupo_id" value={s.grupo_id} />
                   <ConfirmSubmitButton
                     confirmMessage="¿Cancelar el pedido para entrar a este grupo?"
+                    confirmLabel="Cancelar pedido"
                     className={buttonClass("ghost", "sm", "!px-2 !py-0.5 text-xs")}
                   >
                     Cancelar

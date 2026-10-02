@@ -1,6 +1,6 @@
 import Link from "next/link";
-import { redirect } from "next/navigation";
 import { getContexto } from "@/lib/grupo";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { cambiarGrupo, unirseGrupo } from "@/lib/actions/grupos";
 import Card from "@/components/ui/Card";
 import GrupoLogo from "@/components/ui/GrupoLogo";
@@ -11,9 +11,11 @@ import ActionForm from "@/components/ActionForm";
 export default async function UnirsePage({ params }: { params: Promise<{ codigo: string }> }) {
   const { codigo } = await params;
   const { supabase, user, grupos } = await getContexto();
-  if (!user) redirect(`/login?next=${encodeURIComponent(`/unirse/${codigo}`)}`);
 
-  const { data } = await supabase
+  // Sin sesión no hay usuario con el que llamar a la función, así que la
+  // vista previa (nombre, escudo, cantidad de miembros) se lee con la service
+  // role. Solo con el código exacto: no permite listar ni buscar grupos.
+  const { data } = await (user ? supabase : createAdminClient())
     .rpc("get_grupo_por_codigo", { p_codigo: codigo })
     .maybeSingle<{
       id: string;
@@ -39,6 +41,7 @@ export default async function UnirsePage({ params }: { params: Promise<{ codigo:
   }
 
   const yaSoyMiembro = grupos.some((g) => g.id === data.id);
+  const next = encodeURIComponent(`/unirse/${codigo}`);
 
   return (
     <div className="flex min-h-[60vh] flex-col items-center justify-center">
@@ -49,7 +52,19 @@ export default async function UnirsePage({ params }: { params: Promise<{ codigo:
         <p className="mt-1 mb-5 text-sm text-zinc-500">
           {data.miembros} {data.miembros === 1 ? "miembro" : "miembros"}
         </p>
-        {yaSoyMiembro ? (
+        {!user ? (
+          <div className="flex flex-col gap-3">
+            <p className="text-sm text-zinc-400">
+              Para sumarte, creá tu cuenta o entrá con la que ya tenés. Después volvés acá solo.
+            </p>
+            <Link href={`/signup?next=${next}`} className={buttonClass("primary", "md", "w-full")}>
+              Crear mi cuenta
+            </Link>
+            <Link href={`/login?next=${next}`} className={buttonClass("secondary", "md", "w-full")}>
+              Ya tengo cuenta
+            </Link>
+          </div>
+        ) : yaSoyMiembro ? (
           <form action={cambiarGrupo}>
             <input type="hidden" name="grupo_id" value={data.id} />
             <p className="mb-3 text-sm text-zinc-400">Ya sos parte de este grupo.</p>

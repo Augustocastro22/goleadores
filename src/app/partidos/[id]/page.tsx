@@ -224,6 +224,7 @@ export default async function PartidoDetailPage({
             <input type="hidden" name="partido_id" value={id} />
             <ConfirmSubmitButton
               confirmMessage="¿Seguro que querés borrar este partido? Se pierden los goles y los votos cargados."
+              confirmLabel="Eliminar"
               className="w-full rounded-xl border border-danger-500/20 bg-danger-500/10 px-4 py-2.5 text-sm font-semibold text-danger-400 transition hover:bg-danger-500/20"
             >
               Eliminar partido

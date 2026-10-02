@@ -85,6 +85,7 @@ export default function EncuestaCard({
             <form action={handleEliminar}>
               <ConfirmSubmitButton
                 confirmMessage="¿Borrar esta encuesta?"
+                confirmLabel="Borrar"
                 className="text-zinc-500 hover:text-danger-400"
               >
                 <IconTrash className="h-4 w-4" />

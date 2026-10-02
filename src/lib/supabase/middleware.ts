@@ -10,6 +10,9 @@ const NO_AUTH_REQUIRED_PATHS = [
   "/recuperar",
   "/auth/callback",
   "/actualizar-password",
+  // La invitación se ve sin sesión: muestra el grupo y ofrece entrar o crear
+  // la cuenta (ver src/app/unirse/[codigo]/page.tsx).
+  "/unirse/",
 ];
 // Si ya hay una sesión normal, no tiene sentido quedarse ahí (se manda a
 // /partidos). "/actualizar-password" queda afuera a propósito: durante el
@@ -55,10 +58,6 @@ export async function updateSession(request: NextRequest) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     url.search = "";
-    // Un link de invitación tiene que sobrevivir al login/registro.
-    if (request.nextUrl.pathname.startsWith("/unirse/")) {
-      url.searchParams.set("next", request.nextUrl.pathname);
-    }
     return NextResponse.redirect(url);
   }
 
