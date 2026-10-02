@@ -56,21 +56,23 @@ export default function GrupoSwitcher({
   }
 
   return (
-    <div ref={ref} className="relative min-w-0">
+    // flex en el contenedor para que el botón pueda achicarse y truncar el
+    // nombre (si no, se desborda por debajo de los links de la barra).
+    <div ref={ref} className="relative flex min-w-0">
       <button
         type="button"
         onClick={() => setAbierto((v) => !v)}
         aria-expanded={abierto}
         aria-haspopup="menu"
         title="Cambiar de grupo"
-        className="flex min-w-0 items-center gap-1.5 rounded-lg py-1 pr-1.5 text-base font-extrabold tracking-tight text-white transition hover:bg-white/5"
+        className="flex max-w-full min-w-0 items-center gap-1.5 rounded-lg py-1 pr-1.5 text-base font-extrabold tracking-tight text-white transition hover:bg-white/5"
       >
         {activo ? (
           <GrupoLogo src={activo.logo_url} nombre={activo.nombre} size={28} />
         ) : (
           <span className="text-lg">⚽</span>
         )}
-        <span className="max-w-[45vw] truncate sm:max-w-56">{activo?.nombre ?? "Goleadores"}</span>
+        <span className="truncate">{activo?.nombre ?? "Goleadores"}</span>
         <IconChevronRight
           className={`h-4 w-4 shrink-0 text-zinc-500 transition ${abierto ? "-rotate-90" : "rotate-90"}`}
         />

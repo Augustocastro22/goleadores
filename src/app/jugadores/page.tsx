@@ -25,7 +25,8 @@ export default async function JugadoresPage({
       goleadores={(goleadoresRes.data ?? []) as RankingRow[]}
       mvpRows={(mvpRes.data ?? []) as RankingRow[]}
       peorRows={(peorRes.data ?? []) as RankingRow[]}
-      votacionActiva={config.votacion_activa}
+      votaMvp={config.vota_mvp}
+      votaPeor={config.vota_peor}
       tabInicial={tab === "formacion" ? "formacion" : "plantel"}
     />
   );

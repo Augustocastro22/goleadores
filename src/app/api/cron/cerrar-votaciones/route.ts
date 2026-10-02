@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { enviarPush } from "@/lib/push/send";
-import { fechaLimiteVotacion } from "@/lib/votacion";
+import { categoriasTexto, fechaLimiteVotacion } from "@/lib/votacion";
 import { revisarEmpates } from "@/lib/votaciones";
 import { urlConGrupo } from "@/lib/grupo-cookie";
 
@@ -20,7 +20,7 @@ export async function GET(request: NextRequest) {
   const supabase = createAdminClient();
   const { data: partidos, error } = await supabase
     .from("partidos")
-    .select("id, grupo_id, fecha, rival")
+    .select("id, grupo_id, fecha, rival, con_mvp, con_peor")
     .eq("votacion_cerrada_notificada", false)
     .eq("jugado", true)
     .eq("con_votacion", true);
@@ -41,7 +41,7 @@ export async function GET(request: NextRequest) {
         participantes.map((p) => p.jugador_id),
         {
           title: "Se cerró la votación",
-          body: `Ya se puede ver quién ganó Mejor Jugador y Peor Jugador vs ${partido.rival}.`,
+          body: `Ya se puede ver quién ganó ${categoriasTexto({ conMvp: partido.con_mvp, conPeor: partido.con_peor })} vs ${partido.rival}.`,
           url: urlConGrupo(`/partidos/${partido.id}`, partido.grupo_id),
         }
       );

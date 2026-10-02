@@ -37,7 +37,10 @@ export interface Partido {
   votacion_abierta_notificada: boolean;
   votacion_cerrada_notificada: boolean;
   jugado: boolean;
+  /** Tiene alguna votación (si es false no se vota nada, sin importar con_mvp/con_peor). */
   con_votacion: boolean;
+  con_mvp: boolean;
+  con_peor: boolean;
 }
 
 export type Equipo = 1 | 2;

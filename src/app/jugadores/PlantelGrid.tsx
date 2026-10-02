@@ -6,18 +6,23 @@ import Avatar from "@/components/ui/Avatar";
 import Badge from "@/components/ui/Badge";
 import { IconGoal, IconThumbsDown, IconTrophy } from "@/components/icons";
 
+/** Clases completas (Tailwind no ve clases armadas con template strings). */
+const COLS: Record<number, string> = { 1: "grid-cols-1", 2: "grid-cols-2", 3: "grid-cols-3" };
+
 export default function PlantelGrid({
   jugadores,
   goleadores,
   mvpRows,
   peorRows,
-  votacionActiva,
+  votaMvp,
+  votaPeor,
 }: {
   jugadores: Miembro[];
   goleadores: RankingRow[];
   mvpRows: RankingRow[];
   peorRows: RankingRow[];
-  votacionActiva: boolean;
+  votaMvp: boolean;
+  votaPeor: boolean;
 }) {
   const goles = new Map(goleadores.map((r) => [r.jugador_id, r.goles ?? 0]));
   const partidosJugados = new Map(goleadores.map((r) => [r.jugador_id, r.partidos_jugados ?? 0]));
@@ -49,15 +54,13 @@ export default function PlantelGrid({
             </Badge>
             <div
               className={`mt-1 grid w-full divide-x divide-border border-t border-border pt-3 ${
-                votacionActiva ? "grid-cols-3" : "grid-cols-1"
+                COLS[1 + Number(votaMvp) + Number(votaPeor)]
               }`}
             >
               <Stat icon={IconGoal} value={goles.get(j.id) ?? 0} label="Goles" />
-              {votacionActiva && (
-                <>
-                  <Stat icon={IconTrophy} value={vecesMvp.get(j.id) ?? 0} label="MVP" />
-                  <Stat icon={IconThumbsDown} value={vecesPeor.get(j.id) ?? 0} label="Peor" />
-                </>
+              {votaMvp && <Stat icon={IconTrophy} value={vecesMvp.get(j.id) ?? 0} label="MVP" />}
+              {votaPeor && (
+                <Stat icon={IconThumbsDown} value={vecesPeor.get(j.id) ?? 0} label="Peor" />
               )}
             </div>
             <p className="text-[11px] text-zinc-600">

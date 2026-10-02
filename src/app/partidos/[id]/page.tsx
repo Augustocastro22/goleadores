@@ -1,6 +1,6 @@
 import { notFound, redirect } from "next/navigation";
 import { getContexto, getMiembros, rolEn } from "@/lib/grupo";
-import { getConfig } from "@/lib/config";
+import { getConfig, grupoVota as votaAlgo } from "@/lib/config";
 import { deletePartido } from "@/lib/actions/partidos";
 import { votar, votarDesempate } from "@/lib/actions/votos";
 import { votacionCerrada } from "@/lib/votacion";
@@ -40,7 +40,9 @@ export default async function PartidoDetailPage({
 
   // El rol que cuenta es el del grupo del partido (puede no ser el grupo activo).
   const isAdmin = rolEn(ctx, partido.grupo_id) === "admin";
-  const { votacion_activa: grupoVota } = await getConfig(supabase, partido.grupo_id);
+  const grupoVota = votaAlgo(await getConfig(supabase, partido.grupo_id));
+  const conMvp = partido.con_votacion && partido.con_mvp;
+  const conPeor = partido.con_votacion && partido.con_peor;
 
   const { data: participantesRaw } = await supabase
     .from("partido_jugadores")
@@ -97,6 +99,8 @@ export default async function PartidoDetailPage({
       totalParticipantes,
       votosMvp,
       votosPeor,
+      conMvp,
+      conPeor,
     });
 
     if (cerrada) {
@@ -182,30 +186,40 @@ export default async function PartidoDetailPage({
           <h2 className="mb-3 text-lg font-bold text-white">Votación</h2>
           {!partido.con_votacion ? (
             <Card className="px-4 py-3 text-sm text-zinc-500">
-              Jugaron {participantes.length}, menos que el mínimo para votar Mejor y Peor Jugador,
-              así que este partido no tiene votación.
+              Jugaron {participantes.length}, menos que el mínimo para votar, así que este partido
+              no tiene votación.
             </Card>
           ) : cerrada ? (
             <div className="flex flex-col gap-3">
-              <DesgloseVotos label="Mejor Jugador" filas={desgloseMvp} />
-              <DesempateInfo
-                desempate={desempates.find((d) => d.tipo === "MVP") ?? null}
-                yaVote={misVotosDesempate}
-                miId={user.id}
-                jugadorPorId={jugadorPorId}
-              />
-              <DesgloseVotos label="Peor Jugador" filas={desglosePeor} />
-              <DesempateInfo
-                desempate={desempates.find((d) => d.tipo === "PEOR") ?? null}
-                yaVote={misVotosDesempate}
-                miId={user.id}
-                jugadorPorId={jugadorPorId}
-              />
+              {conMvp && (
+                <>
+                  <DesgloseVotos label="Mejor Jugador" filas={desgloseMvp} />
+                  <DesempateInfo
+                    desempate={desempates.find((d) => d.tipo === "MVP") ?? null}
+                    yaVote={misVotosDesempate}
+                    miId={user.id}
+                    jugadorPorId={jugadorPorId}
+                  />
+                </>
+              )}
+              {conPeor && (
+                <>
+                  <DesgloseVotos label="Peor Jugador" filas={desglosePeor} />
+                  <DesempateInfo
+                    desempate={desempates.find((d) => d.tipo === "PEOR") ?? null}
+                    yaVote={misVotosDesempate}
+                    miId={user.id}
+                    jugadorPorId={jugadorPorId}
+                  />
+                </>
+              )}
             </div>
           ) : (
             <VotacionForm
               partidoId={id}
               candidatos={candidatos}
+              conMvp={conMvp}
+              conPeor={conPeor}
               yaVoteMvp={yaVoteMvp}
               yaVotePeor={yaVotePeor}
             />
@@ -412,15 +426,19 @@ function DesempateInfo({
 function VotacionForm({
   partidoId,
   candidatos,
+  conMvp,
+  conPeor,
   yaVoteMvp,
   yaVotePeor,
 }: {
   partidoId: string;
   candidatos: ParticipanteRow[];
+  conMvp: boolean;
+  conPeor: boolean;
   yaVoteMvp: boolean;
   yaVotePeor: boolean;
 }) {
-  if (yaVoteMvp && yaVotePeor) {
+  if ((!conMvp || yaVoteMvp) && (!conPeor || yaVotePeor)) {
     return (
       <Card className="px-4 py-3 text-sm text-zinc-500">Ya votaste en este partido.</Card>
     );
@@ -456,16 +474,18 @@ function VotacionForm({
         }}
         className="flex flex-col gap-4"
       >
-        {yaVoteMvp ? (
-          <p className="text-sm text-zinc-500">Ya votaste Mejor Jugador en este partido.</p>
-        ) : (
-          <VotoSelect label="Mejor Jugador" name="mvp_jugador_id" candidatos={candidatos} />
-        )}
-        {yaVotePeor ? (
-          <p className="text-sm text-zinc-500">Ya votaste Peor Jugador en este partido.</p>
-        ) : (
-          <VotoSelect label="Peor Jugador" name="peor_jugador_id" candidatos={candidatos} />
-        )}
+        {conMvp &&
+          (yaVoteMvp ? (
+            <p className="text-sm text-zinc-500">Ya votaste Mejor Jugador en este partido.</p>
+          ) : (
+            <VotoSelect label="Mejor Jugador" name="mvp_jugador_id" candidatos={candidatos} />
+          ))}
+        {conPeor &&
+          (yaVotePeor ? (
+            <p className="text-sm text-zinc-500">Ya votaste Peor Jugador en este partido.</p>
+          ) : (
+            <VotoSelect label="Peor Jugador" name="peor_jugador_id" candidatos={candidatos} />
+          ))}
         <Button type="submit" size="sm" className="self-start">
           Votar
         </Button>

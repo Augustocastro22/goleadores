@@ -1,5 +1,5 @@
 import { createAdminClient } from "@/lib/supabase/admin";
-import { votacionCerrada } from "@/lib/votacion";
+import { categoriasTexto, votacionCerrada } from "@/lib/votacion";
 import { calcularEmpate } from "@/lib/desempate";
 import { enviarPush } from "@/lib/push/send";
 import { urlConGrupo } from "@/lib/grupo-cookie";
@@ -44,10 +44,11 @@ export async function revisarEmpates(partidoId: string) {
 
   const { data: partido } = await admin
     .from("partidos")
-    .select("rival, grupo_id")
+    .select("rival, grupo_id, con_mvp, con_peor")
     .eq("id", partidoId)
     .single();
   if (!partido) return;
+  const tipos = (["MVP", "PEOR"] as const).filter((t) => (t === "MVP" ? partido.con_mvp : partido.con_peor));
   const url = urlConGrupo(`/partidos/${partidoId}`, partido.grupo_id);
 
   const { data: participantesRaw } = await admin
@@ -72,7 +73,7 @@ export async function revisarEmpates(partidoId: string) {
     .eq("rol", "admin");
   const idsAdmins = (admins ?? []).map((a) => a.jugador_id);
 
-  for (const tipo of ["MVP", "PEOR"] as const) {
+  for (const tipo of tipos) {
     const { data: existente } = await admin
       .from("desempates")
       .select("id")
@@ -135,7 +136,7 @@ export async function cerrarVotacionSiCorresponde(partidoId: string) {
   const admin = createAdminClient();
   const { data: partido } = await admin
     .from("partidos")
-    .select("grupo_id, fecha, rival, jugado, con_votacion, votacion_cerrada_notificada")
+    .select("grupo_id, fecha, rival, jugado, con_votacion, con_mvp, con_peor, votacion_cerrada_notificada")
     .eq("id", partidoId)
     .single();
   if (!partido || !partido.jugado || !partido.con_votacion || partido.votacion_cerrada_notificada) return;
@@ -152,6 +153,8 @@ export async function cerrarVotacionSiCorresponde(partidoId: string) {
     totalParticipantes: (participantes ?? []).filter((p) => miembros.has(p.jugador_id)).length,
     votosMvp: votosDeMiembros.filter((v) => v.tipo === "MVP").length,
     votosPeor: votosDeMiembros.filter((v) => v.tipo === "PEOR").length,
+    conMvp: partido.con_mvp,
+    conPeor: partido.con_peor,
   });
   if (!cerrada) return;
 
@@ -159,7 +162,7 @@ export async function cerrarVotacionSiCorresponde(partidoId: string) {
     (participantes ?? []).map((p) => p.jugador_id).filter((id) => miembros.has(id)),
     {
       title: "Se cerró la votación",
-      body: `Ya se puede ver quién ganó Mejor Jugador y Peor Jugador vs ${partido.rival}.`,
+      body: `Ya se puede ver quién ganó ${categoriasTexto({ conMvp: partido.con_mvp, conPeor: partido.con_peor })} vs ${partido.rival}.`,
       url: urlConGrupo(`/partidos/${partidoId}`, partido.grupo_id),
     }
   );

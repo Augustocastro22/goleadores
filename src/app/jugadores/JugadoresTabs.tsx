@@ -12,14 +12,16 @@ export default function JugadoresTabs({
   goleadores,
   mvpRows,
   peorRows,
-  votacionActiva,
+  votaMvp,
+  votaPeor,
   tabInicial,
 }: {
   jugadores: Miembro[];
   goleadores: RankingRow[];
   mvpRows: RankingRow[];
   peorRows: RankingRow[];
-  votacionActiva: boolean;
+  votaMvp: boolean;
+  votaPeor: boolean;
   tabInicial: Tab;
 }) {
   const [tab, setTab] = useState<Tab>(tabInicial);
@@ -64,7 +66,8 @@ export default function JugadoresTabs({
           goleadores={goleadores}
           mvpRows={mvpRows}
           peorRows={peorRows}
-          votacionActiva={votacionActiva}
+          votaMvp={votaMvp}
+          votaPeor={votaPeor}
         />
       ) : (
         <FormacionBuilder jugadores={jugadores} />

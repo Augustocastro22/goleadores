@@ -21,6 +21,30 @@ describe("votacionCerrada", () => {
     ).toBe(false);
   });
 
+  it("una categoría apagada no se espera para cerrar", () => {
+    const hoy = new Date().toISOString().slice(0, 10);
+    expect(
+      votacionCerrada({
+        fechaPartido: hoy,
+        totalParticipantes: 5,
+        votosMvp: 5,
+        votosPeor: 0,
+        conMvp: true,
+        conPeor: false,
+      })
+    ).toBe(true);
+    expect(
+      votacionCerrada({
+        fechaPartido: hoy,
+        totalParticipantes: 5,
+        votosMvp: 4,
+        votosPeor: 0,
+        conMvp: true,
+        conPeor: false,
+      })
+    ).toBe(false);
+  });
+
   it("cierra igual por vencimiento del plazo aunque falten votos", () => {
     expect(
       votacionCerrada({ fechaPartido: "2000-01-01", totalParticipantes: 5, votosMvp: 1, votosPeor: 0 })

@@ -1,5 +1,5 @@
 import { requireGrupo } from "@/lib/grupo";
-import { getConfig } from "@/lib/config";
+import { getConfig, grupoVota } from "@/lib/config";
 import { votacionCerrada } from "@/lib/votacion";
 import type { EstadoVotacion, RankingRow } from "@/lib/types";
 import Card from "@/components/ui/Card";
@@ -9,9 +9,10 @@ import { ComponentType, SVGProps } from "react";
 
 export default async function EstadisticasPage() {
   const { supabase, grupo } = await requireGrupo();
-  // Si el grupo no vota Mejor/Peor, la página muestra solo goleadores (los
+  // Cada ranking de votos se muestra solo si el grupo vota esa categoría (los
   // votos de cuando sí votaba quedan guardados y vuelven si se reactiva).
-  const { votacion_activa: votacionActiva } = await getConfig(supabase, grupo.id);
+  const config = await getConfig(supabase, grupo.id);
+  const votacionActiva = grupoVota(config);
 
   const [goleadores, mvp, peor, partidosRes] = await Promise.all([
     supabase.rpc("get_goleadores", { p_grupo_id: grupo.id }),
@@ -19,9 +20,10 @@ export default async function EstadisticasPage() {
     supabase.rpc("get_ranking_votos", { p_grupo_id: grupo.id, p_tipo: "PEOR" }),
     supabase
       .from("partidos")
-      .select("id, fecha")
+      .select("id, fecha, con_mvp, con_peor")
       .eq("grupo_id", grupo.id)
       .eq("jugado", true)
+      .eq("con_votacion", true)
       .order("fecha", { ascending: false })
       .order("created_at", { ascending: false })
       .limit(10),
@@ -37,6 +39,8 @@ export default async function EstadisticasPage() {
       totalParticipantes: estado?.total_participantes ?? 0,
       votosMvp: estado?.votos_mvp ?? 0,
       votosPeor: estado?.votos_peor ?? 0,
+      conMvp: partido.con_mvp,
+      conPeor: partido.con_peor,
     });
     if (cerrada) {
       ultimoPartidoCerradoId = partido.id;
@@ -72,29 +76,29 @@ export default async function EstadisticasPage() {
         valueKey="goles"
         valueLabel="Goles"
       />
-      {votacionActiva && (
-        <>
-      <RankingList
-        titulo="Mejor Jugador (MVP)"
-        icon={IconTrophy}
-        iconClassName="bg-gold-500/15 text-gold-400"
-        rows={(mvp.data ?? []) as RankingRow[]}
-        valueKey="veces_elegido"
-        valueLabel="Veces"
-        onlyLideres
-        ultimoPartidoGanadores={ultimoMvp}
-      />
-      <RankingList
-        titulo="Peor Jugador"
-        icon={IconThumbsDown}
-        iconClassName="bg-danger-500/15 text-danger-400"
-        rows={(peor.data ?? []) as RankingRow[]}
-        valueKey="veces_elegido"
-        valueLabel="Veces"
-        onlyLideres
-        ultimoPartidoGanadores={ultimoPeor}
-      />
-        </>
+      {config.vota_mvp && (
+        <RankingList
+          titulo="Mejor Jugador (MVP)"
+          icon={IconTrophy}
+          iconClassName="bg-gold-500/15 text-gold-400"
+          rows={(mvp.data ?? []) as RankingRow[]}
+          valueKey="veces_elegido"
+          valueLabel="Veces"
+          onlyLideres
+          ultimoPartidoGanadores={ultimoMvp}
+        />
+      )}
+      {config.vota_peor && (
+        <RankingList
+          titulo="Peor Jugador"
+          icon={IconThumbsDown}
+          iconClassName="bg-danger-500/15 text-danger-400"
+          rows={(peor.data ?? []) as RankingRow[]}
+          valueKey="veces_elegido"
+          valueLabel="Veces"
+          onlyLideres
+          ultimoPartidoGanadores={ultimoPeor}
+        />
       )}
     </div>
   );

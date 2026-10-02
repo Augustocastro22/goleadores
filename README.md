@@ -79,6 +79,8 @@ En `/admin` (ícono de ajustes arriba a la derecha, solo visible para los admins
 
 Requiere ejecutar la migración [`0015_admin_config.sql`](supabase/migrations/0015_admin_config.sql) en el SQL Editor de Supabase (agrega la tabla `config` y la columna `partidos.con_votacion`).
 
+Mejor Jugador y Peor Jugador se prenden o apagan por separado: requiere [`0018_votacion_separada.sql`](supabase/migrations/0018_votacion_separada.sql) (agrega `partidos.con_mvp` y `partidos.con_peor`, y hace que la votación cierre sin esperar la categoría apagada).
+
 ## 8. Multi-grupo
 
 La migración [`0016_multi_grupo.sql`](supabase/migrations/0016_multi_grupo.sql) agrega las tablas `grupos` y `grupo_miembros`, pone `grupo_id` en partidos, encuestas y configuración, y reescribe todas las políticas de RLS para que el acceso dependa de ser miembro (o admin) de cada grupo. Si ya tenías datos, los mueve a un primer grupo llamado "Goleadores" con todos los perfiles como miembros y el mismo rol que tenían. El rol global `profiles.rol` desaparece.

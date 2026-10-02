@@ -21,8 +21,14 @@ interface PartidoJugadoRow {
     lugar: string;
     goles_rival: number;
     goles_otros: number;
+    con_votacion: boolean;
+    con_mvp: boolean;
+    con_peor: boolean;
   };
 }
+
+/** Clases completas (Tailwind no ve clases armadas con template strings). */
+const COLS: Record<number, string> = { 2: "grid-cols-2", 3: "grid-cols-3", 4: "grid-cols-4" };
 
 interface Logro {
   icon: ComponentType<SVGProps<SVGSVGElement>>;
@@ -48,7 +54,7 @@ export default async function JugadorDetallePage({
   const jugador = (membresia?.profiles ?? null) as unknown as Profile | null;
   if (!membresia || !jugador) notFound();
   const rol = membresia.rol as Rol;
-  const { votacion_activa: votacionActiva } = await getConfig(supabase, grupo.id);
+  const { vota_mvp: votaMvp, vota_peor: votaPeor } = await getConfig(supabase, grupo.id);
 
   const [goleadoresRes, mvpRes, peorRes, misPartidosRes, todosPartidosRes] = await Promise.all([
     supabase.rpc("get_goleadores", { p_grupo_id: grupo.id }),
@@ -56,7 +62,7 @@ export default async function JugadorDetallePage({
     supabase.rpc("get_ranking_votos", { p_grupo_id: grupo.id, p_tipo: "PEOR" }),
     supabase
       .from("partido_jugadores")
-      .select("partido_id, goles, equipo, partidos!inner(fecha, rival, lugar, goles_rival, goles_otros, jugado, grupo_id)")
+      .select("partido_id, goles, equipo, partidos!inner(fecha, rival, lugar, goles_rival, goles_otros, jugado, grupo_id, con_votacion, con_mvp, con_peor)")
       .eq("jugador_id", id)
       .eq("partidos.jugado", true)
       .eq("partidos.grupo_id", grupo.id),
@@ -137,7 +143,8 @@ export default async function JugadorDetallePage({
   // Racha de MVP: partidos consecutivos (propios, con votación cerrada) elegido Mejor Jugador.
   const misPartidosAsc = [...misPartidos].sort((a, b) => a.partidos.fecha.localeCompare(b.partidos.fecha));
   const fueMvpPorPartido = await Promise.all(
-    (votacionActiva ? misPartidosAsc : []).map(async (mp) => {
+    (votaMvp ? misPartidosAsc : []).map(async (mp) => {
+      if (!mp.partidos.con_votacion || !mp.partidos.con_mvp) return false;
       const { data: estado } = await supabase
         .rpc("get_estado_votacion", { p_partido_id: mp.partido_id })
         .single<EstadoVotacion>();
@@ -146,6 +153,8 @@ export default async function JugadorDetallePage({
         totalParticipantes: estado?.total_participantes ?? 0,
         votosMvp: estado?.votos_mvp ?? 0,
         votosPeor: estado?.votos_peor ?? 0,
+        conMvp: mp.partidos.con_mvp,
+        conPeor: mp.partidos.con_peor,
       });
       if (!cerrada) return false;
       const { data: ganadores } = await supabase.rpc("get_ganadores_votacion", {
@@ -168,7 +177,7 @@ export default async function JugadorDetallePage({
   }
 
   const logrosCandidatos: (Logro | null)[] = [
-    votacionActiva && partidosJugados > 0 && vecesPeor === 0
+    votaPeor && partidosJugados > 0 && vecesPeor === 0
       ? { icon: IconThumbsDown, titulo: "Nunca la remó", detalle: "Nunca fue elegido Peor Jugador." }
       : null,
     rachaGolMax >= 3
@@ -223,17 +232,13 @@ export default async function JugadorDetallePage({
         </Badge>
         <div
           className={`mt-2 grid w-full divide-x divide-border border-t border-border pt-4 ${
-            votacionActiva ? "grid-cols-4" : "grid-cols-2"
+            COLS[2 + Number(votaMvp) + Number(votaPeor)]
           }`}
         >
           <StatCol value={goles} label="Goles" />
           <StatCol value={partidosJugados} label="Partidos" />
-          {votacionActiva && (
-            <>
-              <StatCol value={vecesMvp} label="MVP" />
-              <StatCol value={vecesPeor} label="Peor" />
-            </>
-          )}
+          {votaMvp && <StatCol value={vecesMvp} label="MVP" />}
+          {votaPeor && <StatCol value={vecesPeor} label="Peor" />}
         </div>
       </Card>
 

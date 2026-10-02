@@ -3,7 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { enviarPush } from "@/lib/push/send";
-import { getConfig, tieneVotacion } from "@/lib/config";
+import { getConfig, votacionDelPartido } from "@/lib/config";
+import { categoriasTexto } from "@/lib/votacion";
 import { getContexto, rolEn } from "@/lib/grupo";
 import { urlConGrupo } from "@/lib/grupo-cookie";
 
@@ -219,16 +220,21 @@ export async function guardarGolesPartido({ partidoId, goles, golesOtros, golesR
 
   const { data: partido } = await supabase
     .from("partidos")
-    .select("rival, jugado, con_votacion, votacion_abierta_notificada")
+    .select("rival, jugado, con_votacion, con_mvp, con_peor, votacion_abierta_notificada")
     .eq("id", partidoId)
     .single();
   if (!partido) return { error: "Partido no encontrado." };
 
-  // La primera vez que se cargan los goles se decide si el partido tiene
-  // votación de Mejor/Peor, según las reglas del grupo en /admin (si vota y
-  // con qué mínimo de jugadores). Después ya no se reevalúa (ver
-  // 0015_admin_config.sql): cambiar las reglas no toca partidos ya jugados.
-  let conVotacion = partido.con_votacion;
+  // La primera vez que se cargan los goles se decide qué vota el partido
+  // (Mejor y/o Peor), según las reglas del grupo en /admin (qué categorías
+  // vota y con qué mínimo de jugadores). Después ya no se reevalúa (ver
+  // 0015_admin_config.sql y 0018_votacion_separada.sql): cambiar las reglas
+  // no toca partidos ya jugados.
+  let votacion = {
+    con_votacion: partido.con_votacion,
+    con_mvp: partido.con_mvp,
+    con_peor: partido.con_peor,
+  };
   if (!partido.jugado) {
     const [{ count }, config] = await Promise.all([
       supabase
@@ -237,7 +243,7 @@ export async function guardarGolesPartido({ partidoId, goles, golesOtros, golesR
         .eq("partido_id", partidoId),
       getConfig(supabase, grupoId),
     ]);
-    conVotacion = tieneVotacion(count ?? 0, config);
+    votacion = votacionDelPartido(count ?? 0, config);
   }
 
   for (const { jugadorId, goles: cantidad } of goles) {
@@ -255,14 +261,14 @@ export async function guardarGolesPartido({ partidoId, goles, golesOtros, golesR
       goles_otros: golesOtros,
       goles_rival: golesRival,
       jugado: true,
-      con_votacion: conVotacion,
+      ...votacion,
       // Sin votación no hay nada que avisar (ni apertura ni cierre).
-      ...(conVotacion ? {} : { votacion_abierta_notificada: true, votacion_cerrada_notificada: true }),
+      ...(votacion.con_votacion ? {} : { votacion_abierta_notificada: true, votacion_cerrada_notificada: true }),
     })
     .eq("id", partidoId);
   if (partidoError) return { error: partidoError.message };
 
-  if (conVotacion && !partido.votacion_abierta_notificada) {
+  if (votacion.con_votacion && !partido.votacion_abierta_notificada) {
     const { data: participantes } = await supabase
       .from("partido_jugadores")
       .select("jugador_id")
@@ -272,7 +278,7 @@ export async function guardarGolesPartido({ partidoId, goles, golesOtros, golesR
       (participantes ?? []).map((p) => p.jugador_id),
       {
         title: "¡Se abrió la votación!",
-        body: `Votá Mejor Jugador y Peor Jugador del partido vs ${partido.rival}.`,
+        body: `Votá ${categoriasTexto({ conMvp: votacion.con_mvp, conPeor: votacion.con_peor })} del partido vs ${partido.rival}.`,
         url: urlConGrupo(`/partidos/${partidoId}`, grupoId),
       }
     );

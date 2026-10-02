@@ -23,13 +23,16 @@ export async function votar(formData: FormData) {
 
   const { data: partido } = await supabase
     .from("partidos")
-    .select("fecha, jugado, con_votacion")
+    .select("fecha, jugado, con_votacion, con_mvp, con_peor")
     .eq("id", partidoId)
     .single();
   if (!partido) return { error: "Partido no encontrado." };
   if (!partido.jugado) return { error: "Todavía no se cargaron los resultados de este partido." };
   if (!partido.con_votacion) {
     return { error: "Este partido no tiene votación: jugaron menos jugadores que el mínimo." };
+  }
+  if ((tipo === "MVP" && !partido.con_mvp) || (tipo === "PEOR" && !partido.con_peor)) {
+    return { error: "En este partido no se vota esa categoría." };
   }
 
   const { data: estado } = await supabase
@@ -43,6 +46,8 @@ export async function votar(formData: FormData) {
       totalParticipantes: estado.total_participantes,
       votosMvp: estado.votos_mvp,
       votosPeor: estado.votos_peor,
+      conMvp: partido.con_mvp,
+      conPeor: partido.con_peor,
     })
   ) {
     return { error: "La votación de este partido ya está cerrada." };
