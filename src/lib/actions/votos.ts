@@ -3,109 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { votacionCerrada } from "@/lib/votacion";
-import { calcularEmpate } from "@/lib/desempate";
-import { enviarPush } from "@/lib/push/send";
-import { createAdminClient } from "@/lib/supabase/admin";
-import { urlConGrupo } from "@/lib/grupo-cookie";
-import type { Desempate, EstadoVotacion, TipoVoto } from "@/lib/types";
-
-const CATEGORIA_LABEL: Record<TipoVoto, string> = {
-  MVP: "Mejor Jugador",
-  PEOR: "Peor Jugador",
-};
-
-/**
- * Se llama justo cuando la votación de un partido acaba de cerrarse (todos
- * votaron, o venció el plazo). Para MVP y para Peor por separado, si hay
- * empate por el primer puesto y ese empate se puede definir sin riesgo de
- * volver a empatar (ver src/lib/desempate.ts), abre una revotación
- * exclusiva entre los empatados y avisa a quienes pueden definirlo y a los
- * admins. Si ya existe un desempate para ese partido+tipo, no hace nada
- * (no se reprocesa).
- */
-export async function revisarEmpates(partidoId: string) {
-  const admin = createAdminClient();
-
-  const { data: partido } = await admin
-    .from("partidos")
-    .select("rival, grupo_id")
-    .eq("id", partidoId)
-    .single();
-  if (!partido) return;
-  const url = urlConGrupo(`/partidos/${partidoId}`, partido.grupo_id);
-
-  const { data: participantesRaw } = await admin
-    .from("partido_jugadores")
-    .select("jugador_id, profiles(apodo)")
-    .eq("partido_id", partidoId);
-  const participantes = (participantesRaw ?? []) as unknown as {
-    jugador_id: string;
-    profiles: { apodo: string } | null;
-  }[];
-  if (participantes.length === 0) return;
-
-  const apodoPorId = new Map(participantes.map((p) => [p.jugador_id, p.profiles?.apodo ?? ""]));
-  const idsParticipantes = participantes.map((p) => p.jugador_id);
-
-  const { data: admins } = await admin
-    .from("grupo_miembros")
-    .select("jugador_id")
-    .eq("grupo_id", partido.grupo_id)
-    .eq("rol", "admin");
-  const idsAdmins = (admins ?? []).map((a) => a.jugador_id);
-
-  for (const tipo of ["MVP", "PEOR"] as const) {
-    const { data: existente } = await admin
-      .from("desempates")
-      .select("id")
-      .eq("partido_id", partidoId)
-      .eq("tipo", tipo)
-      .maybeSingle();
-    if (existente) continue;
-
-    const { data: votosRaw } = await admin
-      .from("votos")
-      .select("jugador_que_vota_id, jugador_votado_id")
-      .eq("partido_id", partidoId)
-      .eq("tipo", tipo);
-    const votos = (votosRaw ?? []).map((v) => ({
-      votante: v.jugador_que_vota_id,
-      votado: v.jugador_votado_id,
-    }));
-
-    const empate = calcularEmpate(idsParticipantes, votos);
-    if (!empate || !empate.definible) continue;
-
-    const { error: insertError } = await admin.from("desempates").insert({
-      partido_id: partidoId,
-      tipo,
-      candidatos: empate.empatados,
-      elegibles: empate.elegibles,
-    });
-    if (insertError) continue;
-
-    const categoria = CATEGORIA_LABEL[tipo];
-    const nombresEmpatados = empate.empatados.map((id) => apodoPorId.get(id) ?? "?").join(" y ");
-
-    await enviarPush(empate.elegibles, {
-      title: "Tenés que definir un empate",
-      body: `Empate en ${categoria} (${nombresEmpatados}) vs ${partido.rival}. Tu voto define quién gana.`,
-      url,
-    });
-
-    const idsElegibles = new Set(empate.elegibles);
-    const idsAdminsAAvisar = idsAdmins.filter((id) => !idsElegibles.has(id));
-    if (idsAdminsAAvisar.length > 0) {
-      await enviarPush(idsAdminsAAvisar, {
-        title: "Empate a definir",
-        body: `Empate en ${categoria} (${nombresEmpatados}) vs ${partido.rival}. Puede definirlo: ${empate.elegibles
-          .map((id) => apodoPorId.get(id) ?? "?")
-          .join(", ")}.`,
-        url,
-      });
-    }
-  }
-}
+import { cerrarVotacionSiCorresponde, resolverDesempateSiCorresponde } from "@/lib/votaciones";
+import type { Desempate, EstadoVotacion } from "@/lib/types";
 
 export async function votar(formData: FormData) {
   const partidoId = String(formData.get("partido_id") ?? "");
@@ -124,7 +23,7 @@ export async function votar(formData: FormData) {
 
   const { data: partido } = await supabase
     .from("partidos")
-    .select("grupo_id, fecha, rival, jugado, con_votacion, votacion_cerrada_notificada")
+    .select("fecha, jugado, con_votacion")
     .eq("id", partidoId)
     .single();
   if (!partido) return { error: "Partido no encontrado." };
@@ -163,45 +62,8 @@ export async function votar(formData: FormData) {
     return { error: error.message };
   }
 
-  if (!partido.votacion_cerrada_notificada) {
-    const { data: estadoNuevo } = await supabase
-      .rpc("get_estado_votacion", { p_partido_id: partidoId })
-      .single<EstadoVotacion>();
-
-    const cerradaAhora =
-      estadoNuevo &&
-      votacionCerrada({
-        fechaPartido: partido.fecha,
-        totalParticipantes: estadoNuevo.total_participantes,
-        votosMvp: estadoNuevo.votos_mvp,
-        votosPeor: estadoNuevo.votos_peor,
-      });
-
-    if (cerradaAhora) {
-      const { data: participantes } = await supabase
-        .from("partido_jugadores")
-        .select("jugador_id")
-        .eq("partido_id", partidoId);
-
-      await enviarPush(
-        (participantes ?? []).map((p) => p.jugador_id),
-        {
-          title: "Se cerró la votación",
-          body: `Ya se puede ver quién ganó Mejor Jugador y Peor Jugador vs ${partido.rival}.`,
-          url: urlConGrupo(`/partidos/${partidoId}`, partido.grupo_id),
-        }
-      );
-
-      // Un jugador cualquiera (no admin) puede ser quien complete la votación,
-      // y la tabla partidos solo se puede actualizar como admin vía RLS.
-      await createAdminClient()
-        .from("partidos")
-        .update({ votacion_cerrada_notificada: true })
-        .eq("id", partidoId);
-
-      await revisarEmpates(partidoId);
-    }
-  }
+  // Si con este voto se completó, avisa, la marca cerrada y abre desempates.
+  await cerrarVotacionSiCorresponde(partidoId);
 
   revalidatePath(`/partidos/${partidoId}`);
   revalidatePath("/estadisticas");
@@ -245,52 +107,7 @@ export async function votarDesempate(formData: FormData) {
     return { error: error.message };
   }
 
-  const admin = createAdminClient();
-  const { data: votosDesempate } = await admin
-    .from("desempate_votos")
-    .select("jugador_votado_id")
-    .eq("desempate_id", desempateId);
-
-  if ((votosDesempate?.length ?? 0) >= desempate.elegibles.length) {
-    const conteo = new Map<string, number>();
-    for (const v of votosDesempate ?? []) {
-      conteo.set(v.jugador_votado_id, (conteo.get(v.jugador_votado_id) ?? 0) + 1);
-    }
-    const maxVotos = Math.max(...conteo.values());
-    const ganadores = [...conteo.entries()].filter(([, n]) => n === maxVotos).map(([gid]) => gid);
-    // Por construcción (ver revisarEmpates/calcularEmpate) esto siempre da un
-    // único ganador. Si por algún motivo no fuera así, se deja sin ganador:
-    // el partido queda como el empate original, sin romper nada.
-    const ganadorId = ganadores.length === 1 ? ganadores[0] : null;
-
-    await admin
-      .from("desempates")
-      .update({ resuelto: true, ganador_id: ganadorId })
-      .eq("id", desempateId);
-
-    if (ganadorId) {
-      const { data: partido } = await admin
-        .from("partidos")
-        .select("rival, grupo_id")
-        .eq("id", desempate.partido_id)
-        .single();
-      const { data: participantes } = await admin
-        .from("partido_jugadores")
-        .select("jugador_id")
-        .eq("partido_id", desempate.partido_id);
-
-      if (partido && participantes) {
-        await enviarPush(
-          participantes.map((p) => p.jugador_id),
-          {
-            title: "Se definió el empate",
-            body: `Ya se sabe quién ganó ${CATEGORIA_LABEL[desempate.tipo]} vs ${partido.rival}.`,
-            url: urlConGrupo(`/partidos/${desempate.partido_id}`, partido.grupo_id),
-          }
-        );
-      }
-    }
-  }
+  await resolverDesempateSiCorresponde(desempateId);
 
   revalidatePath(`/partidos/${desempate.partido_id}`);
   revalidatePath("/estadisticas");

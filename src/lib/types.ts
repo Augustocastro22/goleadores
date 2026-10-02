@@ -141,4 +141,6 @@ export interface RankingRow {
   votos?: number;
   veces_elegido?: number;
   partidos_jugados?: number;
+  /** false si se fue del grupo (sigue en las tablas con lo que hizo). */
+  sigue_en_grupo?: boolean;
 }

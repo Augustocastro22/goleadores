@@ -346,11 +346,15 @@ function DesempateInfo({
   if (desempate.resuelto) {
     return (
       <Card className="px-4 py-3 text-sm text-zinc-400">
-        Empate entre {nombresEmpatados}: se definió por revotación y ganó{" "}
-        <span className="font-semibold text-white">
-          {desempate.ganador_id ? nombreDe(desempate.ganador_id) : "nadie (quedó sin resolver)"}
-        </span>
-        .
+        {desempate.ganador_id ? (
+          <>
+            Empate entre {nombresEmpatados}: se definió por revotación y ganó{" "}
+            <span className="font-semibold text-white">{nombreDe(desempate.ganador_id)}</span>.
+          </>
+        ) : (
+          // Volvió a empatar, o quienes tenían que definirlo se fueron del grupo.
+          <>Empate entre {nombresEmpatados}: no se pudo definir, así que cuentan todos.</>
+        )}
       </Card>
     );
   }

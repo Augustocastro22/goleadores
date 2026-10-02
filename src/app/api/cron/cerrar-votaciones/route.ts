@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { enviarPush } from "@/lib/push/send";
 import { fechaLimiteVotacion } from "@/lib/votacion";
-import { revisarEmpates } from "@/lib/actions/votos";
+import { revisarEmpates } from "@/lib/votaciones";
 import { urlConGrupo } from "@/lib/grupo-cookie";
 
 /**

@@ -6,6 +6,7 @@ import { enviarPush } from "@/lib/push/send";
 import { getContexto, rolEn } from "@/lib/grupo";
 import { urlConGrupo } from "@/lib/grupo-cookie";
 import { filasConfig, parseConfig } from "@/lib/config";
+import { revisarTrasSalida } from "@/lib/votaciones";
 
 /** Todo lo de /admin opera sobre el grupo activo, y solo si es admin ahí. */
 async function requireAdmin() {
@@ -127,6 +128,9 @@ export async function sacarDelGrupo(formData: FormData) {
     .eq("grupo_id", grupo.id)
     .eq("jugador_id", jugadorId);
   if (error) return { error: error.message };
+
+  // Votaciones o desempates que solo esperaban su voto pueden cerrarse ahora.
+  await revisarTrasSalida(grupo.id);
 
   revalidatePath("/admin");
   revalidatePath("/jugadores");

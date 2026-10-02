@@ -8,6 +8,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { enviarPush } from "@/lib/push/send";
 import { GRUPO_COOKIE, GRUPO_COOKIE_OPTIONS, urlConGrupo } from "@/lib/grupo-cookie";
 import { filasConfig, parseConfig } from "@/lib/config";
+import { revisarTrasSalida } from "@/lib/votaciones";
 
 async function activarGrupo(grupoId: string) {
   (await cookies()).set(GRUPO_COOKIE, grupoId, GRUPO_COOKIE_OPTIONS);
@@ -176,6 +177,9 @@ export async function salirDelGrupo(formData: FormData) {
     .eq("grupo_id", grupoId)
     .eq("jugador_id", user.id);
   if (error) return { error: error.message };
+
+  // Votaciones o desempates que solo esperaban su voto pueden cerrarse ahora.
+  await revisarTrasSalida(grupoId);
 
   revalidatePath("/", "layout");
   return { success: true };

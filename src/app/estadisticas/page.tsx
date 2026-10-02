@@ -172,7 +172,12 @@ function RankingList({
               >
                 {onlyLideres ? 1 : i + 1}
               </span>
-              <Avatar src={row.foto_url} alt={row.apodo} size={36} />
+              <Avatar
+                src={row.foto_url}
+                alt={row.apodo}
+                size={36}
+                className={row.sigue_en_grupo === false ? "opacity-50 grayscale" : ""}
+              />
               <div className="min-w-0 flex-1">
                 <p className="truncate font-medium text-white">
                   {row.nombre} {row.apellido}
@@ -180,6 +185,7 @@ function RankingList({
                 <p className="truncate text-xs text-zinc-500">
                   {row.apodo} · {row.partidos_jugados ?? 0}{" "}
                   {row.partidos_jugados === 1 ? "partido" : "partidos"}
+                  {row.sigue_en_grupo === false && " · ya no está en el grupo"}
                 </p>
               </div>
               <div className="flex shrink-0 items-center gap-1">
