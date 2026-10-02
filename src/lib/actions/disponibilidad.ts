@@ -13,6 +13,7 @@ export async function crearBloqueo(formData: FormData) {
   const horaDesde = String(formData.get("hora_desde") ?? "").trim() || null;
   const horaHasta = String(formData.get("hora_hasta") ?? "").trim() || null;
   const nota = String(formData.get("nota") ?? "").trim() || null;
+  const grupoId = String(formData.get("grupo_id") ?? "").trim() || null;
 
   if (tipo !== "puntual" && tipo !== "rango" && tipo !== "recurrente") {
     return { error: "Tipo inválido." };
@@ -41,6 +42,7 @@ export async function crearBloqueo(formData: FormData) {
 
   const { error } = await supabase.from("bloqueos_disponibilidad").insert({
     jugador_id: user.id,
+    grupo_id: grupoId,
     tipo,
     fecha_desde: tipo === "recurrente" ? null : fechaDesde,
     fecha_hasta: tipo === "rango" ? fechaHasta : null,

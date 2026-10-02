@@ -3,6 +3,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { enviarPush } from "@/lib/push/send";
 import { fechaLimiteVotacion } from "@/lib/votacion";
 import { revisarEmpates } from "@/lib/actions/votos";
+import { urlConGrupo } from "@/lib/grupo-cookie";
 
 /**
  * Corre una vez por día (ver vercel.json). Cierra por vencimiento las
@@ -19,7 +20,7 @@ export async function GET(request: NextRequest) {
   const supabase = createAdminClient();
   const { data: partidos, error } = await supabase
     .from("partidos")
-    .select("id, fecha, rival")
+    .select("id, grupo_id, fecha, rival")
     .eq("votacion_cerrada_notificada", false)
     .eq("jugado", true)
     .eq("con_votacion", true);
@@ -41,7 +42,7 @@ export async function GET(request: NextRequest) {
         {
           title: "Se cerró la votación",
           body: `Ya se puede ver quién ganó Mejor Jugador y Peor Jugador vs ${partido.rival}.`,
-          url: `/partidos/${partido.id}`,
+          url: urlConGrupo(`/partidos/${partido.id}`, partido.grupo_id),
         }
       );
     }

@@ -1,6 +1,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { isRecoverySession } from "@/lib/recovery";
+import { GRUPO_COOKIE, GRUPO_COOKIE_OPTIONS } from "@/lib/grupo-cookie";
 
 // No requieren sesión para poder verse.
 const NO_AUTH_REQUIRED_PATHS = [
@@ -53,6 +54,11 @@ export async function updateSession(request: NextRequest) {
   if (!user && !noAuthRequired) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
+    url.search = "";
+    // Un link de invitación tiene que sobrevivir al login/registro.
+    if (request.nextUrl.pathname.startsWith("/unirse/")) {
+      url.searchParams.set("next", request.nextUrl.pathname);
+    }
     return NextResponse.redirect(url);
   }
 
@@ -73,6 +79,19 @@ export async function updateSession(request: NextRequest) {
       url.pathname = "/actualizar-password";
       return NextResponse.redirect(url);
     }
+  }
+
+  // ?grupo=<id> (lo traen los links de las notificaciones push) cambia el
+  // grupo activo y se saca de la URL. Si no es miembro de ese grupo,
+  // getContexto() lo ignora y usa otro.
+  const grupoParam = request.nextUrl.searchParams.get("grupo");
+  if (user && grupoParam) {
+    const url = request.nextUrl.clone();
+    url.searchParams.delete("grupo");
+    const response = NextResponse.redirect(url);
+    supabaseResponse.cookies.getAll().forEach((cookie) => response.cookies.set(cookie));
+    response.cookies.set(GRUPO_COOKIE, grupoParam, GRUPO_COOKIE_OPTIONS);
+    return response;
   }
 
   return supabaseResponse;

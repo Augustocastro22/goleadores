@@ -6,6 +6,7 @@ function bloqueo(overrides: Partial<Bloqueo>): Bloqueo {
   return {
     id: "1",
     jugador_id: "j1",
+    grupo_id: null,
     tipo: "puntual",
     fecha_desde: null,
     fecha_hasta: null,

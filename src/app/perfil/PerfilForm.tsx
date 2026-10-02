@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
-import type { Profile } from "@/lib/types";
+import type { Profile, Rol } from "@/lib/types";
 import { updateProfile, uploadAvatar } from "@/lib/actions/profile";
 import { resizeAndCompressImage } from "@/lib/image";
 import Card from "@/components/ui/Card";
@@ -11,7 +11,7 @@ import Avatar from "@/components/ui/Avatar";
 import Badge from "@/components/ui/Badge";
 import { IconCamera } from "@/components/icons";
 
-export default function PerfilForm({ profile }: { profile: Profile }) {
+export default function PerfilForm({ profile, rol }: { profile: Profile; rol: Rol | null }) {
   const [fotoUrl, setFotoUrl] = useState(profile.foto_url);
   const [message, setMessage] = useState<{ type: "ok" | "error"; text: string } | null>(null);
   const [uploading, setUploading] = useState(false);
@@ -84,9 +84,11 @@ export default function PerfilForm({ profile }: { profile: Profile }) {
         </div>
         <div className="text-center">
           <p className="font-semibold text-white">{profile.apodo}</p>
-          <Badge variant={profile.rol === "admin" ? "gold" : "neutral"} className="mt-1.5">
-            {profile.rol === "admin" ? "Admin" : "Jugador"}
-          </Badge>
+          {rol && (
+            <Badge variant={rol === "admin" ? "gold" : "neutral"} className="mt-1.5">
+              {rol === "admin" ? "Admin" : "Jugador"}
+            </Badge>
+          )}
         </div>
         {uploading && <p className="text-xs text-zinc-500">Subiendo foto...</p>}
       </Card>

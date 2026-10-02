@@ -2,29 +2,30 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
 import { enviarPush } from "@/lib/push/send";
 import { getConfig, tieneVotacion } from "@/lib/config";
+import { getContexto, rolEn } from "@/lib/grupo";
+import { urlConGrupo } from "@/lib/grupo-cookie";
 
-async function requireAdmin() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return { supabase, isAdmin: false, userId: null };
-
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("rol")
-    .eq("id", user.id)
-    .single();
-
-  return { supabase, isAdmin: profile?.rol === "admin", userId: user.id };
+/** Si el usuario es admin del grupo al que pertenece el partido. */
+async function requireAdminDePartido(partidoId: string) {
+  const ctx = await getContexto();
+  const { data } = await ctx.supabase
+    .from("partidos")
+    .select("grupo_id")
+    .eq("id", partidoId)
+    .maybeSingle();
+  const grupoId: string | null = data?.grupo_id ?? null;
+  return {
+    supabase: ctx.supabase,
+    grupoId,
+    isAdmin: !!grupoId && rolEn(ctx, grupoId) === "admin",
+  };
 }
 
 export async function createPartido(formData: FormData) {
-  const { supabase, isAdmin, userId } = await requireAdmin();
-  if (!isAdmin) return { error: "Solo el admin puede cargar partidos." };
+  const { supabase, user, grupo } = await getContexto();
+  if (!user || grupo?.rol !== "admin") return { error: "Solo el admin puede cargar partidos." };
 
   const fecha = String(formData.get("fecha") ?? "");
   const hora = String(formData.get("hora") ?? "").trim() || null;
@@ -48,7 +49,7 @@ export async function createPartido(formData: FormData) {
 
   const { data: partido, error } = await supabase
     .from("partidos")
-    .insert({ fecha, hora, lugar, rival, created_by: userId })
+    .insert({ grupo_id: grupo.id, fecha, hora, lugar, rival, created_by: user.id })
     .select()
     .single();
 
@@ -74,7 +75,7 @@ export async function createPartido(formData: FormData) {
   await enviarPush(destinatarios, {
     title: "Nuevo partido",
     body: `${fechaFormateada}${horaFormateada} vs ${rival} en ${lugar}. ¡Ya estás convocado!`,
-    url: `/partidos/${partido.id}`,
+    url: urlConGrupo(`/partidos/${partido.id}`, grupo.id),
   });
 
   revalidatePath("/partidos");
@@ -82,11 +83,11 @@ export async function createPartido(formData: FormData) {
 }
 
 export async function deletePartido(formData: FormData) {
-  const { supabase, isAdmin } = await requireAdmin();
-  if (!isAdmin) return { error: "Solo el admin puede borrar partidos." };
-
   const partidoId = String(formData.get("partido_id") ?? "");
   if (!partidoId) return { error: "Partido inválido." };
+
+  const { supabase, isAdmin } = await requireAdminDePartido(partidoId);
+  if (!isAdmin) return { error: "Solo el admin puede borrar partidos." };
 
   const { error } = await supabase.from("partidos").delete().eq("id", partidoId);
   if (error) return { error: error.message };
@@ -102,9 +103,9 @@ export interface ConvocadosInput {
 }
 
 export async function actualizarConvocados({ partidoId, participantes }: ConvocadosInput) {
-  const { supabase, isAdmin } = await requireAdmin();
-  if (!isAdmin) return { error: "Solo el admin puede editar la convocatoria." };
   if (!partidoId) return { error: "Partido inválido." };
+  const { supabase, isAdmin, grupoId } = await requireAdminDePartido(partidoId);
+  if (!isAdmin || !grupoId) return { error: "Solo el admin puede editar la convocatoria." };
   if (!participantes.some((p) => p.equipo === 1)) {
     return { error: "Tiene que haber al menos un jugador en el Equipo 1 (nuestro equipo)." };
   }
@@ -176,7 +177,7 @@ export async function actualizarConvocados({ partidoId, participantes }: Convoca
         {
           title: "Nuevo partido",
           body: `${fechaFormateada}${horaFormateada} vs ${partido.rival} en ${partido.lugar}. ¡Ya estás convocado!`,
-          url: `/partidos/${partidoId}`,
+          url: urlConGrupo(`/partidos/${partidoId}`, grupoId),
         }
       );
     }
@@ -185,7 +186,7 @@ export async function actualizarConvocados({ partidoId, participantes }: Convoca
       await enviarPush(aBorrar, {
         title: "Ya no estás convocado",
         body: `Te bajaron del partido vs ${partido.rival} del ${fechaFormateada}${horaFormateada}.`,
-        url: `/partidos/${partidoId}`,
+        url: urlConGrupo(`/partidos/${partidoId}`, grupoId),
       });
     }
   }
@@ -202,11 +203,11 @@ export interface GolesInput {
 }
 
 export async function guardarGolesPartido({ partidoId, goles, golesOtros, golesRival }: GolesInput) {
-  const { supabase, isAdmin } = await requireAdmin();
-  if (!isAdmin) return { error: "Solo el admin puede cargar goles." };
+  if (!partidoId) return { error: "Partido inválido." };
+  const { supabase, isAdmin, grupoId } = await requireAdminDePartido(partidoId);
+  if (!isAdmin || !grupoId) return { error: "Solo el admin puede cargar goles." };
 
   if (
-    !partidoId ||
     Number.isNaN(golesOtros) ||
     golesOtros < 0 ||
     Number.isNaN(golesRival) ||
@@ -224,8 +225,9 @@ export async function guardarGolesPartido({ partidoId, goles, golesOtros, golesR
   if (!partido) return { error: "Partido no encontrado." };
 
   // La primera vez que se cargan los goles se decide si el partido tiene
-  // votación de Mejor/Peor, según el mínimo de jugadores configurado en
-  // /admin. Después ya no se reevalúa (ver 0015_admin_config.sql).
+  // votación de Mejor/Peor, según las reglas del grupo en /admin (si vota y
+  // con qué mínimo de jugadores). Después ya no se reevalúa (ver
+  // 0015_admin_config.sql): cambiar las reglas no toca partidos ya jugados.
   let conVotacion = partido.con_votacion;
   if (!partido.jugado) {
     const [{ count }, config] = await Promise.all([
@@ -233,9 +235,9 @@ export async function guardarGolesPartido({ partidoId, goles, golesOtros, golesR
         .from("partido_jugadores")
         .select("id", { count: "exact", head: true })
         .eq("partido_id", partidoId),
-      getConfig(supabase),
+      getConfig(supabase, grupoId),
     ]);
-    conVotacion = tieneVotacion(count ?? 0, config.min_jugadores_votacion);
+    conVotacion = tieneVotacion(count ?? 0, config);
   }
 
   for (const { jugadorId, goles: cantidad } of goles) {
@@ -271,7 +273,7 @@ export async function guardarGolesPartido({ partidoId, goles, golesOtros, golesR
       {
         title: "¡Se abrió la votación!",
         body: `Votá Mejor Jugador y Peor Jugador del partido vs ${partido.rival}.`,
-        url: `/partidos/${partidoId}`,
+        url: urlConGrupo(`/partidos/${partidoId}`, grupoId),
       }
     );
 

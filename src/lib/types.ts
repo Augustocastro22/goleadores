@@ -7,12 +7,25 @@ export interface Profile {
   apellido: string;
   apodo: string;
   foto_url: string | null;
-  rol: Rol;
   created_at: string;
 }
 
+export interface Grupo {
+  id: string;
+  nombre: string;
+  codigo_invitacion: string;
+  requiere_aprobacion: boolean;
+  logo_url: string | null;
+  created_by: string | null;
+  created_at: string;
+}
+
+/** Un perfil visto como miembro de un grupo puntual, con su rol en ese grupo. */
+export type Miembro = Profile & { rol: Rol };
+
 export interface Partido {
   id: string;
+  grupo_id: string;
   fecha: string;
   hora: string | null;
   lugar: string;
@@ -39,6 +52,7 @@ export interface PartidoJugador {
 
 export interface Encuesta {
   id: string;
+  grupo_id: string;
   pregunta: string;
   creado_por: string;
   cierra_en: string;
@@ -62,6 +76,8 @@ export type DisponibilidadTipo = "puntual" | "rango" | "recurrente";
 export interface Bloqueo {
   id: string;
   jugador_id: string;
+  /** null = vale para todos los grupos del jugador. */
+  grupo_id: string | null;
   tipo: DisponibilidadTipo;
   fecha_desde: string | null;
   fecha_hasta: string | null;

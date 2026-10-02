@@ -1,31 +1,16 @@
 import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { getMiembros, requireGrupo } from "@/lib/grupo";
 import { createPartido } from "@/lib/actions/partidos";
-import type { Profile } from "@/lib/types";
 import Card from "@/components/ui/Card";
 import { Input, Label } from "@/components/ui/Input";
 import Avatar from "@/components/ui/Avatar";
 import SubmitButton from "@/components/SubmitButton";
 
 export default async function NuevoPartidoPage() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
+  const { supabase, grupo } = await requireGrupo();
+  if (grupo.rol !== "admin") redirect("/partidos");
 
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("rol")
-    .eq("id", user.id)
-    .single();
-  if (profile?.rol !== "admin") redirect("/partidos");
-
-  const { data: jugadores } = await supabase
-    .from("profiles")
-    .select("*")
-    .order("nombre")
-    .returns<Profile[]>();
+  const jugadores = await getMiembros(supabase, grupo.id);
 
   return (
     <div className="mx-auto max-w-md">
@@ -65,7 +50,7 @@ export default async function NuevoPartidoPage() {
               goles van a contar igual en la tabla histórica.
             </p>
             <div className="flex flex-col gap-2">
-              {(jugadores ?? []).map((jugador) => (
+              {jugadores.map((jugador) => (
                 <div
                   key={jugador.id}
                   className="flex items-center justify-between gap-3 rounded-xl border border-border bg-white/5 px-3.5 py-2.5"

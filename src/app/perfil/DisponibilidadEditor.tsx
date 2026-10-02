@@ -16,7 +16,14 @@ const TIPOS: { value: DisponibilidadTipo; label: string }[] = [
   { value: "recurrente", label: "Siempre (por día de semana)" },
 ];
 
-export default function DisponibilidadEditor({ bloqueosIniciales }: { bloqueosIniciales: Bloqueo[] }) {
+export default function DisponibilidadEditor({
+  bloqueosIniciales,
+  grupos,
+}: {
+  bloqueosIniciales: Bloqueo[];
+  grupos: { id: string; nombre: string }[];
+}) {
+  const nombreGrupo = new Map(grupos.map((g) => [g.id, g.nombre]));
   const router = useRouter();
   const formRef = useRef<HTMLFormElement>(null);
   const [borrados, setBorrados] = useState<Set<string>>(new Set());
@@ -57,8 +64,9 @@ export default function DisponibilidadEditor({ bloqueosIniciales }: { bloqueosIn
       <div>
         <p className="font-semibold text-white">Disponibilidad</p>
         <p className="mt-1 text-xs text-zinc-500">
-          Marcá los días que no podés jugar. Es solo un aviso para el admin al armar la
-          convocatoria, no te saca solo del partido.
+          Marcá los días que no podés jugar, para todos tus grupos o solo para uno (por ejemplo, si
+          ese día jugás con otro grupo). Es solo un aviso para el admin al armar la convocatoria,
+          no te saca solo del partido.
         </p>
       </div>
 
@@ -71,7 +79,10 @@ export default function DisponibilidadEditor({ bloqueosIniciales }: { bloqueosIn
             >
               <div className="min-w-0">
                 <p className="truncate text-sm text-zinc-200">{describirBloqueo(b)}</p>
-                {b.nota && <p className="truncate text-xs text-zinc-500">{b.nota}</p>}
+                <p className="truncate text-xs text-zinc-500">
+                  {b.grupo_id ? `Solo en ${nombreGrupo.get(b.grupo_id) ?? "un grupo"}` : "Todos mis grupos"}
+                  {b.nota && ` · ${b.nota}`}
+                </p>
               </div>
               <button
                 type="button"
@@ -159,6 +170,26 @@ export default function DisponibilidadEditor({ bloqueosIniciales }: { bloqueosIn
             <Input type="time" name="hora_hasta" />
           </Label>
         </div>
+
+        {grupos.length > 1 && (
+          <Label>
+            Para qué grupo
+            <select
+              name="grupo_id"
+              defaultValue=""
+              className="w-full rounded-xl border border-border bg-white/5 px-3.5 py-2.5 text-sm text-white outline-none focus:border-primary-400/60 focus:ring-2 focus:ring-primary-400/20"
+            >
+              <option value="" className="bg-surface">
+                Todos mis grupos
+              </option>
+              {grupos.map((g) => (
+                <option key={g.id} value={g.id} className="bg-surface">
+                  Solo {g.nombre}
+                </option>
+              ))}
+            </select>
+          </Label>
+        )}
 
         <Label>
           Nota (opcional)

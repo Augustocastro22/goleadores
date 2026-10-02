@@ -2,6 +2,8 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { getContexto } from "@/lib/grupo";
+import { urlConGrupo } from "@/lib/grupo-cookie";
 import { encuestaCerrada } from "@/lib/encuestas";
 import { enviarPush } from "@/lib/push/send";
 import type { ResultadoEncuesta } from "@/lib/types";
@@ -23,15 +25,13 @@ export async function crearEncuesta(formData: FormData) {
   if (opciones.length < MIN_OPCIONES) return { error: `Cargá al menos ${MIN_OPCIONES} opciones.` };
   if (opciones.length > MAX_OPCIONES) return { error: `Máximo ${MAX_OPCIONES} opciones.` };
 
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const { supabase, user, grupo } = await getContexto();
   if (!user) return { error: "No autenticado." };
+  if (!grupo) return { error: "Primero sumate a un grupo." };
 
   const { data: encuesta, error } = await supabase
     .from("encuestas")
-    .insert({ pregunta, creado_por: user.id, cierra_en: cierraEn.toISOString() })
+    .insert({ grupo_id: grupo.id, pregunta, creado_por: user.id, cierra_en: cierraEn.toISOString() })
     .select()
     .single();
   if (error) return { error: error.message };
@@ -41,10 +41,14 @@ export async function crearEncuesta(formData: FormData) {
     .insert(opciones.map((texto, i) => ({ encuesta_id: encuesta.id, texto, orden: i })));
   if (opcionesError) return { error: opcionesError.message };
 
-  const { data: jugadores } = await supabase.from("profiles").select("id").neq("id", user.id);
+  const { data: miembros } = await supabase
+    .from("grupo_miembros")
+    .select("jugador_id")
+    .eq("grupo_id", grupo.id)
+    .neq("jugador_id", user.id);
   await enviarPush(
-    (jugadores ?? []).map((j) => j.id),
-    { title: "Nueva encuesta", body: pregunta, url: "/encuestas" }
+    (miembros ?? []).map((m) => m.jugador_id),
+    { title: `Nueva encuesta en ${grupo.nombre}`, body: pregunta, url: urlConGrupo("/encuestas", grupo.id) }
   );
 
   revalidatePath("/encuestas");
@@ -64,14 +68,17 @@ export async function votarEncuesta(formData: FormData) {
 
   const { data: encuesta } = await supabase
     .from("encuestas")
-    .select("cierra_en")
+    .select("grupo_id, cierra_en")
     .eq("id", encuestaId)
     .single();
   if (!encuesta) return { error: "Encuesta no encontrada." };
 
   const [{ data: resultados }, { count: totalParticipantes }] = await Promise.all([
     supabase.rpc("get_resultados_encuesta", { p_encuesta_id: encuestaId }),
-    supabase.from("profiles").select("id", { count: "exact", head: true }),
+    supabase
+      .from("grupo_miembros")
+      .select("jugador_id", { count: "exact", head: true })
+      .eq("grupo_id", encuesta.grupo_id),
   ]);
   const totalVotos = ((resultados ?? []) as ResultadoEncuesta[]).reduce((sum, r) => sum + r.votos, 0);
 

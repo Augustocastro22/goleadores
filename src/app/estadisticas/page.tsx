@@ -1,5 +1,5 @@
-import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { requireGrupo } from "@/lib/grupo";
+import { getConfig } from "@/lib/config";
 import { votacionCerrada } from "@/lib/votacion";
 import type { EstadoVotacion, RankingRow } from "@/lib/types";
 import Card from "@/components/ui/Card";
@@ -8,19 +8,19 @@ import { IconGoal, IconThumbsDown, IconTrophy } from "@/components/icons";
 import { ComponentType, SVGProps } from "react";
 
 export default async function EstadisticasPage() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
+  const { supabase, grupo } = await requireGrupo();
+  // Si el grupo no vota Mejor/Peor, la página muestra solo goleadores (los
+  // votos de cuando sí votaba quedan guardados y vuelven si se reactiva).
+  const { votacion_activa: votacionActiva } = await getConfig(supabase, grupo.id);
 
   const [goleadores, mvp, peor, partidosRes] = await Promise.all([
-    supabase.rpc("get_goleadores"),
-    supabase.rpc("get_ranking_votos", { p_tipo: "MVP" }),
-    supabase.rpc("get_ranking_votos", { p_tipo: "PEOR" }),
+    supabase.rpc("get_goleadores", { p_grupo_id: grupo.id }),
+    supabase.rpc("get_ranking_votos", { p_grupo_id: grupo.id, p_tipo: "MVP" }),
+    supabase.rpc("get_ranking_votos", { p_grupo_id: grupo.id, p_tipo: "PEOR" }),
     supabase
       .from("partidos")
       .select("id, fecha")
+      .eq("grupo_id", grupo.id)
       .eq("jugado", true)
       .order("fecha", { ascending: false })
       .order("created_at", { ascending: false })
@@ -28,7 +28,7 @@ export default async function EstadisticasPage() {
   ]);
 
   let ultimoPartidoCerradoId: string | null = null;
-  for (const partido of partidosRes.data ?? []) {
+  for (const partido of votacionActiva ? (partidosRes.data ?? []) : []) {
     const { data: estado } = await supabase
       .rpc("get_estado_votacion", { p_partido_id: partido.id })
       .single<EstadoVotacion>();
@@ -72,6 +72,8 @@ export default async function EstadisticasPage() {
         valueKey="goles"
         valueLabel="Goles"
       />
+      {votacionActiva && (
+        <>
       <RankingList
         titulo="Mejor Jugador (MVP)"
         icon={IconTrophy}
@@ -92,6 +94,8 @@ export default async function EstadisticasPage() {
         onlyLideres
         ultimoPartidoGanadores={ultimoPeor}
       />
+        </>
+      )}
     </div>
   );
 }

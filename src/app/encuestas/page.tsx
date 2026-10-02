@@ -1,27 +1,35 @@
-import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { requireGrupo } from "@/lib/grupo";
 import { encuestaCerrada } from "@/lib/encuestas";
 import type { Encuesta, EncuestaOpcion, Profile, ResultadoEncuesta } from "@/lib/types";
 import CrearEncuestaForm from "./CrearEncuestaForm";
 import EncuestaCard from "./EncuestaCard";
 
 export default async function EncuestasPage() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
+  const { supabase, user, grupo } = await requireGrupo();
+  const isAdmin = grupo.rol === "admin";
 
-  const { data: miPerfil } = await supabase.from("profiles").select("rol").eq("id", user.id).single();
-  const isAdmin = miPerfil?.rol === "admin";
-
-  const [{ data: encuestas }, { data: opcionesRaw }, { data: creadoresRaw }, { count: totalParticipantes }] =
-    await Promise.all([
-      supabase.from("encuestas").select("*").order("created_at", { ascending: false }).returns<Encuesta[]>(),
-      supabase.from("encuesta_opciones").select("*").order("orden").returns<EncuestaOpcion[]>(),
-      supabase.from("profiles").select("id, apodo").returns<Pick<Profile, "id" | "apodo">[]>(),
-      supabase.from("profiles").select("id", { count: "exact", head: true }),
-    ]);
+  const [{ data: encuestas }, { data: creadoresRaw }, { count: totalParticipantes }] = await Promise.all([
+    supabase
+      .from("encuestas")
+      .select("*")
+      .eq("grupo_id", grupo.id)
+      .order("created_at", { ascending: false })
+      .returns<Encuesta[]>(),
+    supabase.from("profiles").select("id, apodo").returns<Pick<Profile, "id" | "apodo">[]>(),
+    supabase
+      .from("grupo_miembros")
+      .select("jugador_id", { count: "exact", head: true })
+      .eq("grupo_id", grupo.id),
+  ]);
+  const { data: opcionesRaw } = await supabase
+    .from("encuesta_opciones")
+    .select("*")
+    .in(
+      "encuesta_id",
+      (encuestas ?? []).map((e) => e.id)
+    )
+    .order("orden")
+    .returns<EncuestaOpcion[]>();
 
   const apodoPorId = new Map((creadoresRaw ?? []).map((p) => [p.id, p.apodo]));
   const opcionesPorEncuesta = new Map<string, EncuestaOpcion[]>();

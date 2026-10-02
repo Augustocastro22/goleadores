@@ -1,9 +1,10 @@
 import Link from "next/link";
-import { notFound, redirect } from "next/navigation";
+import { notFound } from "next/navigation";
 import { ComponentType, SVGProps } from "react";
-import { createClient } from "@/lib/supabase/server";
+import { requireGrupo } from "@/lib/grupo";
+import { getConfig } from "@/lib/config";
 import { votacionCerrada } from "@/lib/votacion";
-import type { EstadoVotacion, Profile, RankingRow } from "@/lib/types";
+import type { EstadoVotacion, Profile, RankingRow, Rol } from "@/lib/types";
 import { calcularResultado, RESULTADO_CLASS, type Resultado } from "@/lib/resultado";
 import Card from "@/components/ui/Card";
 import Avatar from "@/components/ui/Avatar";
@@ -35,29 +36,36 @@ export default async function JugadorDetallePage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
+  const { supabase, grupo } = await requireGrupo();
 
-  const { data: jugador } = await supabase
-    .from("profiles")
-    .select("*")
-    .eq("id", id)
-    .single<Profile>();
-  if (!jugador) notFound();
+  // Las estadísticas que se muestran son las del grupo activo.
+  const { data: membresia } = await supabase
+    .from("grupo_miembros")
+    .select("rol, profiles(*)")
+    .eq("grupo_id", grupo.id)
+    .eq("jugador_id", id)
+    .maybeSingle();
+  const jugador = (membresia?.profiles ?? null) as unknown as Profile | null;
+  if (!membresia || !jugador) notFound();
+  const rol = membresia.rol as Rol;
+  const { votacion_activa: votacionActiva } = await getConfig(supabase, grupo.id);
 
   const [goleadoresRes, mvpRes, peorRes, misPartidosRes, todosPartidosRes] = await Promise.all([
-    supabase.rpc("get_goleadores"),
-    supabase.rpc("get_ranking_votos", { p_tipo: "MVP" }),
-    supabase.rpc("get_ranking_votos", { p_tipo: "PEOR" }),
+    supabase.rpc("get_goleadores", { p_grupo_id: grupo.id }),
+    supabase.rpc("get_ranking_votos", { p_grupo_id: grupo.id, p_tipo: "MVP" }),
+    supabase.rpc("get_ranking_votos", { p_grupo_id: grupo.id, p_tipo: "PEOR" }),
     supabase
       .from("partido_jugadores")
-      .select("partido_id, goles, equipo, partidos!inner(fecha, rival, lugar, goles_rival, goles_otros, jugado)")
+      .select("partido_id, goles, equipo, partidos!inner(fecha, rival, lugar, goles_rival, goles_otros, jugado, grupo_id)")
       .eq("jugador_id", id)
-      .eq("partidos.jugado", true),
-    supabase.from("partidos").select("id, fecha").eq("jugado", true).order("fecha", { ascending: true }),
+      .eq("partidos.jugado", true)
+      .eq("partidos.grupo_id", grupo.id),
+    supabase
+      .from("partidos")
+      .select("id, fecha")
+      .eq("grupo_id", grupo.id)
+      .eq("jugado", true)
+      .order("fecha", { ascending: true }),
   ]);
 
   const goleadores = (goleadoresRes.data ?? []) as RankingRow[];
@@ -129,7 +137,7 @@ export default async function JugadorDetallePage({
   // Racha de MVP: partidos consecutivos (propios, con votación cerrada) elegido Mejor Jugador.
   const misPartidosAsc = [...misPartidos].sort((a, b) => a.partidos.fecha.localeCompare(b.partidos.fecha));
   const fueMvpPorPartido = await Promise.all(
-    misPartidosAsc.map(async (mp) => {
+    (votacionActiva ? misPartidosAsc : []).map(async (mp) => {
       const { data: estado } = await supabase
         .rpc("get_estado_votacion", { p_partido_id: mp.partido_id })
         .single<EstadoVotacion>();
@@ -160,7 +168,7 @@ export default async function JugadorDetallePage({
   }
 
   const logrosCandidatos: (Logro | null)[] = [
-    partidosJugados > 0 && vecesPeor === 0
+    votacionActiva && partidosJugados > 0 && vecesPeor === 0
       ? { icon: IconThumbsDown, titulo: "Nunca la remó", detalle: "Nunca fue elegido Peor Jugador." }
       : null,
     rachaGolMax >= 3
@@ -210,14 +218,22 @@ export default async function JugadorDetallePage({
           </p>
           <p className="text-sm text-zinc-500">{jugador.apodo}</p>
         </div>
-        <Badge variant={jugador.rol === "admin" ? "gold" : "neutral"}>
-          {jugador.rol === "admin" ? "Admin" : "Jugador"}
+        <Badge variant={rol === "admin" ? "gold" : "neutral"}>
+          {rol === "admin" ? "Admin" : "Jugador"}
         </Badge>
-        <div className="mt-2 grid w-full grid-cols-4 divide-x divide-border border-t border-border pt-4">
+        <div
+          className={`mt-2 grid w-full divide-x divide-border border-t border-border pt-4 ${
+            votacionActiva ? "grid-cols-4" : "grid-cols-2"
+          }`}
+        >
           <StatCol value={goles} label="Goles" />
           <StatCol value={partidosJugados} label="Partidos" />
-          <StatCol value={vecesMvp} label="MVP" />
-          <StatCol value={vecesPeor} label="Peor" />
+          {votacionActiva && (
+            <>
+              <StatCol value={vecesMvp} label="MVP" />
+              <StatCol value={vecesPeor} label="Peor" />
+            </>
+          )}
         </div>
       </Card>
 

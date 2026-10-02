@@ -1,6 +1,5 @@
 import Link from "next/link";
-import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { requireGrupo } from "@/lib/grupo";
 import type { Partido } from "@/lib/types";
 import { calcularResultado, RESULTADO_CLASS, type Resultado } from "@/lib/resultado";
 import Card from "@/components/ui/Card";
@@ -10,21 +9,12 @@ import { IconChevronRight, IconPlus } from "@/components/icons";
 import PushBanner from "@/components/PushBanner";
 
 export default async function PartidosPage() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
-
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("rol")
-    .eq("id", user.id)
-    .single();
+  const { supabase, grupo } = await requireGrupo();
 
   const { data: partidos } = await supabase
     .from("partidos")
     .select("*")
+    .eq("grupo_id", grupo.id)
     .order("fecha", { ascending: false })
     .returns<Partido[]>();
 
@@ -73,7 +63,7 @@ export default async function PartidosPage() {
 
       <div className="mb-6 flex items-center justify-between">
         <h1 className="text-2xl font-extrabold tracking-tight text-white">Partidos</h1>
-        {profile?.rol === "admin" && (
+        {grupo.rol === "admin" && (
           <Link href="/partidos/nuevo" className={buttonClass("primary", "sm")}>
             <IconPlus className="h-4 w-4" /> Nuevo
           </Link>
@@ -83,6 +73,12 @@ export default async function PartidosPage() {
       {!partidos || partidos.length === 0 ? (
         <Card className="px-5 py-10 text-center text-sm text-zinc-500">
           Todavía no hay partidos cargados.
+          {grupo.rol === "admin" && (
+            <span className="mt-1 block">
+              Cargá el primero con <span className="text-zinc-300">+ Nuevo</span>, o invitá al
+              resto del grupo desde Admin.
+            </span>
+          )}
         </Card>
       ) : (
         <>

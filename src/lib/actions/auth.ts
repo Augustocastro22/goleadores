@@ -5,6 +5,17 @@ import { createClient as createSupabaseJsClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import { getSiteUrl } from "@/lib/site-url";
 
+/** Destino después de entrar: solo rutas internas (evita open redirects). */
+function destino(formData: FormData) {
+  const next = String(formData.get("next") ?? "");
+  return next.startsWith("/") && !next.startsWith("//") ? next : "/partidos";
+}
+
+function conNext(path: string, formData: FormData) {
+  const next = destino(formData);
+  return next === "/partidos" ? path : `${path}&next=${encodeURIComponent(next)}`;
+}
+
 export async function login(formData: FormData) {
   const email = String(formData.get("email") ?? "").trim();
   const password = String(formData.get("password") ?? "");
@@ -13,10 +24,10 @@ export async function login(formData: FormData) {
   const { error } = await supabase.auth.signInWithPassword({ email, password });
 
   if (error) {
-    redirect(`/login?error=${encodeURIComponent(error.message)}`);
+    redirect(conNext(`/login?error=${encodeURIComponent(error.message)}`, formData));
   }
 
-  redirect("/partidos");
+  redirect(destino(formData));
 }
 
 export async function signup(formData: FormData) {
@@ -27,7 +38,7 @@ export async function signup(formData: FormData) {
   const apodo = String(formData.get("apodo") ?? "").trim();
 
   if (!nombre || !apellido || !apodo) {
-    redirect(`/signup?error=${encodeURIComponent("Completá nombre, apellido y apodo.")}`);
+    redirect(conNext(`/signup?error=${encodeURIComponent("Completá nombre, apellido y apodo.")}`, formData));
   }
 
   const supabase = await createClient();
@@ -38,19 +49,22 @@ export async function signup(formData: FormData) {
   });
 
   if (error) {
-    redirect(`/signup?error=${encodeURIComponent(error.message)}`);
+    redirect(conNext(`/signup?error=${encodeURIComponent(error.message)}`, formData));
   }
 
   if (!data.session) {
     // El proyecto tiene "Confirm email" activado: la cuenta se creó pero
     // todavía no hay sesión hasta que confirme el mail.
     redirect(
-      "/login?error=" +
-        encodeURIComponent("Cuenta creada. Revisá tu email para confirmarla antes de entrar.")
+      conNext(
+        "/login?error=" +
+          encodeURIComponent("Cuenta creada. Revisá tu email para confirmarla antes de entrar."),
+        formData
+      )
     );
   }
 
-  redirect("/partidos");
+  redirect(destino(formData));
 }
 
 export async function logout() {

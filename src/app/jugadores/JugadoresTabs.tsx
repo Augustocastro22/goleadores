@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import type { Profile, RankingRow } from "@/lib/types";
+import type { Miembro, RankingRow } from "@/lib/types";
 import PlantelGrid from "./PlantelGrid";
 import FormacionBuilder from "./FormacionBuilder";
 
@@ -12,12 +12,14 @@ export default function JugadoresTabs({
   goleadores,
   mvpRows,
   peorRows,
+  votacionActiva,
   tabInicial,
 }: {
-  jugadores: Profile[];
+  jugadores: Miembro[];
   goleadores: RankingRow[];
   mvpRows: RankingRow[];
   peorRows: RankingRow[];
+  votacionActiva: boolean;
   tabInicial: Tab;
 }) {
   const [tab, setTab] = useState<Tab>(tabInicial);
@@ -62,6 +64,7 @@ export default function JugadoresTabs({
           goleadores={goleadores}
           mvpRows={mvpRows}
           peorRows={peorRows}
+          votacionActiva={votacionActiva}
         />
       ) : (
         <FormacionBuilder jugadores={jugadores} />

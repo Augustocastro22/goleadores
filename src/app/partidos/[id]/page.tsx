@@ -1,5 +1,6 @@
 import { notFound, redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { getContexto, getMiembros, rolEn } from "@/lib/grupo";
+import { getConfig } from "@/lib/config";
 import { deletePartido } from "@/lib/actions/partidos";
 import { votar, votarDesempate } from "@/lib/actions/votos";
 import { votacionCerrada } from "@/lib/votacion";
@@ -26,10 +27,8 @@ export default async function PartidoDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const ctx = await getContexto();
+  const { supabase, user } = ctx;
   if (!user) redirect("/login");
 
   const { data: partido } = await supabase
@@ -39,12 +38,9 @@ export default async function PartidoDetailPage({
     .single();
   if (!partido) notFound();
 
-  const { data: miPerfil } = await supabase
-    .from("profiles")
-    .select("rol")
-    .eq("id", user.id)
-    .single();
-  const isAdmin = miPerfil?.rol === "admin";
+  // El rol que cuenta es el del grupo del partido (puede no ser el grupo activo).
+  const isAdmin = rolEn(ctx, partido.grupo_id) === "admin";
+  const { votacion_activa: grupoVota } = await getConfig(supabase, partido.grupo_id);
 
   const { data: participantesRaw } = await supabase
     .from("partido_jugadores")
@@ -60,11 +56,17 @@ export default async function PartidoDetailPage({
   let todosLosJugadores: Profile[] = [];
   let bloqueos: Bloqueo[] = [];
   if (isAdmin && !partido.jugado) {
-    const [{ data: jugadoresData }, { data: bloqueosData }] = await Promise.all([
-      supabase.from("profiles").select("*").order("nombre").returns<Profile[]>(),
-      supabase.from("bloqueos_disponibilidad").select("*").returns<Bloqueo[]>(),
-    ]);
-    todosLosJugadores = jugadoresData ?? [];
+    todosLosJugadores = await getMiembros(supabase, partido.grupo_id);
+    const { data: bloqueosData } = await supabase
+      .from("bloqueos_disponibilidad")
+      .select("*")
+      .in(
+        "jugador_id",
+        todosLosJugadores.map((j) => j.id)
+      )
+      // Los generales y los de este grupo; no los que el jugador marcó para otro grupo.
+      .or(`grupo_id.is.null,grupo_id.eq.${partido.grupo_id}`)
+      .returns<Bloqueo[]>();
     bloqueos = bloqueosData ?? [];
   }
 
@@ -174,7 +176,8 @@ export default async function PartidoDetailPage({
         />
       )}
 
-      {soyParticipante && partido.jugado && (
+      {/* Un partido sin votación de un grupo que ya no vota no muestra nada de votación. */}
+      {soyParticipante && partido.jugado && (partido.con_votacion || grupoVota) && (
         <section>
           <h2 className="mb-3 text-lg font-bold text-white">Votación</h2>
           {!partido.con_votacion ? (

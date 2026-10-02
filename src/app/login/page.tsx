@@ -7,9 +7,9 @@ import Button from "@/components/ui/Button";
 export default async function LoginPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string }>;
+  searchParams: Promise<{ error?: string; next?: string }>;
 }) {
-  const { error } = await searchParams;
+  const { error, next } = await searchParams;
 
   return (
     <div className="flex min-h-[70vh] flex-col items-center justify-center">
@@ -26,6 +26,7 @@ export default async function LoginPage({
           </p>
         )}
         <form action={login} className="flex flex-col gap-4">
+          {next && <input type="hidden" name="next" value={next} />}
           <Label>
             Email
             <Input type="email" name="email" required />
@@ -48,7 +49,7 @@ export default async function LoginPage({
 
       <p className="mt-6 text-sm text-zinc-500">
         ¿No tenés cuenta?{" "}
-        <Link href="/signup" className="font-semibold text-primary-400 hover:text-primary-300">
+        <Link href={next ? `/signup?next=${encodeURIComponent(next)}` : "/signup"} className="font-semibold text-primary-400 hover:text-primary-300">
           Registrate
         </Link>
       </p>

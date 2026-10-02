@@ -1,17 +1,15 @@
 import Link from "next/link";
-import { createClient } from "@/lib/supabase/server";
+import { getContexto } from "@/lib/grupo";
 import { logout } from "@/lib/actions/auth";
 import { isRecoverySession } from "@/lib/recovery";
 import Avatar from "./ui/Avatar";
+import GrupoLogo from "./ui/GrupoLogo";
 import NavLinks from "./NavLinks";
 import BottomNav from "./BottomNav";
-import { IconLogout, IconSettings } from "./icons";
+import { IconChevronRight, IconLogout, IconSettings } from "./icons";
 
 export default async function NavBar() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const { supabase, user, grupo } = await getContexto();
 
   if (!user) return null;
 
@@ -22,7 +20,7 @@ export default async function NavBar() {
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("apodo, foto_url, rol")
+    .select("apodo, foto_url")
     .eq("id", user.id)
     .single();
 
@@ -30,17 +28,24 @@ export default async function NavBar() {
     <>
       <header className="sticky top-0 z-20 border-b border-border bg-background/80 backdrop-blur-lg">
         <nav className="mx-auto flex max-w-3xl items-center justify-between gap-3 px-4 py-3">
-          <div className="flex items-center gap-6">
+          <div className="flex min-w-0 items-center gap-6">
             <Link
-              href="/partidos"
-              className="flex items-center gap-1.5 text-base font-extrabold tracking-tight text-white"
+              href="/grupos"
+              title="Cambiar de grupo"
+              className="flex min-w-0 items-center gap-1.5 text-base font-extrabold tracking-tight text-white"
             >
-              <span className="text-lg">⚽</span> Goleadores
+              {grupo ? (
+                <GrupoLogo src={grupo.logo_url} nombre={grupo.nombre} size={28} />
+              ) : (
+                <span className="text-lg">⚽</span>
+              )}
+              <span className="max-w-[45vw] truncate sm:max-w-56">{grupo?.nombre ?? "Goleadores"}</span>
+              <IconChevronRight className="h-4 w-4 shrink-0 rotate-90 text-zinc-500" />
             </Link>
-            <NavLinks />
+            {grupo && <NavLinks />}
           </div>
           <div className="flex items-center gap-2">
-            {profile?.rol === "admin" && (
+            {grupo?.rol === "admin" && (
               <Link
                 href="/admin"
                 title="Admin"
@@ -68,7 +73,7 @@ export default async function NavBar() {
           </div>
         </nav>
       </header>
-      <BottomNav />
+      {grupo && <BottomNav />}
     </>
   );
 }

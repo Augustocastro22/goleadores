@@ -7,9 +7,9 @@ import Button from "@/components/ui/Button";
 export default async function SignupPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string }>;
+  searchParams: Promise<{ error?: string; next?: string }>;
 }) {
-  const { error } = await searchParams;
+  const { error, next } = await searchParams;
 
   return (
     <div className="flex min-h-[70vh] flex-col items-center justify-center">
@@ -26,6 +26,7 @@ export default async function SignupPage({
           </p>
         )}
         <form action={signup} className="flex flex-col gap-4">
+          {next && <input type="hidden" name="next" value={next} />}
           <div className="grid grid-cols-2 gap-3">
             <Label>
               Nombre
@@ -56,7 +57,7 @@ export default async function SignupPage({
 
       <p className="mt-6 text-sm text-zinc-500">
         ¿Ya tenés cuenta?{" "}
-        <Link href="/login" className="font-semibold text-primary-400 hover:text-primary-300">
+        <Link href={next ? `/login?next=${encodeURIComponent(next)}` : "/login"} className="font-semibold text-primary-400 hover:text-primary-300">
           Iniciá sesión
         </Link>
       </p>

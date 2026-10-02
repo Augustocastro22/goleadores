@@ -6,6 +6,7 @@ import { votacionCerrada } from "@/lib/votacion";
 import { calcularEmpate } from "@/lib/desempate";
 import { enviarPush } from "@/lib/push/send";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { urlConGrupo } from "@/lib/grupo-cookie";
 import type { Desempate, EstadoVotacion, TipoVoto } from "@/lib/types";
 
 const CATEGORIA_LABEL: Record<TipoVoto, string> = {
@@ -27,10 +28,11 @@ export async function revisarEmpates(partidoId: string) {
 
   const { data: partido } = await admin
     .from("partidos")
-    .select("rival")
+    .select("rival, grupo_id")
     .eq("id", partidoId)
     .single();
   if (!partido) return;
+  const url = urlConGrupo(`/partidos/${partidoId}`, partido.grupo_id);
 
   const { data: participantesRaw } = await admin
     .from("partido_jugadores")
@@ -45,8 +47,12 @@ export async function revisarEmpates(partidoId: string) {
   const apodoPorId = new Map(participantes.map((p) => [p.jugador_id, p.profiles?.apodo ?? ""]));
   const idsParticipantes = participantes.map((p) => p.jugador_id);
 
-  const { data: admins } = await admin.from("profiles").select("id").eq("rol", "admin");
-  const idsAdmins = (admins ?? []).map((a) => a.id);
+  const { data: admins } = await admin
+    .from("grupo_miembros")
+    .select("jugador_id")
+    .eq("grupo_id", partido.grupo_id)
+    .eq("rol", "admin");
+  const idsAdmins = (admins ?? []).map((a) => a.jugador_id);
 
   for (const tipo of ["MVP", "PEOR"] as const) {
     const { data: existente } = await admin
@@ -84,7 +90,7 @@ export async function revisarEmpates(partidoId: string) {
     await enviarPush(empate.elegibles, {
       title: "Tenés que definir un empate",
       body: `Empate en ${categoria} (${nombresEmpatados}) vs ${partido.rival}. Tu voto define quién gana.`,
-      url: `/partidos/${partidoId}`,
+      url,
     });
 
     const idsElegibles = new Set(empate.elegibles);
@@ -95,7 +101,7 @@ export async function revisarEmpates(partidoId: string) {
         body: `Empate en ${categoria} (${nombresEmpatados}) vs ${partido.rival}. Puede definirlo: ${empate.elegibles
           .map((id) => apodoPorId.get(id) ?? "?")
           .join(", ")}.`,
-        url: `/partidos/${partidoId}`,
+        url,
       });
     }
   }
@@ -118,7 +124,7 @@ export async function votar(formData: FormData) {
 
   const { data: partido } = await supabase
     .from("partidos")
-    .select("fecha, rival, jugado, con_votacion, votacion_cerrada_notificada")
+    .select("grupo_id, fecha, rival, jugado, con_votacion, votacion_cerrada_notificada")
     .eq("id", partidoId)
     .single();
   if (!partido) return { error: "Partido no encontrado." };
@@ -182,7 +188,7 @@ export async function votar(formData: FormData) {
         {
           title: "Se cerró la votación",
           body: `Ya se puede ver quién ganó Mejor Jugador y Peor Jugador vs ${partido.rival}.`,
-          url: `/partidos/${partidoId}`,
+          url: urlConGrupo(`/partidos/${partidoId}`, partido.grupo_id),
         }
       );
 
@@ -265,7 +271,7 @@ export async function votarDesempate(formData: FormData) {
     if (ganadorId) {
       const { data: partido } = await admin
         .from("partidos")
-        .select("rival")
+        .select("rival, grupo_id")
         .eq("id", desempate.partido_id)
         .single();
       const { data: participantes } = await admin
@@ -279,7 +285,7 @@ export async function votarDesempate(formData: FormData) {
           {
             title: "Se definió el empate",
             body: `Ya se sabe quién ganó ${CATEGORIA_LABEL[desempate.tipo]} vs ${partido.rival}.`,
-            url: `/partidos/${desempate.partido_id}`,
+            url: urlConGrupo(`/partidos/${desempate.partido_id}`, partido.grupo_id),
           }
         );
       }

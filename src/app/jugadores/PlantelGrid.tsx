@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { ComponentType, SVGProps } from "react";
-import type { Profile, RankingRow } from "@/lib/types";
+import type { Miembro, RankingRow } from "@/lib/types";
 import Card from "@/components/ui/Card";
 import Avatar from "@/components/ui/Avatar";
 import Badge from "@/components/ui/Badge";
@@ -11,11 +11,13 @@ export default function PlantelGrid({
   goleadores,
   mvpRows,
   peorRows,
+  votacionActiva,
 }: {
-  jugadores: Profile[];
+  jugadores: Miembro[];
   goleadores: RankingRow[];
   mvpRows: RankingRow[];
   peorRows: RankingRow[];
+  votacionActiva: boolean;
 }) {
   const goles = new Map(goleadores.map((r) => [r.jugador_id, r.goles ?? 0]));
   const partidosJugados = new Map(goleadores.map((r) => [r.jugador_id, r.partidos_jugados ?? 0]));
@@ -45,10 +47,18 @@ export default function PlantelGrid({
             <Badge variant={j.rol === "admin" ? "gold" : "neutral"}>
               {j.rol === "admin" ? "Admin" : "Jugador"}
             </Badge>
-            <div className="mt-1 grid w-full grid-cols-3 divide-x divide-border border-t border-border pt-3">
+            <div
+              className={`mt-1 grid w-full divide-x divide-border border-t border-border pt-3 ${
+                votacionActiva ? "grid-cols-3" : "grid-cols-1"
+              }`}
+            >
               <Stat icon={IconGoal} value={goles.get(j.id) ?? 0} label="Goles" />
-              <Stat icon={IconTrophy} value={vecesMvp.get(j.id) ?? 0} label="MVP" />
-              <Stat icon={IconThumbsDown} value={vecesPeor.get(j.id) ?? 0} label="Peor" />
+              {votacionActiva && (
+                <>
+                  <Stat icon={IconTrophy} value={vecesMvp.get(j.id) ?? 0} label="MVP" />
+                  <Stat icon={IconThumbsDown} value={vecesPeor.get(j.id) ?? 0} label="Peor" />
+                </>
+              )}
             </div>
             <p className="text-[11px] text-zinc-600">
               {partidosJugados.get(j.id) ?? 0}{" "}

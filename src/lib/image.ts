@@ -1,8 +1,13 @@
-/** Redimensiona y comprime una imagen en el navegador antes de subirla. */
+/**
+ * Redimensiona y comprime una imagen en el navegador antes de subirla. Por
+ * defecto JPEG (fotos de perfil); los escudos van en PNG para no perder la
+ * transparencia.
+ */
 export async function resizeAndCompressImage(
   file: File,
   maxSize = 512,
-  quality = 0.8
+  quality = 0.8,
+  formato: "jpeg" | "png" = "jpeg"
 ): Promise<File> {
   const bitmap = await createImageBitmap(file);
 
@@ -18,8 +23,12 @@ export async function resizeAndCompressImage(
   ctx.drawImage(bitmap, 0, 0, width, height);
 
   const blob: Blob = await new Promise((resolve, reject) =>
-    canvas.toBlob((b) => (b ? resolve(b) : reject(new Error("No se pudo comprimir la imagen."))), "image/jpeg", quality)
+    canvas.toBlob(
+      (b) => (b ? resolve(b) : reject(new Error("No se pudo comprimir la imagen."))),
+      `image/${formato}`,
+      quality
+    )
   );
 
-  return new File([blob], "avatar.jpg", { type: "image/jpeg" });
+  return new File([blob], formato === "png" ? "imagen.png" : "avatar.jpg", { type: `image/${formato}` });
 }
