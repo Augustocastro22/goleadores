@@ -16,6 +16,27 @@ function conNext(path: string, formData: FormData) {
   return next === "/partidos" ? path : `${path}&next=${encodeURIComponent(next)}`;
 }
 
+/**
+ * Entrar (o crear la cuenta) con Google. Supabase manda a la pantalla de
+ * Google y vuelve a /auth/callback con un código, que abre la sesión y
+ * redirige a donde iba (por ejemplo la invitación a un grupo). Si ya había
+ * una cuenta con ese mismo email, Supabase la vincula: es la misma cuenta.
+ */
+export async function loginConGoogle(formData: FormData) {
+  const supabase = await createClient();
+  const siteUrl = await getSiteUrl();
+  const { data, error } = await supabase.auth.signInWithOAuth({
+    provider: "google",
+    options: {
+      redirectTo: `${siteUrl}/auth/callback?next=${encodeURIComponent(destino(formData))}&oauth=1`,
+    },
+  });
+  if (error || !data.url) {
+    redirect(conNext(`/login?error=${encodeURIComponent("No se pudo entrar con Google. Probá de nuevo.")}`, formData));
+  }
+  redirect(data.url);
+}
+
 export async function login(formData: FormData) {
   const email = String(formData.get("email") ?? "").trim();
   const password = String(formData.get("password") ?? "");
@@ -40,6 +61,11 @@ export async function signup(formData: FormData) {
   if (!nombre || !apellido || !apodo) {
     redirect(conNext(`/signup?error=${encodeURIComponent("Completá nombre, apellido y apodo.")}`, formData));
   }
+  if (formData.get("acepta_privacidad") !== "on") {
+    redirect(
+      conNext(`/signup?error=${encodeURIComponent("Para crear la cuenta tenés que aceptar la política de privacidad.")}`, formData)
+    );
+  }
 
   const supabase = await createClient();
   const siteUrl = await getSiteUrl();
@@ -47,7 +73,8 @@ export async function signup(formData: FormData) {
     email,
     password,
     options: {
-      data: { nombre, apellido, apodo },
+      // Cuándo aceptó la política de privacidad (consentimiento, Ley 25.326).
+      data: { nombre, apellido, apodo, privacidad_aceptada_en: new Date().toISOString() },
       // El link del mail de confirmación vuelve a donde iba (por ejemplo la
       // invitación a un grupo) pasando por /auth/callback, que abre la sesión.
       emailRedirectTo: `${siteUrl}/auth/callback?next=${encodeURIComponent(destino(formData))}`,

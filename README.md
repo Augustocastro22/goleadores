@@ -101,3 +101,9 @@ src/app/grupos, /unirse             Crear grupo, sumarse con link de invitación
 src/app/admin                       Invitación, reglas, edición de partidos y miembros (admin del grupo)
 src/lib/grupo.ts                    Grupo activo (cookie) y membresías del usuario
 ```
+
+## 9. Privacidad, contacto y borrado de cuenta
+
+- La política de privacidad está en `/privacidad` (los datos del responsable, en `src/lib/legal.ts`). El registro pide aceptarla.
+- Cada usuario puede borrar su cuenta desde **Mi perfil → Eliminar mi cuenta**: se borra todo lo que lo identifica y sus goles y votos quedan como "Jugador eliminado" (ver [`0018_borrado_cuenta.sql`](supabase/migrations/0018_borrado_cuenta.sql)).
+- El formulario de `/contacto` guarda los mensajes en la tabla `mensajes_contacto` (se leen desde el Table Editor de Supabase). Para que además lleguen por mail, creá una cuenta en [resend.com](https://resend.com) **con el mismo mail donde querés recibirlos**, generá una API key y cargá en Vercel `RESEND_API_KEY` y `CONTACTO_EMAIL_DESTINO`. Sin dominio propio, Resend solo deja mandar al mail de la cuenta, que es justo este caso; con dominio verificado podés usar `CONTACTO_EMAIL_REMITENTE` (ej. `Goleadores <contacto@tudominio.com>`).

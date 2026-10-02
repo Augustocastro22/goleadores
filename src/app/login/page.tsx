@@ -3,6 +3,7 @@ import { login } from "@/lib/actions/auth";
 import Card from "@/components/ui/Card";
 import { Input, Label } from "@/components/ui/Input";
 import Button from "@/components/ui/Button";
+import BotonGoogle from "@/components/BotonGoogle";
 
 export default async function LoginPage({
   searchParams,
@@ -35,6 +36,9 @@ export default async function LoginPage({
             {error}
           </p>
         )}
+        <div className="mb-4">
+          <BotonGoogle next={next} />
+        </div>
         <form action={login} className="flex flex-col gap-4">
           {next && <input type="hidden" name="next" value={next} />}
           <Label>
@@ -61,6 +65,14 @@ export default async function LoginPage({
         ¿No tenés cuenta?{" "}
         <Link href={next ? `/signup?next=${encodeURIComponent(next)}` : "/signup"} className="font-semibold text-primary-400 hover:text-primary-300">
           Registrate
+        </Link>
+      </p>
+      <p className="mt-3 flex gap-3 text-xs text-zinc-600">
+        <Link href="/privacidad" className="hover:text-zinc-400">
+          Política de privacidad
+        </Link>
+        <Link href="/contacto" className="hover:text-zinc-400">
+          Contacto
         </Link>
       </p>
     </div>

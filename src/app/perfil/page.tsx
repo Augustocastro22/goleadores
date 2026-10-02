@@ -4,6 +4,8 @@ import type { Bloqueo } from "@/lib/types";
 import PerfilForm from "./PerfilForm";
 import DisponibilidadEditor from "./DisponibilidadEditor";
 import PushSubscribe from "@/components/PushSubscribe";
+import Link from "next/link";
+import EliminarCuenta from "./EliminarCuenta";
 
 export default async function PerfilPage() {
   const { supabase, user, grupo, grupos } = await getContexto();
@@ -34,6 +36,10 @@ export default async function PerfilPage() {
           grupos={grupos.map((g) => ({ id: g.id, nombre: g.nombre }))}
         />
         <PushSubscribe />
+        <EliminarCuenta />
+        <Link href="/privacidad" className="text-center text-xs text-zinc-500 hover:text-zinc-300">
+          Política de privacidad
+        </Link>
       </div>
     </div>
   );

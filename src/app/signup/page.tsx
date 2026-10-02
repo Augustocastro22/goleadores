@@ -3,6 +3,7 @@ import { signup } from "@/lib/actions/auth";
 import Card from "@/components/ui/Card";
 import { Input, Label } from "@/components/ui/Input";
 import Button from "@/components/ui/Button";
+import BotonGoogle from "@/components/BotonGoogle";
 
 export default async function SignupPage({
   searchParams,
@@ -30,6 +31,9 @@ export default async function SignupPage({
             {error}
           </p>
         )}
+        <div className="mb-4">
+          <BotonGoogle next={next} />
+        </div>
         <form action={signup} className="flex flex-col gap-4">
           {next && <input type="hidden" name="next" value={next} />}
           <div className="grid grid-cols-2 gap-3">
@@ -54,6 +58,21 @@ export default async function SignupPage({
             Contraseña
             <Input type="password" name="password" required minLength={6} />
           </Label>
+          <label className="flex items-start gap-2.5 text-xs text-zinc-400">
+            <input
+              type="checkbox"
+              name="acepta_privacidad"
+              required
+              className="mt-0.5 h-4 w-4 shrink-0 accent-primary-500"
+            />
+            <span>
+              Leí y acepto la{" "}
+              <Link href="/privacidad" target="_blank" className="text-primary-400 underline hover:text-primary-300">
+                política de privacidad
+              </Link>
+              .
+            </span>
+          </label>
           <Button type="submit" className="mt-2 w-full">
             Crear cuenta
           </Button>

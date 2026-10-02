@@ -43,6 +43,25 @@ body {
   scrollbar-color: rgba(255, 255, 255, 0.15) transparent;
 }
 
+/*
+ * Campos de fecha y hora en iPhone (Safari): con su estilo nativo tienen un
+ * ancho mínimo propio (se salen de su columna), vacíos se achican a casi
+ * nada de alto y centran el texto. Se les saca el estilo nativo para que se
+ * comporten como el resto de los inputs; el selector de fecha/hora del
+ * sistema sigue abriéndose igual al tocarlos.
+ */
+input[type="date"],
+input[type="time"],
+input[type="datetime-local"] {
+  -webkit-appearance: none;
+  appearance: none;
+  min-width: 0;
+  min-height: 2.875rem;
+}
+input::-webkit-date-and-time-value {
+  text-align: left;
+}
+
 .no-scrollbar::-webkit-scrollbar {
   display: none;
 }

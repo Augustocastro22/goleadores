@@ -13,6 +13,8 @@ const NO_AUTH_REQUIRED_PATHS = [
   // La invitación se ve sin sesión: muestra el grupo y ofrece entrar o crear
   // la cuenta (ver src/app/unirse/[codigo]/page.tsx).
   "/unirse/",
+  "/privacidad",
+  "/contacto",
 ];
 // Si ya hay una sesión normal, no tiene sentido quedarse ahí (se manda a
 // /partidos). "/actualizar-password" queda afuera a propósito: durante el

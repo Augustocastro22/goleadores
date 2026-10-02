@@ -28,10 +28,18 @@ export async function GET(request: NextRequest) {
     if (!error) return NextResponse.redirect(`${origin}${destino}`);
   }
 
-  // Formato PKCE (?code=): es el que usa la confirmación de cuenta.
+  // Formato PKCE (?code=): es el que usan la confirmación de cuenta y el
+  // login con Google.
   if (code) {
-    const { error } = await supabase.auth.exchangeCodeForSession(code);
-    if (!error) return NextResponse.redirect(`${origin}${destino}`);
+    const { data, error } = await supabase.auth.exchangeCodeForSession(code);
+    if (!error) {
+      // Con Google no pasa por la casilla del registro: el botón avisa que al
+      // continuar acepta la política, y acá queda registrado cuándo.
+      if (searchParams.get("oauth") && !data.user?.user_metadata?.privacidad_aceptada_en) {
+        await supabase.auth.updateUser({ data: { privacidad_aceptada_en: new Date().toISOString() } });
+      }
+      return NextResponse.redirect(`${origin}${destino}`);
+    }
   }
 
   // Si el mail de confirmación se abrió en otro navegador, el email igual
