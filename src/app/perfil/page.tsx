@@ -26,6 +26,12 @@ export default async function PerfilPage() {
     .order("created_at", { ascending: false })
     .returns<Bloqueo[]>();
 
+  // Fecha de hoy en Argentina (YYYY-MM-DD), para que el calendario marque los
+  // días pasados igual en el servidor y en el navegador.
+  const hoy = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Argentina/Buenos_Aires" }).format(
+    new Date()
+  );
+
   return (
     <div className="mx-auto max-w-sm">
       <h1 className="mb-6 text-2xl font-extrabold tracking-tight text-white">Mi perfil</h1>
@@ -34,6 +40,7 @@ export default async function PerfilPage() {
         <DisponibilidadEditor
           bloqueosIniciales={bloqueos ?? []}
           grupos={grupos.map((g) => ({ id: g.id, nombre: g.nombre }))}
+          hoy={hoy}
         />
         <PushSubscribe />
         <EliminarCuenta />

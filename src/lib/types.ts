@@ -88,6 +88,8 @@ export interface Bloqueo {
   hora_desde: string | null;
   hora_hasta: string | null;
   nota: string | null;
+  /** Fechas en las que no aplica (ej: un domingo liberado de "todos los domingos"). */
+  excepciones: string[];
   created_at: string;
 }
 
