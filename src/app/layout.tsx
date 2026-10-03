@@ -14,9 +14,22 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+const DESCRIPCION =
+  "Armá los partidos con tus amigos, cargá los goles, votá al mejor y al peor, y seguí las estadísticas del grupo.";
+
 export const metadata: Metadata = {
+  // Base para las URLs absolutas de la vista previa (la imagen de opengraph-image.tsx).
+  metadataBase: new URL("https://goleadores.ar"),
   title: "Goleadores",
-  description: "Estadísticas de los partidos entre amigos",
+  description: DESCRIPCION,
+  // Lo que muestran WhatsApp y compañía al compartir un link.
+  openGraph: {
+    title: "Goleadores",
+    description: DESCRIPCION,
+    siteName: "Goleadores",
+    locale: "es_AR",
+    type: "website",
+  },
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,

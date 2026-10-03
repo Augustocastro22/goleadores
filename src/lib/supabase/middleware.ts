@@ -15,6 +15,8 @@ const NO_AUTH_REQUIRED_PATHS = [
   "/unirse/",
   "/privacidad",
   "/contacto",
+  // La imagen de la vista previa de los links: la pide WhatsApp, sin sesión.
+  "/opengraph-image",
 ];
 // Si ya hay una sesión normal, no tiene sentido quedarse ahí (se manda a
 // /partidos). "/actualizar-password" queda afuera a propósito: durante el
