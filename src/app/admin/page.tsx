@@ -27,6 +27,7 @@ import ActionForm from "@/components/ActionForm";
 import ReglasFields from "@/components/ReglasFields";
 import InvitacionLink from "./InvitacionLink";
 import LogoUploader from "./LogoUploader";
+import HoraSelect from "@/components/HoraSelect";
 
 type Tab = "grupo" | "config" | "partidos" | "usuarios";
 
@@ -224,7 +225,7 @@ async function PartidosTab({ grupoId }: { grupoId: string }) {
                   </Label>
                   <Label className="w-28 shrink-0">
                     Hora
-                    <Input type="time" name="hora" defaultValue={p.hora?.slice(0, 5) ?? ""} />
+                    <HoraSelect defaultValue={p.hora?.slice(0, 5) ?? ""} />
                   </Label>
                 </div>
                 <Label>

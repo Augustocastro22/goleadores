@@ -5,6 +5,8 @@ import Card from "@/components/ui/Card";
 import { Input, Label } from "@/components/ui/Input";
 import Avatar from "@/components/ui/Avatar";
 import SubmitButton from "@/components/SubmitButton";
+import HoraSelect from "@/components/HoraSelect";
+import EquipoPicker from "./EquipoPicker";
 
 export default async function NuevoPartidoPage() {
   const { supabase, grupo } = await requireGrupo();
@@ -30,7 +32,7 @@ export default async function NuevoPartidoPage() {
             </Label>
             <Label className="w-28 shrink-0">
               Hora
-              <Input type="time" name="hora" />
+              <HoraSelect />
             </Label>
           </div>
           <Label>
@@ -45,8 +47,8 @@ export default async function NuevoPartidoPage() {
           <div>
             <p className="mb-1 text-sm font-medium text-zinc-300">Jugadores por equipo</p>
             <p className="mb-2 text-xs text-zinc-500">
-              Marcá en qué equipo jugó cada uno. Si alguien no jugó ese partido, dejalo sin marcar.
-              Un jugador del grupo puede jugar en el Equipo 2 (por ejemplo en una pichanga) y sus
+              Marcá en qué equipo jugó cada uno. Si alguien no jugó ese partido, dejalo sin marcar
+              (para sacar a alguien, tocá la ✕ o de nuevo su equipo). Un jugador del grupo puede jugar en el Equipo 2 (por ejemplo en una pichanga) y sus
               goles van a contar igual en la tabla histórica.
             </p>
             <div className="flex flex-col gap-2">
@@ -57,21 +59,12 @@ export default async function NuevoPartidoPage() {
                 >
                   <div className="flex min-w-0 items-center gap-3">
                     <Avatar src={jugador.foto_url} alt={jugador.apodo} size={28} />
-                    <span className="truncate text-sm text-zinc-200">
+                    <span className="block truncate text-sm text-zinc-200">
                       {jugador.nombre} {jugador.apellido}{" "}
                       <span className="text-zinc-500">({jugador.apodo})</span>
                     </span>
                   </div>
-                  <div className="flex shrink-0 gap-1.5">
-                    <label className="cursor-pointer rounded-lg border border-border px-2.5 py-1 text-xs font-semibold text-zinc-400 transition has-[:checked]:border-primary-500/40 has-[:checked]:bg-primary-500/10 has-[:checked]:text-primary-400">
-                      <input type="radio" name={`equipo-${jugador.id}`} value="1" className="sr-only" />
-                      Eq. 1
-                    </label>
-                    <label className="cursor-pointer rounded-lg border border-border px-2.5 py-1 text-xs font-semibold text-zinc-400 transition has-[:checked]:border-gold-500/40 has-[:checked]:bg-gold-500/10 has-[:checked]:text-gold-400">
-                      <input type="radio" name={`equipo-${jugador.id}`} value="2" className="sr-only" />
-                      Eq. 2
-                    </label>
-                  </div>
+                  <EquipoPicker jugadorId={jugador.id} apodo={jugador.apodo} />
                 </div>
               ))}
             </div>

@@ -8,6 +8,7 @@ import Card from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
 import Avatar from "@/components/ui/Avatar";
 import { actualizarConvocados } from "@/lib/actions/partidos";
+import { IconClose } from "@/components/icons";
 
 type Equipo = 1 | 2;
 
@@ -79,6 +80,15 @@ export default function ConvocadosEditor({
     setEditando(false);
   }
 
+  function sacar(jugadorId: string) {
+    setMessage(null);
+    setAsignaciones((prev) => {
+      const next = { ...prev };
+      delete next[jugadorId];
+      return next;
+    });
+  }
+
   function elegir(jugadorId: string, equipo: Equipo) {
     setMessage(null);
     setAsignaciones((prev) => {
@@ -135,7 +145,7 @@ export default function ConvocadosEditor({
                 <div key={jugador.id} className="flex items-center gap-3 px-4 py-3">
                   <Avatar src={jugador.foto_url} alt={jugador.apodo} size={32} />
                   <div className="min-w-0">
-                    <span className="truncate text-sm text-zinc-200">
+                    <span className="block truncate text-sm text-zinc-200">
                       {jugador.nombre} {jugador.apellido}{" "}
                       <span className="text-zinc-500">({jugador.apodo})</span>
                     </span>
@@ -171,8 +181,8 @@ export default function ConvocadosEditor({
       <h2 className="mb-3 text-lg font-bold text-white">Convocatoria</h2>
       <Card className="p-4">
         <p className="mb-3 text-xs text-zinc-500">
-          Marcá quién juega y en qué equipo. Si alguien todavía no confirmó o se baja, dejalo sin
-          marcar: podés sumarlo o sacarlo hasta antes de cargar el resultado.
+          Marcá quién juega y en qué equipo. Para sacar a alguien tocá la ✕ (o de nuevo su
+          equipo). Podés sumar o sacar gente hasta antes de cargar el resultado.
         </p>
         <div className="flex flex-col gap-2">
           {jugadores.map((jugador) => {
@@ -186,7 +196,7 @@ export default function ConvocadosEditor({
                 <div className="flex min-w-0 items-center gap-3">
                   <Avatar src={jugador.foto_url} alt={jugador.apodo} size={28} />
                   <div className="min-w-0">
-                    <span className="truncate text-sm text-zinc-200">
+                    <span className="block truncate text-sm text-zinc-200">
                       {jugador.nombre} {jugador.apellido}{" "}
                       <span className="text-zinc-500">({jugador.apodo})</span>
                     </span>
@@ -220,6 +230,16 @@ export default function ConvocadosEditor({
                     }`}
                   >
                     Eq. 2
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => sacar(jugador.id)}
+                    aria-label={`Sacar a ${jugador.apodo} de la convocatoria`}
+                    className={`flex w-7 items-center justify-center rounded-lg border border-border text-zinc-500 transition hover:border-danger-500/40 hover:text-danger-400 ${
+                      equipo ? "" : "invisible"
+                    }`}
+                  >
+                    <IconClose className="h-3.5 w-3.5" />
                   </button>
                 </div>
               </div>
