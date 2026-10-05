@@ -5,12 +5,14 @@ import { Input } from "@/components/ui/Input";
 import { MAX_MIN_JUGADORES, type AppConfig } from "@/lib/config";
 
 /**
- * Campos de las reglas de votación de un grupo (los lee parseConfig). Se usan
+ * Campos de las reglas de un grupo: votación y confirmación de los convocados
+ * (los lee parseConfig). Se usan
  * al crear el grupo y en Admin → Reglas.
  */
 export default function ReglasFields({ inicial }: { inicial: AppConfig }) {
   const [votaMvp, setVotaMvp] = useState(inicial.vota_mvp);
   const [votaPeor, setVotaPeor] = useState(inicial.vota_peor);
+  const [pedirConfirmacion, setPedirConfirmacion] = useState(inicial.pedir_confirmacion);
 
   return (
     <div className="flex flex-col gap-3">
@@ -52,6 +54,16 @@ export default function ReglasFields({ inicial }: { inicial: AppConfig }) {
       ) : (
         <input type="hidden" name="min_jugadores_votacion" value={inicial.min_jugadores_votacion} />
       )}
+
+      <div className="mt-1 border-t border-border pt-4">
+        <CategoriaCheckbox
+          name="pedir_confirmacion"
+          checked={pedirConfirmacion}
+          onChange={setPedirConfirmacion}
+          titulo="Pedir confirmación a los convocados"
+          detalle="Cada convocado tiene que decir si juega. Los que dicen que no quedan afuera; los que no respondan los definís vos al cargar el resultado."
+        />
+      </div>
     </div>
   );
 }

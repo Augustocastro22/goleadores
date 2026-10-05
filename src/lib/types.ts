@@ -45,12 +45,16 @@ export interface Partido {
 
 export type Equipo = 1 | 2;
 
+/** Si el convocado confirmó que juega (ver 0020_confirmacion.sql). */
+export type Respuesta = "pendiente" | "juega" | "no_juega";
+
 export interface PartidoJugador {
   id: string;
   partido_id: string;
   jugador_id: string;
   goles: number;
   equipo: Equipo;
+  respuesta: Respuesta;
 }
 
 export interface Encuesta {

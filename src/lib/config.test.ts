@@ -48,11 +48,13 @@ describe("parseConfig", () => {
       vota_mvp: true,
       vota_peor: true,
       min_jugadores_votacion: 8,
+      pedir_confirmacion: false,
     });
     expect(parseConfig(form({ vota_mvp: "on", min_jugadores_votacion: "8" }))).toEqual({
       vota_mvp: true,
       vota_peor: false,
       min_jugadores_votacion: 8,
+      pedir_confirmacion: false,
     });
   });
 
@@ -61,6 +63,13 @@ describe("parseConfig", () => {
       vota_mvp: false,
       vota_peor: false,
       min_jugadores_votacion: 8,
+      pedir_confirmacion: false,
+    });
+  });
+
+  it("el checkbox de confirmación prende pedir_confirmacion", () => {
+    expect(parseConfig(form({ pedir_confirmacion: "on", min_jugadores_votacion: "0" }))).toMatchObject({
+      pedir_confirmacion: true,
     });
   });
 

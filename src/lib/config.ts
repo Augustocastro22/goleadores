@@ -13,12 +13,15 @@ export interface AppConfig {
   vota_peor: boolean;
   /** Mínimo de jugadores en un partido para que haya votación de Mejor/Peor. 0 = sin mínimo. */
   min_jugadores_votacion: number;
+  /** Si los convocados tienen que confirmar que juegan (ver 0020_confirmacion.sql). */
+  pedir_confirmacion: boolean;
 }
 
 export const CONFIG_DEFAULTS: AppConfig = {
   vota_mvp: true,
   vota_peor: true,
   min_jugadores_votacion: 0,
+  pedir_confirmacion: false,
 };
 
 export const MAX_MIN_JUGADORES = 50;
@@ -44,6 +47,9 @@ export async function getConfig(supabase: SupabaseClient, grupoId: string): Prom
     if (row.clave === "vota_peor" && typeof row.valor === "boolean") {
       config.vota_peor = row.valor;
     }
+    if (row.clave === "pedir_confirmacion" && typeof row.valor === "boolean") {
+      config.pedir_confirmacion = row.valor;
+    }
   }
   return config;
 }
@@ -60,13 +66,19 @@ export function grupoVota(config: Pick<AppConfig, "vota_mvp" | "vota_peor">): bo
 export function parseConfig(formData: FormData): AppConfig | { error: string } {
   const votaMvp = formData.get("vota_mvp") === "on";
   const votaPeor = formData.get("vota_peor") === "on";
+  const pedirConfirmacion = formData.get("pedir_confirmacion") === "on";
   // Con la votación apagada el campo del mínimo no se muestra: se mantiene el
   // valor que venía (hidden) para que al volver a prenderla siga igual.
   const minJugadores = Number(formData.get("min_jugadores_votacion") ?? 0);
   if (!Number.isInteger(minJugadores) || minJugadores < 0 || minJugadores > MAX_MIN_JUGADORES) {
     return { error: `El mínimo de jugadores tiene que ser un número entre 0 y ${MAX_MIN_JUGADORES}.` };
   }
-  return { vota_mvp: votaMvp, vota_peor: votaPeor, min_jugadores_votacion: minJugadores };
+  return {
+    vota_mvp: votaMvp,
+    vota_peor: votaPeor,
+    min_jugadores_votacion: minJugadores,
+    pedir_confirmacion: pedirConfirmacion,
+  };
 }
 
 /** Filas para guardar en la tabla config (upsert por grupo_id + clave). */
@@ -87,7 +99,7 @@ export function filasConfig(grupoId: string, config: AppConfig, userId: string) 
  */
 export function votacionDelPartido(
   cantidadJugadores: number,
-  config: AppConfig
+  config: Pick<AppConfig, "vota_mvp" | "vota_peor" | "min_jugadores_votacion">
 ): { con_votacion: boolean; con_mvp: boolean; con_peor: boolean } {
   const alcanza = cantidadJugadores >= config.min_jugadores_votacion;
   const con_mvp = alcanza && config.vota_mvp;

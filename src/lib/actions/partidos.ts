@@ -7,6 +7,8 @@ import { getConfig, votacionDelPartido } from "@/lib/config";
 import { categoriasTexto } from "@/lib/votacion";
 import { getContexto, rolEn } from "@/lib/grupo";
 import { urlConGrupo } from "@/lib/grupo-cookie";
+import { partidoYaPaso } from "@/lib/confirmacion";
+import type { Respuesta } from "@/lib/types";
 
 /** Si el usuario es admin del grupo al que pertenece el partido. */
 async function requireAdminDePartido(partidoId: string) {
@@ -19,8 +21,35 @@ async function requireAdminDePartido(partidoId: string) {
   const grupoId: string | null = data?.grupo_id ?? null;
   return {
     supabase: ctx.supabase,
+    userId: ctx.user?.id ?? null,
     grupoId,
     isAdmin: !!grupoId && rolEn(ctx, grupoId) === "admin",
+  };
+}
+
+/**
+ * Respuesta con la que entra un convocado nuevo. El admin que arma la
+ * convocatoria y se convoca a sí mismo ya está diciendo que juega. `pedir`
+ * es false si el grupo no pide confirmación o el partido ya pasó.
+ */
+function respuestaInicial(jugadorId: string, pedir: boolean, quienConvoca: string | null) {
+  return pedir && jugadorId !== quienConvoca ? "pendiente" : "juega";
+}
+
+/** Aviso de convocatoria: si el grupo pide confirmación, se lo pide. */
+function avisoConvocatoria(
+  partido: { fecha: string; hora: string | null; rival: string; lugar: string },
+  pedirConfirmacion: boolean
+) {
+  const fecha = new Date(partido.fecha + "T00:00:00").toLocaleDateString("es-AR", {
+    day: "numeric",
+    month: "long",
+  });
+  const hora = partido.hora ? ` a las ${partido.hora.slice(0, 5)}` : "";
+  const cierre = pedirConfirmacion ? "Estás convocado: confirmá si jugás." : "¡Ya estás convocado!";
+  return {
+    title: "Nuevo partido",
+    body: `${fecha}${hora} vs ${partido.rival} en ${partido.lugar}. ${cierre}`,
   };
 }
 
@@ -56,28 +85,33 @@ export async function createPartido(formData: FormData) {
 
   if (error) return { error: error.message };
 
+  // Un partido que ya pasó (se olvidaron de cargarlo antes) no es una
+  // convocatoria: entran todos como que jugaron y no se avisa a nadie.
+  const yaPaso = partidoYaPaso(fecha, hora);
+  const { pedir_confirmacion } = await getConfig(supabase, grupo.id);
+  const pedir = pedir_confirmacion && !yaPaso;
   const { error: pjError } = await supabase.from("partido_jugadores").insert(
     participantes.map(({ jugador_id, equipo }) => ({
       partido_id: partido.id,
       jugador_id,
       equipo,
       goles: 0,
+      respuesta: respuestaInicial(jugador_id, pedir, user.id),
     }))
   );
 
   if (pjError) return { error: pjError.message };
 
-  const fechaFormateada = new Date(fecha + "T00:00:00").toLocaleDateString("es-AR", {
-    day: "numeric",
-    month: "long",
-  });
-  const horaFormateada = hora ? ` a las ${hora.slice(0, 5)}` : "";
-  const destinatarios = participantes.map((p) => p.jugador_id);
-  await enviarPush(destinatarios, {
-    title: "Nuevo partido",
-    body: `${fechaFormateada}${horaFormateada} vs ${rival} en ${lugar}. ¡Ya estás convocado!`,
-    url: urlConGrupo(`/partidos/${partido.id}`, grupo.id),
-  });
+  // Al que lo cargó no le avisa: ya sabe que se convocó.
+  if (!yaPaso) {
+    await enviarPush(
+      participantes.map((p) => p.jugador_id).filter((id) => id !== user.id),
+      {
+        ...avisoConvocatoria({ fecha, hora, rival, lugar }, pedir),
+        url: urlConGrupo(`/partidos/${partido.id}`, grupo.id),
+      }
+    );
+  }
 
   revalidatePath("/partidos");
   redirect(`/partidos/${partido.id}`);
@@ -105,7 +139,7 @@ export interface ConvocadosInput {
 
 export async function actualizarConvocados({ partidoId, participantes }: ConvocadosInput) {
   if (!partidoId) return { error: "Partido inválido." };
-  const { supabase, isAdmin, grupoId } = await requireAdminDePartido(partidoId);
+  const { supabase, userId, isAdmin, grupoId } = await requireAdminDePartido(partidoId);
   if (!isAdmin || !grupoId) return { error: "Solo el admin puede editar la convocatoria." };
   if (!participantes.some((p) => p.equipo === 1)) {
     return { error: "Tiene que haber al menos un jugador en el Equipo 1 (nuestro equipo)." };
@@ -144,6 +178,9 @@ export async function actualizarConvocados({ partidoId, participantes }: Convoca
     if (error) return { error: error.message };
   }
 
+  const yaPaso = partidoYaPaso(partido.fecha, partido.hora);
+  const { pedir_confirmacion } = await getConfig(supabase, grupoId);
+  const pedir = pedir_confirmacion && !yaPaso;
   if (aAgregar.length > 0) {
     const { error } = await supabase.from("partido_jugadores").insert(
       aAgregar.map(({ jugadorId, equipo }) => ({
@@ -151,6 +188,7 @@ export async function actualizarConvocados({ partidoId, participantes }: Convoca
         jugador_id: jugadorId,
         equipo,
         goles: 0,
+        respuesta: respuestaInicial(jugadorId, pedir, userId),
       }))
     );
     if (error) return { error: error.message };
@@ -165,7 +203,7 @@ export async function actualizarConvocados({ partidoId, participantes }: Convoca
     if (error) return { error: error.message };
   }
 
-  if (aAgregar.length > 0 || aBorrar.length > 0) {
+  if (!yaPaso && (aAgregar.length > 0 || aBorrar.length > 0)) {
     const fechaFormateada = new Date(partido.fecha + "T00:00:00").toLocaleDateString("es-AR", {
       day: "numeric",
       month: "long",
@@ -174,17 +212,16 @@ export async function actualizarConvocados({ partidoId, participantes }: Convoca
 
     if (aAgregar.length > 0) {
       await enviarPush(
-        aAgregar.map((p) => p.jugadorId),
+        aAgregar.map((p) => p.jugadorId).filter((id) => id !== userId),
         {
-          title: "Nuevo partido",
-          body: `${fechaFormateada}${horaFormateada} vs ${partido.rival} en ${partido.lugar}. ¡Ya estás convocado!`,
+          ...avisoConvocatoria(partido, pedir),
           url: urlConGrupo(`/partidos/${partidoId}`, grupoId),
         }
       );
     }
 
     if (aBorrar.length > 0) {
-      await enviarPush(aBorrar, {
+      await enviarPush(aBorrar.filter((id) => id !== userId), {
         title: "Ya no estás convocado",
         body: `Te bajaron del partido vs ${partido.rival} del ${fechaFormateada}${horaFormateada}.`,
         url: urlConGrupo(`/partidos/${partidoId}`, grupoId),
@@ -236,6 +273,25 @@ export async function guardarGolesPartido({ partidoId, goles, golesOtros, golesR
     con_peor: partido.con_peor,
   };
   if (!partido.jugado) {
+    // Si el grupo pide confirmación: los que no respondieron los define el
+    // admin antes de cargar el resultado, y los que no juegan salen del
+    // partido (ver 0020_confirmacion.sql). Así, a partir de acá
+    // partido_jugadores son solo los que jugaron.
+    const { count: pendientes } = await supabase
+      .from("partido_jugadores")
+      .select("id", { count: "exact", head: true })
+      .eq("partido_id", partidoId)
+      .eq("respuesta", "pendiente");
+    if (pendientes) {
+      return { error: "Antes de cargar el resultado, definí si jugaron los que no respondieron." };
+    }
+    const { error: bajaError } = await supabase
+      .from("partido_jugadores")
+      .delete()
+      .eq("partido_id", partidoId)
+      .eq("respuesta", "no_juega");
+    if (bajaError) return { error: bajaError.message };
+
     const [{ count }, config] = await Promise.all([
       supabase
         .from("partido_jugadores")
@@ -268,21 +324,37 @@ export async function guardarGolesPartido({ partidoId, goles, golesOtros, golesR
     .eq("id", partidoId);
   if (partidoError) return { error: partidoError.message };
 
-  if (votacion.con_votacion && !partido.votacion_abierta_notificada) {
-    const { data: participantes } = await supabase
+  const avisarVotacion = votacion.con_votacion && !partido.votacion_abierta_notificada;
+  // Sin votación, la primera vez que se cargan los goles se avisa el resultado
+  // (también si el partido se cargó después de jugarse).
+  const avisarResultado = !votacion.con_votacion && !partido.jugado;
+  if (avisarVotacion || avisarResultado) {
+    const { data: participantesRaw } = await supabase
       .from("partido_jugadores")
-      .select("jugador_id")
+      .select("jugador_id, equipo, goles")
       .eq("partido_id", partidoId);
+    const participantes = participantesRaw ?? [];
+    const golesDe = (equipo: number) =>
+      participantes.filter((p) => p.equipo === equipo).reduce((total, p) => total + p.goles, 0);
+    const resultado = `Nosotros ${golesDe(1) + golesOtros} – ${golesDe(2) + golesRival} ${partido.rival}`;
 
     await enviarPush(
-      (participantes ?? []).map((p) => p.jugador_id),
-      {
-        title: "¡Se abrió la votación!",
-        body: `Votá ${categoriasTexto({ conMvp: votacion.con_mvp, conPeor: votacion.con_peor })} del partido vs ${partido.rival}.`,
-        url: urlConGrupo(`/partidos/${partidoId}`, grupoId),
-      }
+      participantes.map((p) => p.jugador_id),
+      avisarVotacion
+        ? {
+            title: "¡Se abrió la votación!",
+            body: `${resultado}. Votá ${categoriasTexto({ conMvp: votacion.con_mvp, conPeor: votacion.con_peor })} del partido.`,
+            url: urlConGrupo(`/partidos/${partidoId}`, grupoId),
+          }
+        : {
+            title: "Se cargó el resultado",
+            body: `${resultado}. Mirá los goles del partido.`,
+            url: urlConGrupo(`/partidos/${partidoId}`, grupoId),
+          }
     );
+  }
 
+  if (avisarVotacion) {
     await supabase
       .from("partidos")
       .update({ votacion_abierta_notificada: true })
@@ -291,5 +363,77 @@ export async function guardarGolesPartido({ partidoId, goles, golesOtros, golesR
 
   revalidatePath(`/partidos/${partidoId}`);
   revalidatePath("/estadisticas");
+  return { success: true };
+}
+
+/** El convocado dice si juega. Si dice que no (o se arrepiente), se avisa a los admins. */
+export async function responderConvocatoria(partidoId: string, juega: boolean) {
+  const { supabase, user } = await getContexto();
+  if (!user || !partidoId) return { error: "Partido inválido." };
+
+  const { data: anterior } = await supabase
+    .from("partido_jugadores")
+    .select("respuesta, partidos(grupo_id, rival, fecha)")
+    .eq("partido_id", partidoId)
+    .eq("jugador_id", user.id)
+    .maybeSingle<{ respuesta: Respuesta; partidos: { grupo_id: string; rival: string; fecha: string } }>();
+  if (!anterior) return { error: "No estás convocado a este partido." };
+
+  const { data: ok, error } = await supabase.rpc("responder_convocatoria", {
+    p_partido_id: partidoId,
+    p_juega: juega,
+  });
+  if (error) return { error: error.message };
+  if (!ok) return { error: "El partido ya se jugó, no se puede cambiar." };
+
+  const { grupo_id, rival, fecha } = anterior.partidos;
+  const avisar = juega ? anterior.respuesta === "no_juega" : anterior.respuesta !== "no_juega";
+  if (avisar) {
+    const [{ data: admins }, { data: perfil }] = await Promise.all([
+      supabase.from("grupo_miembros").select("jugador_id").eq("grupo_id", grupo_id).eq("rol", "admin"),
+      supabase.from("profiles").select("apodo").eq("id", user.id).single(),
+    ]);
+    const fechaFormateada = new Date(fecha + "T00:00:00").toLocaleDateString("es-AR", {
+      day: "numeric",
+      month: "long",
+    });
+    const apodo = perfil?.apodo ?? "Un convocado";
+    await enviarPush(
+      (admins ?? []).map((a) => a.jugador_id).filter((id) => id !== user.id),
+      {
+        title: juega ? `${apodo} al final juega` : `${apodo} no juega`,
+        body: `Partido vs ${rival} del ${fechaFormateada}.`,
+        url: urlConGrupo(`/partidos/${partidoId}`, grupo_id),
+      }
+    );
+  }
+
+  revalidatePath(`/partidos/${partidoId}`);
+  return { success: true };
+}
+
+/**
+ * El admin define la respuesta de un convocado: para los que no respondieron
+ * o para corregir imprevistos (dijo que sí y faltó, dijo que no y fue).
+ */
+export async function fijarRespuesta(partidoId: string, jugadorId: string, respuesta: Respuesta) {
+  if (!partidoId || !jugadorId || !["pendiente", "juega", "no_juega"].includes(respuesta)) {
+    return { error: "Datos inválidos." };
+  }
+  const { supabase, isAdmin } = await requireAdminDePartido(partidoId);
+  if (!isAdmin) return { error: "Solo el admin puede cambiar la respuesta de otro." };
+
+  const { data: partido } = await supabase.from("partidos").select("jugado").eq("id", partidoId).single();
+  if (!partido) return { error: "Partido no encontrado." };
+  if (partido.jugado) return { error: "El partido ya se jugó, no se puede cambiar." };
+
+  const { error } = await supabase
+    .from("partido_jugadores")
+    .update({ respuesta })
+    .eq("partido_id", partidoId)
+    .eq("jugador_id", jugadorId);
+  if (error) return { error: error.message };
+
+  revalidatePath(`/partidos/${partidoId}`);
   return { success: true };
 }

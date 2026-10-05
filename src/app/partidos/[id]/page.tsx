@@ -4,7 +4,8 @@ import { getConfig, grupoVota as votaAlgo } from "@/lib/config";
 import { deletePartido } from "@/lib/actions/partidos";
 import { votar, votarDesempate } from "@/lib/actions/votos";
 import { votacionCerrada } from "@/lib/votacion";
-import type { Bloqueo, Desempate, EstadoVotacion, Profile, RankingRow } from "@/lib/types";
+import { partidoYaPaso } from "@/lib/confirmacion";
+import type { Bloqueo, Desempate, EstadoVotacion, Profile, RankingRow, Respuesta } from "@/lib/types";
 import Card from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
 import Badge from "@/components/ui/Badge";
@@ -13,11 +14,13 @@ import ConfirmSubmitButton from "@/components/ConfirmSubmitButton";
 import { IconChevronRight } from "@/components/icons";
 import GolesEditor from "./GolesEditor";
 import ConvocadosEditor from "./ConvocadosEditor";
+import { PendientesCard, RespuestaBadge, RespuestaCard, ResumenRespuestas } from "./Confirmacion";
 
 interface ParticipanteRow {
   jugador_id: string;
   goles: number;
   equipo: 1 | 2;
+  respuesta: Respuesta;
   profiles: Profile;
 }
 
@@ -48,7 +51,7 @@ export default async function PartidoDetailPage({
     getConfig(supabase, partido.grupo_id),
     supabase
       .from("partido_jugadores")
-      .select("jugador_id, goles, equipo, profiles(*)")
+      .select("jugador_id, goles, equipo, respuesta, profiles(*)")
       .eq("partido_id", id),
     supabase.from("votos").select("tipo").eq("partido_id", id).eq("jugador_que_vota_id", user.id),
     isAdmin && !partido.jugado ? getMiembros(supabase, partido.grupo_id) : Promise.resolve([] as Profile[]),
@@ -57,6 +60,23 @@ export default async function PartidoDetailPage({
   const participantes = (participantesRaw ?? []) as unknown as ParticipanteRow[];
   const equipo1 = participantes.filter((p) => p.equipo === 1);
   const equipo2 = participantes.filter((p) => p.equipo === 2);
+
+  // Confirmación de los convocados (ver 0020_confirmacion.sql). Solo antes de
+  // cargar el resultado: después quedan nada más los que jugaron. Si hay
+  // respuestas cargadas se muestran siempre (aunque el grupo haya apagado la
+  // opción); si no, solo si el grupo la pide y el partido todavía no pasó (uno
+  // cargado después de jugarse no tuvo convocatoria).
+  const conConfirmacion =
+    !partido.jugado &&
+    (participantes.some((p) => p.respuesta !== "juega") ||
+      (config.pedir_confirmacion && !partidoYaPaso(partido.fecha, partido.hora)));
+  const juegan = (lista: ParticipanteRow[]) =>
+    conConfirmacion ? lista.filter((p) => p.respuesta === "juega") : lista;
+  const miRespuesta = participantes.find((p) => p.jugador_id === user.id)?.respuesta;
+  const pendientes = participantes.filter((p) => p.respuesta === "pendiente");
+  const hoy = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Argentina/Buenos_Aires" }).format(
+    new Date()
+  );
 
   const soyParticipante = participantes.some((p) => p.jugador_id === user.id);
   const jugadorPorId = new Map(participantes.map((p) => [p.jugador_id, p.profiles]));
@@ -144,6 +164,8 @@ export default async function PartidoDetailPage({
 
   return (
     <div className="flex flex-col gap-8">
+      {conConfirmacion && miRespuesta && <RespuestaCard partidoId={id} respuesta={miRespuesta} />}
+
       {isAdmin && !partido.jugado && (
         <ConvocadosEditor
           partidoId={id}
@@ -153,6 +175,23 @@ export default async function PartidoDetailPage({
           partidoFecha={partido.fecha}
           partidoHora={partido.hora}
           bloqueos={bloqueos}
+          respuestas={
+            conConfirmacion
+              ? Object.fromEntries(participantes.map((p) => [p.jugador_id, p.respuesta]))
+              : undefined
+          }
+        />
+      )}
+
+      {/* El día del partido (o después) el admin define a los que no respondieron. */}
+      {isAdmin && conConfirmacion && pendientes.length > 0 && partido.fecha <= hoy && (
+        <PendientesCard
+          partidoId={id}
+          pendientes={pendientes.map((p) => ({
+            jugadorId: p.jugador_id,
+            apodo: p.profiles.apodo,
+            fotoUrl: p.profiles.foto_url,
+          }))}
         />
       )}
 
@@ -162,8 +201,8 @@ export default async function PartidoDetailPage({
           rival={partido.rival}
           fecha={fecha}
           lugar={partido.lugar}
-          equipo1={equipo1.map(toJugador)}
-          equipo2={equipo2.map(toJugador)}
+          equipo1={juegan(equipo1).map(toJugador)}
+          equipo2={juegan(equipo2).map(toJugador)}
           golesOtrosInit={partido.goles_otros}
           golesRivalInit={partido.goles_rival}
           isAdmin={isAdmin}
@@ -175,6 +214,7 @@ export default async function PartidoDetailPage({
           lugar={partido.lugar}
           equipo1={equipo1}
           equipo2={equipo2}
+          conConfirmacion={conConfirmacion}
         />
       )}
 
@@ -254,13 +294,20 @@ function EventoProgramado({
   lugar,
   equipo1,
   equipo2,
+  conConfirmacion,
 }: {
   rival: string;
   fecha: string;
   lugar: string;
   equipo1: ParticipanteRow[];
   equipo2: ParticipanteRow[];
+  conConfirmacion: boolean;
 }) {
+  // Con confirmación, los que dijeron que no van aparte.
+  const enEquipo = (lista: ParticipanteRow[]) =>
+    conConfirmacion ? lista.filter((p) => p.respuesta !== "no_juega") : lista;
+  const noJuegan = conConfirmacion ? [...equipo1, ...equipo2].filter((p) => p.respuesta === "no_juega") : [];
+
   return (
     <div className="flex flex-col gap-6">
       <Card className="p-6">
@@ -271,18 +318,38 @@ function EventoProgramado({
         <div className="mt-4 flex flex-col items-center gap-2">
           <Badge>Partido programado</Badge>
           <p className="text-lg font-bold text-white">vs {rival}</p>
+          {conConfirmacion && (
+            <ResumenRespuestas respuestas={[...equipo1, ...equipo2].map((p) => p.respuesta)} />
+          )}
         </div>
       </Card>
 
-      <ConvocadosList titulo="Convocados · Equipo 1 (Nosotros)" jugadores={equipo1} />
-      {equipo2.length > 0 && (
-        <ConvocadosList titulo={`Convocados · Equipo 2 (${rival})`} jugadores={equipo2} />
+      <ConvocadosList
+        titulo="Convocados · Equipo 1 (Nosotros)"
+        jugadores={enEquipo(equipo1)}
+        conRespuesta={conConfirmacion}
+      />
+      {enEquipo(equipo2).length > 0 && (
+        <ConvocadosList
+          titulo={`Convocados · Equipo 2 (${rival})`}
+          jugadores={enEquipo(equipo2)}
+          conRespuesta={conConfirmacion}
+        />
       )}
+      {noJuegan.length > 0 && <ConvocadosList titulo="No juegan" jugadores={noJuegan} />}
     </div>
   );
 }
 
-function ConvocadosList({ titulo, jugadores }: { titulo: string; jugadores: ParticipanteRow[] }) {
+function ConvocadosList({
+  titulo,
+  jugadores,
+  conRespuesta = false,
+}: {
+  titulo: string;
+  jugadores: ParticipanteRow[];
+  conRespuesta?: boolean;
+}) {
   return (
     <div>
       <h2 className="mb-3 text-lg font-bold text-white">{titulo}</h2>
@@ -290,10 +357,11 @@ function ConvocadosList({ titulo, jugadores }: { titulo: string; jugadores: Part
         {jugadores.map((p) => (
           <div key={p.jugador_id} className="flex items-center gap-3 px-4 py-3">
             <Avatar src={p.profiles.foto_url} alt={p.profiles.apodo} size={32} />
-            <span className="truncate text-sm text-zinc-200">
+            <span className="min-w-0 flex-1 truncate text-sm text-zinc-200">
               {p.profiles.nombre} {p.profiles.apellido}{" "}
               <span className="text-zinc-500">({p.profiles.apodo})</span>
             </span>
+            {conRespuesta && <RespuestaBadge respuesta={p.respuesta} />}
           </div>
         ))}
       </Card>

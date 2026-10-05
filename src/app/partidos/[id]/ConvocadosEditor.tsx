@@ -2,13 +2,14 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import type { Bloqueo, Profile } from "@/lib/types";
+import type { Bloqueo, Profile, Respuesta } from "@/lib/types";
 import { bloqueaFecha, describirBloqueo } from "@/lib/disponibilidad";
 import Card from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
 import Avatar from "@/components/ui/Avatar";
 import { actualizarConvocados } from "@/lib/actions/partidos";
 import { IconClose } from "@/components/icons";
+import { RespuestaSelect, ResumenRespuestas } from "./Confirmacion";
 
 type Equipo = 1 | 2;
 
@@ -20,6 +21,7 @@ export default function ConvocadosEditor({
   partidoFecha,
   partidoHora,
   bloqueos,
+  respuestas,
 }: {
   partidoId: string;
   jugadores: Profile[];
@@ -28,6 +30,8 @@ export default function ConvocadosEditor({
   partidoFecha: string;
   partidoHora: string | null;
   bloqueos: Bloqueo[];
+  /** Respuesta de cada convocado, si el grupo pide confirmación. */
+  respuestas?: Record<string, Respuesta>;
 }) {
   const router = useRouter();
   const asignacionesIniciales = useMemo(() => {
@@ -135,6 +139,11 @@ export default function ConvocadosEditor({
             Editar
           </button>
         </div>
+        {respuestas && convocadosActuales.length > 0 && (
+          <div className="-mt-1 mb-3">
+            <ResumenRespuestas respuestas={Object.values(respuestas)} />
+          </div>
+        )}
         <Card className="divide-y divide-border overflow-hidden py-1">
           {convocadosActuales.length === 0 ? (
             <p className="px-4 py-3 text-sm text-zinc-500">Todavía no hay nadie convocado.</p>
@@ -144,7 +153,7 @@ export default function ConvocadosEditor({
               return (
                 <div key={jugador.id} className="flex items-center gap-3 px-4 py-3">
                   <Avatar src={jugador.foto_url} alt={jugador.apodo} size={32} />
-                  <div className="min-w-0">
+                  <div className="min-w-0 flex-1">
                     <span className="block truncate text-sm text-zinc-200">
                       {jugador.nombre} {jugador.apellido}{" "}
                       <span className="text-zinc-500">({jugador.apodo})</span>
@@ -156,6 +165,15 @@ export default function ConvocadosEditor({
                       </p>
                     )}
                   </div>
+                  {respuestas?.[jugador.id] && (
+                    <RespuestaSelect
+                      // Si la respuesta cambia desde otro lado, arranca de nuevo con la nueva.
+                      key={respuestas[jugador.id]}
+                      partidoId={partidoId}
+                      jugadorId={jugador.id}
+                      respuesta={respuestas[jugador.id]}
+                    />
+                  )}
                 </div>
               );
             })
