@@ -45,16 +45,19 @@ export default async function JugadorDetallePage({
   const { supabase, grupo } = await requireGrupo();
 
   // Las estadísticas que se muestran son las del grupo activo.
-  const { data: membresia } = await supabase
-    .from("grupo_miembros")
-    .select("rol, profiles(*)")
-    .eq("grupo_id", grupo.id)
-    .eq("jugador_id", id)
-    .maybeSingle();
+  const [{ data: membresia }, config] = await Promise.all([
+    supabase
+      .from("grupo_miembros")
+      .select("rol, profiles(*)")
+      .eq("grupo_id", grupo.id)
+      .eq("jugador_id", id)
+      .maybeSingle(),
+    getConfig(supabase, grupo.id),
+  ]);
   const jugador = (membresia?.profiles ?? null) as unknown as Profile | null;
   if (!membresia || !jugador) notFound();
   const rol = membresia.rol as Rol;
-  const { vota_mvp: votaMvp, vota_peor: votaPeor } = await getConfig(supabase, grupo.id);
+  const { vota_mvp: votaMvp, vota_peor: votaPeor } = config;
 
   const [goleadoresRes, mvpRes, peorRes, misPartidosRes, todosPartidosRes] = await Promise.all([
     supabase.rpc("get_goleadores", { p_grupo_id: grupo.id }),

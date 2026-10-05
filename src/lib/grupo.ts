@@ -1,7 +1,7 @@
 import { cache } from "react";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import type { SupabaseClient, User } from "@supabase/supabase-js";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import { GRUPO_COOKIE } from "@/lib/grupo-cookie";
 import type { Grupo, Miembro, Profile, Rol } from "@/lib/types";
@@ -13,9 +13,15 @@ type GrupoBasico = Pick<
 
 export type MiGrupo = GrupoBasico & { rol: Rol };
 
+/** Lo que las páginas usan del usuario logueado (sale del token de sesión). */
+export interface UsuarioSesion {
+  id: string;
+  email: string | null;
+}
+
 export interface Contexto {
   supabase: SupabaseClient;
-  user: User | null;
+  user: UsuarioSesion | null;
   /** Todos los grupos del usuario, en el orden en que se sumó. */
   grupos: MiGrupo[];
   /** El grupo que está mirando (cookie), o el primero si la cookie no es válida. */
@@ -28,10 +34,13 @@ export interface Contexto {
  */
 export const getContexto = cache(async (): Promise<Contexto> => {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return { supabase, user: null, grupos: [], grupo: null };
+  // Verificado localmente con la clave pública del proyecto (ver
+  // src/lib/supabase/middleware.ts); las acciones que cambian datos de la
+  // cuenta siguen usando getUser.
+  const { data: claimsData } = await supabase.auth.getClaims();
+  const claims = claimsData?.claims;
+  if (!claims?.sub) return { supabase, user: null, grupos: [], grupo: null };
+  const user: UsuarioSesion = { id: claims.sub, email: claims.email ?? null };
 
   const { data } = await supabase
     .from("grupo_miembros")

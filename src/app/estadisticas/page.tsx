@@ -11,10 +11,8 @@ export default async function EstadisticasPage() {
   const { supabase, grupo } = await requireGrupo();
   // Cada ranking de votos se muestra solo si el grupo vota esa categoría (los
   // votos de cuando sí votaba quedan guardados y vuelven si se reactiva).
-  const config = await getConfig(supabase, grupo.id);
-  const votacionActiva = grupoVota(config);
-
-  const [goleadores, mvp, peor, partidosRes] = await Promise.all([
+  const [config, goleadores, mvp, peor, partidosRes] = await Promise.all([
+    getConfig(supabase, grupo.id),
     supabase.rpc("get_goleadores", { p_grupo_id: grupo.id }),
     supabase.rpc("get_ranking_votos", { p_grupo_id: grupo.id, p_tipo: "MVP" }),
     supabase.rpc("get_ranking_votos", { p_grupo_id: grupo.id, p_tipo: "PEOR" }),
@@ -28,25 +26,27 @@ export default async function EstadisticasPage() {
       .order("created_at", { ascending: false })
       .limit(10),
   ]);
+  const votacionActiva = grupoVota(config);
 
-  let ultimoPartidoCerradoId: string | null = null;
-  for (const partido of votacionActiva ? (partidosRes.data ?? []) : []) {
-    const { data: estado } = await supabase
-      .rpc("get_estado_votacion", { p_partido_id: partido.id })
-      .single<EstadoVotacion>();
-    const cerrada = votacionCerrada({
-      fechaPartido: partido.fecha,
-      totalParticipantes: estado?.total_participantes ?? 0,
-      votosMvp: estado?.votos_mvp ?? 0,
-      votosPeor: estado?.votos_peor ?? 0,
-      conMvp: partido.con_mvp,
-      conPeor: partido.con_peor,
-    });
-    if (cerrada) {
-      ultimoPartidoCerradoId = partido.id;
-      break;
-    }
-  }
+  // Estado de la votación de los últimos partidos, todos a la vez (no uno
+  // por uno), para quedarse con el más reciente que ya cerró.
+  const recientes = votacionActiva ? (partidosRes.data ?? []) : [];
+  const cerrados = await Promise.all(
+    recientes.map(async (partido) => {
+      const { data: estado } = await supabase
+        .rpc("get_estado_votacion", { p_partido_id: partido.id })
+        .single<EstadoVotacion>();
+      return votacionCerrada({
+        fechaPartido: partido.fecha,
+        totalParticipantes: estado?.total_participantes ?? 0,
+        votosMvp: estado?.votos_mvp ?? 0,
+        votosPeor: estado?.votos_peor ?? 0,
+        conMvp: partido.con_mvp,
+        conPeor: partido.con_peor,
+      });
+    })
+  );
+  const ultimoPartidoCerradoId = recientes.find((_, i) => cerrados[i])?.id ?? null;
 
   let ultimoMvp: RankingRow[] = [];
   let ultimoPeor: RankingRow[] = [];

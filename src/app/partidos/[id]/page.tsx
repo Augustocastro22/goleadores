@@ -40,14 +40,20 @@ export default async function PartidoDetailPage({
 
   // El rol que cuenta es el del grupo del partido (puede no ser el grupo activo).
   const isAdmin = rolEn(ctx, partido.grupo_id) === "admin";
-  const grupoVota = votaAlgo(await getConfig(supabase, partido.grupo_id));
   const conMvp = partido.con_votacion && partido.con_mvp;
   const conPeor = partido.con_votacion && partido.con_peor;
 
-  const { data: participantesRaw } = await supabase
-    .from("partido_jugadores")
-    .select("jugador_id, goles, equipo, profiles(*)")
-    .eq("partido_id", id);
+  // Lo que no depende entre sí se pide todo junto.
+  const [config, { data: participantesRaw }, { data: misVotos }, todosLosJugadores] = await Promise.all([
+    getConfig(supabase, partido.grupo_id),
+    supabase
+      .from("partido_jugadores")
+      .select("jugador_id, goles, equipo, profiles(*)")
+      .eq("partido_id", id),
+    supabase.from("votos").select("tipo").eq("partido_id", id).eq("jugador_que_vota_id", user.id),
+    isAdmin && !partido.jugado ? getMiembros(supabase, partido.grupo_id) : Promise.resolve([] as Profile[]),
+  ]);
+  const grupoVota = votaAlgo(config);
   const participantes = (participantesRaw ?? []) as unknown as ParticipanteRow[];
   const equipo1 = participantes.filter((p) => p.equipo === 1);
   const equipo2 = participantes.filter((p) => p.equipo === 2);
@@ -55,10 +61,8 @@ export default async function PartidoDetailPage({
   const soyParticipante = participantes.some((p) => p.jugador_id === user.id);
   const jugadorPorId = new Map(participantes.map((p) => [p.jugador_id, p.profiles]));
 
-  let todosLosJugadores: Profile[] = [];
   let bloqueos: Bloqueo[] = [];
   if (isAdmin && !partido.jugado) {
-    todosLosJugadores = await getMiembros(supabase, partido.grupo_id);
     const { data: bloqueosData } = await supabase
       .from("bloqueos_disponibilidad")
       .select("*")
@@ -71,12 +75,6 @@ export default async function PartidoDetailPage({
       .returns<Bloqueo[]>();
     bloqueos = bloqueosData ?? [];
   }
-
-  const { data: misVotos } = await supabase
-    .from("votos")
-    .select("tipo")
-    .eq("partido_id", id)
-    .eq("jugador_que_vota_id", user.id);
 
   const yaVoteMvp = (misVotos ?? []).some((v) => v.tipo === "MVP");
   const yaVotePeor = (misVotos ?? []).some((v) => v.tipo === "PEOR");

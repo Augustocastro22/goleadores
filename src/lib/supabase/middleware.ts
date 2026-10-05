@@ -47,9 +47,11 @@ export async function updateSession(request: NextRequest) {
     }
   );
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // getClaims verifica el token acá mismo con la clave pública del proyecto
+  // (firma ES256), sin ir al servidor de Supabase en cada pantalla como
+  // getUser. Si el token venció, lo renueva y actualiza las cookies.
+  const { data: claimsData } = await supabase.auth.getClaims();
+  const user = claimsData?.claims?.sub ? { id: claimsData.claims.sub } : null;
 
   const noAuthRequired = NO_AUTH_REQUIRED_PATHS.some((path) =>
     request.nextUrl.pathname.startsWith(path)
