@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { getContexto } from "@/lib/grupo";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -7,6 +8,27 @@ import GrupoLogo from "@/components/ui/GrupoLogo";
 import { buttonClass } from "@/components/ui/Button";
 import SubmitButton from "@/components/SubmitButton";
 import ActionForm from "@/components/ActionForm";
+import { getGrupoDeInvitacion } from "@/lib/invitacion";
+
+/** Vista previa del link (la imagen está en opengraph-image.tsx, al lado). */
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ codigo: string }>;
+}): Promise<Metadata> {
+  const { codigo } = await params;
+  const grupo = await getGrupoDeInvitacion(codigo);
+  if (!grupo) return {};
+
+  const title = `Sumate a ${grupo.nombre}`;
+  const description = `Te invitaron al grupo ${grupo.nombre} en Goleadores. Entrá para ver los partidos, los goles y las votaciones.`;
+  return {
+    title,
+    description,
+    // Va completo: el openGraph de una página reemplaza al del layout, no se combina.
+    openGraph: { title, description, siteName: "Goleadores", locale: "es_AR", type: "website" },
+  };
+}
 
 export default async function UnirsePage({ params }: { params: Promise<{ codigo: string }> }) {
   const { codigo } = await params;

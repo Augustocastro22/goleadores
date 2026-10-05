@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { cambiarGrupo } from "@/lib/actions/grupos";
 import GrupoLogo from "./ui/GrupoLogo";
-import { IconChevronRight, IconPlus } from "./icons";
+import { IconChevronRight, IconUsers } from "./icons";
 
 export interface GrupoOpcion {
   id: string;
@@ -131,10 +131,14 @@ export default function GrupoSwitcher({
             role="menuitem"
             className="flex items-center gap-3 border-t border-border px-4 py-3 text-sm font-medium text-zinc-300 transition hover:bg-white/5 hover:text-white"
           >
-            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-white/5 text-zinc-400">
-              <IconPlus className="h-4 w-4" />
+            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white/5 text-zinc-400">
+              <IconUsers className="h-4 w-4" />
             </span>
-            Crear o sumarme a un grupo
+            {/* Ahí también se sale de un grupo (o se lo borra si es el último miembro). */}
+            <span className="min-w-0">
+              Mis grupos
+              <span className="block text-xs font-normal text-zinc-500">Crear, sumarme a otro o salir</span>
+            </span>
           </Link>
         </div>
       )}
