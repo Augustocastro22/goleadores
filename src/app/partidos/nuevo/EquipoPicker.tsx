@@ -1,15 +1,25 @@
 "use client";
 
-import { useState } from "react";
 import { IconClose } from "@/components/icons";
+
+export type EquipoElegido = "" | "1" | "2";
 
 /**
  * Equipo de un jugador al crear el partido (campo "equipo-<id>": "1", "2" o
  * vacío = no juega). Tocar el equipo marcado, o la ✕, lo saca.
  */
-export default function EquipoPicker({ jugadorId, apodo }: { jugadorId: string; apodo: string }) {
-  const [equipo, setEquipo] = useState<"" | "1" | "2">("");
-  const alternar = (e: "1" | "2") => setEquipo((actual) => (actual === e ? "" : e));
+export default function EquipoPicker({
+  jugadorId,
+  apodo,
+  equipo,
+  onChange,
+}: {
+  jugadorId: string;
+  apodo: string;
+  equipo: EquipoElegido;
+  onChange: (equipo: EquipoElegido) => void;
+}) {
+  const alternar = (e: "1" | "2") => onChange(equipo === e ? "" : e);
 
   return (
     <div className="flex shrink-0 gap-1.5">
@@ -40,7 +50,7 @@ export default function EquipoPicker({ jugadorId, apodo }: { jugadorId: string; 
       </button>
       <button
         type="button"
-        onClick={() => setEquipo("")}
+        onClick={() => onChange("")}
         aria-label={`Sacar a ${apodo} del partido`}
         className={`flex w-7 items-center justify-center rounded-lg border border-border text-zinc-500 transition hover:border-danger-500/40 hover:text-danger-400 ${
           equipo ? "" : "invisible"

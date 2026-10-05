@@ -7,7 +7,7 @@ import { getConfig, votacionDelPartido } from "@/lib/config";
 import { categoriasTexto } from "@/lib/votacion";
 import { getContexto, rolEn } from "@/lib/grupo";
 import { urlConGrupo } from "@/lib/grupo-cookie";
-import { partidoYaPaso } from "@/lib/confirmacion";
+import { hoyArgentina, partidoYaPaso } from "@/lib/confirmacion";
 import type { Respuesta } from "@/lib/types";
 
 /** Si el usuario es admin del grupo al que pertenece el partido. */
@@ -53,10 +53,16 @@ function avisoConvocatoria(
   };
 }
 
+/**
+ * Alta de un partido (ver NuevoPartidoForm). Con modo "programar" es una
+ * convocatoria; con modo "jugado" se carga un partido que ya se jugó, con
+ * quiénes jugaron y los goles, y queda jugado de una.
+ */
 export async function createPartido(formData: FormData) {
   const { supabase, user, grupo } = await getContexto();
   if (!user || grupo?.rol !== "admin") return { error: "Solo el admin puede cargar partidos." };
 
+  const jugado = formData.get("modo") === "jugado";
   const fecha = String(formData.get("fecha") ?? "");
   const hora = String(formData.get("hora") ?? "").trim() || null;
   const lugar = String(formData.get("lugar") ?? "").trim();
@@ -76,6 +82,26 @@ export async function createPartido(formData: FormData) {
   if (!participantes.some((p) => p.equipo === 1)) {
     return { error: "Tiene que haber al menos un jugador en el Equipo 1 (nuestro equipo)." };
   }
+  const hoy = hoyArgentina();
+  if (jugado && fecha > hoy) {
+    return { error: "Ese partido todavía no se jugó: cargalo con \"Programar\"." };
+  }
+  if (!jugado && fecha < hoy) {
+    return { error: "Esa fecha ya pasó: para cargar un partido que ya se jugó, elegí \"Ya se jugó\"." };
+  }
+
+  // Goles (solo modo jugado): de cada uno de los que jugaron y de los invitados.
+  const leerGoles = (campo: string) => Number(formData.get(campo) ?? 0);
+  const goles = participantes.map((p) => ({
+    jugadorId: p.jugador_id,
+    goles: leerGoles(`goles-${p.jugador_id}`),
+  }));
+  const golesOtros = leerGoles("goles_otros");
+  const golesRival = leerGoles("goles_rival");
+  const todos = [golesOtros, golesRival, ...goles.map((g) => g.goles)];
+  if (jugado && todos.some((n) => !Number.isInteger(n) || n < 0)) {
+    return { error: "Revisá los goles: tienen que ser números enteros, 0 o más." };
+  }
 
   const { data: partido, error } = await supabase
     .from("partidos")
@@ -85,9 +111,9 @@ export async function createPartido(formData: FormData) {
 
   if (error) return { error: error.message };
 
-  // Un partido que ya pasó (se olvidaron de cargarlo antes) no es una
-  // convocatoria: entran todos como que jugaron y no se avisa a nadie.
-  const yaPaso = partidoYaPaso(fecha, hora);
+  // Un partido que ya pasó no es una convocatoria: entran todos como que
+  // jugaron y no se avisa a nadie (los avisa guardarGolesPartido, más abajo).
+  const yaPaso = jugado || partidoYaPaso(fecha, hora);
   const { pedir_confirmacion } = await getConfig(supabase, grupo.id);
   const pedir = pedir_confirmacion && !yaPaso;
   const { error: pjError } = await supabase.from("partido_jugadores").insert(
@@ -111,6 +137,16 @@ export async function createPartido(formData: FormData) {
         url: urlConGrupo(`/partidos/${partido.id}`, grupo.id),
       }
     );
+  }
+
+  if (jugado) {
+    // Lo mismo que cargar los goles desde el partido: lo marca jugado, decide
+    // la votación y avisa el resultado.
+    const resultado = await guardarGolesPartido({ partidoId: partido.id, goles, golesOtros, golesRival });
+    if (resultado.error) {
+      revalidatePath("/partidos");
+      return { error: `Se creó el partido pero no se pudieron guardar los goles: ${resultado.error}` };
+    }
   }
 
   revalidatePath("/partidos");

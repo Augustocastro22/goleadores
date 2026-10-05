@@ -6,6 +6,7 @@ import Card from "@/components/ui/Card";
 import Avatar from "@/components/ui/Avatar";
 import Button from "@/components/ui/Button";
 import { IconGoal } from "@/components/icons";
+import Marcador from "@/components/Marcador";
 import { guardarGolesPartido } from "@/lib/actions/partidos";
 
 interface Jugador {
@@ -83,19 +84,7 @@ export default function GolesEditor({
           <span className="truncate capitalize">{fecha}</span>
           <span className="truncate">{lugar}</span>
         </div>
-        <div className="mt-4 flex items-center justify-center gap-4 sm:gap-6">
-          <p className="flex-1 truncate text-right text-sm font-semibold text-zinc-300 sm:text-base">
-            Nosotros
-          </p>
-          <div className="flex shrink-0 items-center gap-3 rounded-2xl bg-white/5 px-5 py-2.5">
-            <span className="text-3xl font-extrabold tabular-nums text-white">{golesEquipo1}</span>
-            <span className="text-lg font-bold text-zinc-600">–</span>
-            <span className="text-3xl font-extrabold tabular-nums text-white">{golesEquipo2}</span>
-          </div>
-          <p className="flex-1 truncate text-left text-sm font-semibold text-zinc-300 sm:text-base">
-            {rival}
-          </p>
-        </div>
+        <Marcador golesNosotros={golesEquipo1} golesRival={golesEquipo2} rival={rival} className="mt-4" />
       </Card>
 
       <div>
