@@ -15,12 +15,14 @@ export default function ConfirmSubmitButton({
   confirmMessage,
   confirmLabel = "Confirmar",
   className,
+  title,
   children,
 }: {
   confirmMessage: string;
   /** Texto del botón que confirma (ej: "Salir", "Eliminar"). */
   confirmLabel?: string;
   className?: string;
+  title?: string;
   children: React.ReactNode;
 }) {
   const dialogRef = useRef<HTMLDialogElement>(null);
@@ -28,7 +30,12 @@ export default function ConfirmSubmitButton({
 
   return (
     <>
-      <button type="button" className={className} onClick={() => dialogRef.current?.showModal()}>
+      <button
+        type="button"
+        title={title}
+        className={className}
+        onClick={() => dialogRef.current?.showModal()}
+      >
         {children}
       </button>
       <dialog

@@ -6,6 +6,7 @@ import Avatar from "./ui/Avatar";
 import NavLinks from "./NavLinks";
 import BottomNav from "./BottomNav";
 import GrupoSwitcher from "./GrupoSwitcher";
+import ConfirmSubmitButton from "./ConfirmSubmitButton";
 import { IconLogout, IconSettings } from "./icons";
 
 export default async function NavBar() {
@@ -54,13 +55,14 @@ export default async function NavBar() {
               <span className="hidden sm:inline">{profile?.apodo ?? "Perfil"}</span>
             </Link>
             <form action={logout}>
-              <button
-                type="submit"
+              <ConfirmSubmitButton
                 title="Salir"
+                confirmMessage="¿Cerrar sesión? Para volver a entrar vas a tener que ingresar de nuevo."
+                confirmLabel="Cerrar sesión"
                 className="flex h-9 w-9 items-center justify-center rounded-full text-zinc-500 transition hover:bg-white/5 hover:text-danger-400"
               >
                 <IconLogout className="h-5 w-5" />
-              </button>
+              </ConfirmSubmitButton>
             </form>
           </div>
         </nav>
