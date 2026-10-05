@@ -107,8 +107,8 @@ export default function NuevoPartidoForm({
           {jugado
             ? "Marcá en qué equipo jugó cada uno; los que no jugaron, dejalos sin marcar."
             : "Marcá a quién convocás y en qué equipo."}{" "}
-          Un jugador del grupo puede jugar en el Equipo 2 (por ejemplo en una
-          pichanga) y sus goles cuentan igual en la tabla histórica.
+          Un jugador del grupo puede jugar en el Equipo 2 y sus goles cuentan
+          igual en la tabla histórica.
         </p>
         <div className="flex flex-col gap-2">
           {jugadores.map((jugador) => (
