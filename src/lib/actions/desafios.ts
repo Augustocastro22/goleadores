@@ -10,6 +10,7 @@ import { getContexto, rolEn } from "@/lib/grupo";
 import { urlConGrupo } from "@/lib/grupo-cookie";
 import { extraerCodigo, fechaDesafio } from "@/lib/desafios";
 import { avisarDesafio } from "@/lib/desafios-avisos";
+import { errorGolesPorCorregir, golesPorCorregir } from "@/lib/goles-por-corregir";
 
 interface DesafioRow {
   id: string;
@@ -97,6 +98,8 @@ export async function crearDesafio(formData: FormData) {
   const grupoElegido = String(formData.get("grupo_id") ?? "") || ctx.grupo?.id || "";
   const grupo = ctx.grupos.find((g) => g.id === grupoElegido);
   if (!user || grupo?.rol !== "admin") return { error: "Solo el admin puede desafiar a otro grupo." };
+  const pendientes = await golesPorCorregir(supabase, grupo.id);
+  if (pendientes.length > 0) return { error: errorGolesPorCorregir(pendientes) };
 
   const codigo = extraerCodigo(String(formData.get("codigo") ?? ""));
   const fecha = String(formData.get("fecha") ?? "");
@@ -139,6 +142,12 @@ export async function responderDesafio(formData: FormData) {
   const acepta = formData.get("acepta") === "true";
   const { supabase, user } = await getContexto();
   if (!user || !desafioId) return { error: "Desafío inválido." };
+  if (acepta) {
+    // Aceptar le crea un partido al grupo desafiado: mismo freno que cargar uno.
+    const desafiado = (await getDesafio(desafioId))?.grupo_desafiado_id;
+    const pendientes = desafiado ? await golesPorCorregir(supabase, desafiado) : [];
+    if (pendientes.length > 0) return { error: errorGolesPorCorregir(pendientes) };
+  }
 
   const { error } = await supabase.rpc("responder_desafio", { p_desafio_id: desafioId, p_acepta: acepta });
   if (error) return { error: error.message };

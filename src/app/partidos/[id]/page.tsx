@@ -204,6 +204,7 @@ export default async function PartidoDetailPage({
           hoy={hoy}
           propuestas={propuestas}
           golesDeJugadores={golesDeJugadores}
+          partidoJugado={partido.jugado}
         />
       )}
 

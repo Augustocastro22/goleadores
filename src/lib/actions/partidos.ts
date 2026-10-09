@@ -10,6 +10,7 @@ import { urlConGrupo } from "@/lib/grupo-cookie";
 import { hoyArgentina, partidoYaPaso } from "@/lib/confirmacion";
 import type { Respuesta } from "@/lib/types";
 import type { DesafioVista } from "@/lib/desafios";
+import { errorGolesPorCorregir, golesPorCorregir } from "@/lib/goles-por-corregir";
 
 /** Si el usuario es admin del grupo al que pertenece el partido. */
 async function requireAdminDePartido(partidoId: string) {
@@ -62,6 +63,9 @@ function avisoConvocatoria(
 export async function createPartido(formData: FormData) {
   const { supabase, user, grupo } = await getContexto();
   if (!user || grupo?.rol !== "admin") return { error: "Solo el admin puede cargar partidos." };
+
+  const pendientes = await golesPorCorregir(supabase, grupo.id);
+  if (pendientes.length > 0) return { error: errorGolesPorCorregir(pendientes) };
 
   const jugado = formData.get("modo") === "jugado";
   const fecha = String(formData.get("fecha") ?? "");
@@ -321,8 +325,12 @@ export async function guardarGolesPartido({ partidoId, goles, golesOtros, golesR
       p_desafio_id: partido.desafio_id,
     });
     const desafio = ((desafioRaw ?? []) as DesafioVista[])[0];
-    if (!desafio || desafio.marcador_mios === null || desafio.marcador_rival === null) {
-      return { error: "Primero cargá el resultado del desafío (arriba), después los goles de cada uno." };
+    // Los goles se cargan contra el resultado ya cerrado (confirmado o sin
+    // verificar): si se cargaran antes y el resultado cambiara, quedarían
+    // goles de más (o de menos) en la tabla de goleadores.
+    const cerrado = desafio?.resultado_estado === "verificado" || desafio?.resultado_estado === "sin_verificar";
+    if (!desafio || !cerrado || desafio.marcador_mios === null || desafio.marcador_rival === null) {
+      return { error: "Los goles de cada uno se cargan cuando el resultado del desafío esté confirmado (arriba)." };
     }
     const deJugadores = goles.reduce((total, g) => total + g.goles, 0);
     if (deJugadores > desafio.marcador_mios) {

@@ -42,7 +42,9 @@ export default function GolesEditor({
   /**
    * En un desafío el marcador sale del resultado del desafío (el acordado, o
    * la versión de este grupo): no se cargan los goles del rival ni "otros",
-   * se calculan. null = todavía no hay resultado del desafío.
+   * se calculan. null = todavía no hay resultado del desafío. Si después el
+   * resultado cambia, la base recalcula "otros" y el rival
+   * (aplicar_marcador_desafio); si los goles quedan de más se avisa acá.
    */
   marcadorDesafio?: { mios: number | null; rival: number | null };
 }) {
@@ -134,9 +136,16 @@ export default function GolesEditor({
             <InvitadosRow isAdmin={isAdmin} value={golesOtros} onChange={setGolesOtros} />
           )}
         </Card>
+        {esDesafio && marcadorDesafio.mios != null && !golesDeMas && otrosDesafio > 0 && isAdmin && (
+          <p className="mt-2 text-sm text-gold-400">
+            {otrosDesafio === 1 ? "Queda 1 gol" : `Quedan ${otrosDesafio} goles`} en Otros: si {otrosDesafio === 1 ? "lo hizo" : "los hizo"} alguien
+            del grupo, cargáselo{otrosDesafio === 1 ? "" : "s"}.
+          </p>
+        )}
         {golesDeMas && (
           <p className="mt-2 text-sm text-danger-400">
-            Suman {golesDeJugadores} goles, pero en el resultado del desafío hicieron {marcadorDesafio?.mios}.
+            Suman {golesDeJugadores} goles, pero en el resultado del desafío hicieron {marcadorDesafio?.mios}. Hasta
+            que los corrijas no se pueden cargar otros partidos.
           </p>
         )}
       </div>

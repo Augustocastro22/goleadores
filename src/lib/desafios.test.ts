@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  desafiosConGolesDeMas,
   esperaMiRespuesta,
   estadoVisible,
   extraerCodigo,
@@ -165,6 +166,25 @@ describe("resultado", () => {
     expect(puedeCortar({ resultado_estado: "en_discusion", ambos_propusieron: true })).toBe(true);
     expect(puedeCortar({ resultado_estado: "en_discusion", ambos_propusieron: false })).toBe(false);
     expect(puedeCortar({ resultado_estado: "verificado", ambos_propusieron: true })).toBe(false);
+  });
+
+  it("detecta los partidos con más goles de jugadores que el resultado", () => {
+    const goles = new Map([
+      ["p1", 5],
+      ["p2", 4],
+      ["p3", 2],
+    ]);
+    const conGolesDeMas = desafiosConGolesDeMas(
+      [
+        { partido_id: "p1", marcador_mios: 4 }, // el resultado bajó: de más
+        { partido_id: "p2", marcador_mios: 4 }, // justo
+        { partido_id: "p3", marcador_mios: null }, // sin resultado
+        { partido_id: null, marcador_mios: 0 }, // sin aceptar
+        { partido_id: "p4", marcador_mios: 1 }, // sin goles cargados
+      ],
+      goles
+    );
+    expect(conGolesDeMas.map((d) => d.partido_id)).toEqual(["p1"]);
   });
 
   it("esperaMiRespuesta junta desafíos, fechas y resultados", () => {

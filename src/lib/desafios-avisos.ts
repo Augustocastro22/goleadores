@@ -43,6 +43,8 @@ interface Lado {
   rival: string;
   partidoId: string | null;
   convocados: string[];
+  /** Goles cargados de los jugadores del grupo (para avisar si quedan de más). */
+  golesDeJugadores: number;
   admins: string[];
   pideConfirmacion: boolean;
 }
@@ -54,7 +56,10 @@ async function cargarLados(desafioId: string) {
 
   const grupoIds = [d.grupo_desafiante_id, d.grupo_desafiado_id].filter((id): id is string => !!id);
   const [{ data: partidos }, { data: admins }, { data: config }, { data: pendiente }] = await Promise.all([
-    admin.from("partidos").select("id, grupo_id, partido_jugadores(jugador_id)").eq("desafio_id", desafioId),
+    admin
+      .from("partidos")
+      .select("id, grupo_id, partido_jugadores(jugador_id, goles, equipo)")
+      .eq("desafio_id", desafioId),
     admin.from("grupo_miembros").select("grupo_id, jugador_id").in("grupo_id", grupoIds).eq("rol", "admin"),
     admin
       .from("config")
@@ -72,7 +77,7 @@ async function cargarLados(desafioId: string) {
   const lados: Lado[] = grupoIds.map((grupoId) => {
     const esDesafiante = grupoId === d.grupo_desafiante_id;
     const partido = (partidos ?? []).find((p) => p.grupo_id === grupoId) as
-      | { id: string; partido_jugadores: { jugador_id: string }[] }
+      | { id: string; partido_jugadores: { jugador_id: string; goles: number; equipo: number }[] }
       | undefined;
     return {
       grupoId,
@@ -80,6 +85,9 @@ async function cargarLados(desafioId: string) {
       rival: esDesafiante ? d.nombre_desafiado : d.nombre_desafiante,
       partidoId: partido?.id ?? null,
       convocados: partido?.partido_jugadores.map((pj) => pj.jugador_id) ?? [],
+      golesDeJugadores: (partido?.partido_jugadores ?? [])
+        .filter((pj) => pj.equipo === 1)
+        .reduce((total, pj) => total + pj.goles, 0),
       admins: (admins ?? []).filter((a) => a.grupo_id === grupoId).map((a) => a.jugador_id),
       pideConfirmacion: (config ?? []).some((c) => c.grupo_id === grupoId && c.valor === true),
     };
@@ -186,6 +194,23 @@ export async function avisarDesafio(
         destinatarios.filter((id) => id !== opts.excluir),
         { title, body, url }
       );
+
+      // Si el grupo cargó los goles con su versión y el resultado final le
+      // dio menos goles, quedan goles de más: hasta corregirlos no carga
+      // otros partidos (ver goles-por-corregir.ts).
+      if (evento === "resultado_verificado" || evento === "resultado_auto") {
+        const propios = lado.grupoId === d.grupo_desafiante_id ? d.goles_desafiante : d.goles_desafiado;
+        if (propios !== null && lado.golesDeJugadores > propios) {
+          await enviarPush(
+            lado.admins.filter((id) => id !== opts.excluir),
+            {
+              title: "Corregí los goles",
+              body: `El resultado final contra ${lado.rival} les da ${propios} goles y cargaron ${lado.golesDeJugadores}. Hasta corregirlos no se pueden cargar otros partidos.`,
+              url,
+            }
+          );
+        }
+      }
     }
   } catch (err) {
     console.error("No se pudo avisar el desafío:", err);

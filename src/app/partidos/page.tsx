@@ -8,7 +8,7 @@ import { buttonClass } from "@/components/ui/Button";
 import { IconChevronRight, IconPlus } from "@/components/icons";
 import PushBanner from "@/components/PushBanner";
 import { hoyArgentina } from "@/lib/confirmacion";
-import { esperaMiRespuesta, type DesafioVista } from "@/lib/desafios";
+import { desafiosConGolesDeMas, esperaMiRespuesta, type DesafioVista } from "@/lib/desafios";
 
 export default async function PartidosPage() {
   const { supabase, grupo } = await requireGrupo();
@@ -32,6 +32,7 @@ export default async function PartidosPage() {
     string,
     { golesEquipo1: number; golesEquipo2: number; resultado: Resultado }
   >();
+  const golesPorEquipo = new Map<string, { e1: number; e2: number }>();
   if (partidos && partidos.length > 0) {
     const { data: pj } = await supabase
       .from("partido_jugadores")
@@ -41,7 +42,6 @@ export default async function PartidosPage() {
         partidos.map((p) => p.id)
       );
 
-    const golesPorEquipo = new Map<string, { e1: number; e2: number }>();
     for (const row of pj ?? []) {
       const acc = golesPorEquipo.get(row.partido_id) ?? { e1: 0, e2: 0 };
       if (row.equipo === 1) acc.e1 += row.goles;
@@ -61,6 +61,13 @@ export default async function PartidosPage() {
       });
     }
   }
+
+  const conGolesDeMas = new Set(
+    desafiosConGolesDeMas(
+      desafios,
+      new Map([...golesPorEquipo].map(([id, g]) => [id, g.e1]))
+    ).map((d) => d.partido_id)
+  );
 
   const resultados = [...resumenPorPartido.values()].map((r) => r.resultado);
   const ganados = resultados.filter((r) => r === "G").length;
@@ -127,7 +134,12 @@ export default async function PartidosPage() {
                         <p className="truncate text-sm text-zinc-500">
                           {partido.desafio_id && (
                             <span className="font-medium text-gold-400">
-                              {etiquetaDesafio(desafioPorPartido.get(partido.id))} ·{" "}
+                              {etiquetaDesafio(
+                                desafioPorPartido.get(partido.id),
+                                partido.jugado,
+                                conGolesDeMas.has(partido.id)
+                              )}{" "}
+                              ·{" "}
                             </span>
                           )}
                           {partido.lugar}
@@ -148,14 +160,12 @@ export default async function PartidosPage() {
                           </span>
                         </>
                       ) : desafioPorPartido.get(partido.id)?.marcador_mios != null ? (
-                        // Desafío con resultado pero sin los goles de los jugadores todavía.
-                        <>
-                          <span className="text-sm font-bold tabular-nums text-white">
-                            {desafioPorPartido.get(partido.id)!.marcador_mios}-
-                            {desafioPorPartido.get(partido.id)!.marcador_rival}
-                          </span>
-                          <Badge variant="gold">Faltan goles</Badge>
-                        </>
+                        // Desafío con resultado pero sin los goles de los jugadores todavía
+                        // (lo que falta se lee en la segunda línea, así no se corta el rival).
+                        <span className="text-sm font-bold tabular-nums text-white">
+                          {desafioPorPartido.get(partido.id)!.marcador_mios}-
+                          {desafioPorPartido.get(partido.id)!.marcador_rival}
+                        </span>
                       ) : desafioPorPartido.get(partido.id)?.estado === "suspendido" ? (
                         <Badge variant="gold">Suspendido</Badge>
                       ) : (
@@ -191,10 +201,14 @@ function ResumenStat({
   );
 }
 
-/** "Desafío", o con lo que importa de un vistazo: suspendido o sin verificar. */
-function etiquetaDesafio(d: DesafioVista | undefined) {
+/**
+ * "Desafío", o con lo que importa de un vistazo: suspendido, goles por
+ * corregir, resultado a confirmar, faltan goles.
+ */
+function etiquetaDesafio(d: DesafioVista | undefined, jugado: boolean, golesDeMas: boolean) {
   if (d?.estado === "suspendido") return "Desafío suspendido";
-  if (d?.resultado_estado === "sin_verificar") return "Desafío sin verificar";
+  if (golesDeMas) return "Desafío · corregir goles";
   if (d?.resultado_estado === "en_discusion") return "Desafío · resultado a confirmar";
-  return "Desafío";
+  const base = d?.resultado_estado === "sin_verificar" ? "Desafío sin verificar" : "Desafío";
+  return d?.marcador_mios != null && !jugado ? `${base} · faltan goles` : base;
 }

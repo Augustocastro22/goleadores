@@ -61,6 +61,7 @@ export default function DesafioPanel({
   hoy,
   propuestas,
   golesDeJugadores,
+  partidoJugado,
 }: {
   desafio: DesafioVista;
   grupoId: string;
@@ -69,6 +70,8 @@ export default function DesafioPanel({
   propuestas: PropuestaResultado[];
   /** Goles cargados de los jugadores del grupo (para avisar si no coinciden con el marcador). */
   golesDeJugadores: number;
+  /** Si este grupo ya cargó los goles de sus jugadores. */
+  partidoJugado: boolean;
 }) {
   const ocultos = (
     <>
@@ -80,6 +83,7 @@ export default function DesafioPanel({
   const confirmarResultado = isAdmin && puedeConfirmarResultado(d);
   const novedades = novedadesDesafio(d);
   const golesDeMas = d.marcador_mios !== null && golesDeJugadores > d.marcador_mios;
+  const faltanGoles = isAdmin && !partidoJugado && d.marcador_mios !== null;
 
   return (
     <section className="flex flex-col gap-3">
@@ -102,6 +106,9 @@ export default function DesafioPanel({
             {linea}
           </p>
         ))}
+        {faltanGoles && (
+          <p className="text-sm text-primary-400">Ahora cargá los goles de cada uno (abajo).</p>
+        )}
         {golesDeMas && (
           <p className="text-sm text-danger-400">
             Los goles cargados de los jugadores ({golesDeJugadores}) son más que los del resultado del desafío (

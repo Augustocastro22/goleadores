@@ -122,6 +122,20 @@ export function puedeCortar(d: D<"resultado_estado" | "ambos_propusieron">): boo
   return d.resultado_estado === "en_discusion" && d.ambos_propusieron;
 }
 
+/**
+ * Desafíos del grupo cuyo partido tiene más goles de jugadores que los del
+ * resultado. Pasa si el resultado cambió después de cargar los goles (el otro
+ * grupo lo corrigió). Hasta corregirlos, el grupo no carga otros partidos.
+ */
+export function desafiosConGolesDeMas<T extends D<"partido_id" | "marcador_mios">>(
+  desafios: T[],
+  golesDeJugadores: Map<string, number>
+): T[] {
+  return desafios.filter(
+    (d) => d.partido_id !== null && d.marcador_mios !== null && (golesDeJugadores.get(d.partido_id) ?? 0) > d.marcador_mios
+  );
+}
+
 /** Si hay algo que el admin de este grupo tiene que responder. */
 export function esperaMiRespuesta(
   d: D<"estado" | "fecha" | "soy_desafiante" | "propuesta_es_mia" | "resultado_estado" | "resultado_pendiente_es_mio">,
