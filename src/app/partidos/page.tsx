@@ -7,16 +7,23 @@ import Badge from "@/components/ui/Badge";
 import { buttonClass } from "@/components/ui/Button";
 import { IconChevronRight, IconPlus } from "@/components/icons";
 import PushBanner from "@/components/PushBanner";
+import { hoyArgentina } from "@/lib/confirmacion";
+import { puedeResponder, type DesafioVista } from "@/lib/desafios";
 
 export default async function PartidosPage() {
   const { supabase, grupo } = await requireGrupo();
 
-  const { data: partidos } = await supabase
-    .from("partidos")
-    .select("*")
-    .eq("grupo_id", grupo.id)
-    .order("fecha", { ascending: false })
-    .returns<Partido[]>();
+  const [{ data: partidos }, { data: desafiosRaw }] = await Promise.all([
+    supabase
+      .from("partidos")
+      .select("*")
+      .eq("grupo_id", grupo.id)
+      .order("fecha", { ascending: false })
+      .returns<Partido[]>(),
+    grupo.rol === "admin" ? supabase.rpc("get_desafios", { p_grupo_id: grupo.id }) : Promise.resolve({ data: [] }),
+  ]);
+  const hoy = hoyArgentina();
+  const desafiosParaResponder = ((desafiosRaw ?? []) as DesafioVista[]).filter((d) => puedeResponder(d, hoy)).length;
 
   const resumenPorPartido = new Map<
     string,
@@ -63,11 +70,21 @@ export default async function PartidosPage() {
 
       <div className="mb-6 flex items-center justify-between">
         <h1 className="text-2xl font-extrabold tracking-tight text-white">Partidos</h1>
-        {grupo.rol === "admin" && (
-          <Link href="/partidos/nuevo" className={buttonClass("primary", "sm")}>
-            <IconPlus className="h-4 w-4" /> Nuevo
+        <div className="flex items-center gap-2">
+          <Link href="/partidos/desafios" className={buttonClass("secondary", "sm")}>
+            Desafíos
+            {desafiosParaResponder > 0 && (
+              <span className="rounded-full bg-gold-500/20 px-1.5 py-0.5 text-[11px] text-gold-400">
+                {desafiosParaResponder}
+              </span>
+            )}
           </Link>
-        )}
+          {grupo.rol === "admin" && (
+            <Link href="/partidos/nuevo" className={buttonClass("primary", "sm")}>
+              <IconPlus className="h-4 w-4" /> Nuevo
+            </Link>
+          )}
+        </div>
       </div>
 
       {!partidos || partidos.length === 0 ? (
@@ -105,6 +122,7 @@ export default async function PartidosPage() {
                       <div className="min-w-0">
                         <p className="truncate font-semibold text-white">vs {partido.rival}</p>
                         <p className="truncate text-sm text-zinc-500">
+                          {partido.desafio_id && <span className="font-medium text-gold-400">Desafío · </span>}
                           {partido.lugar}
                           {partido.hora && ` · ${partido.hora.slice(0, 5)}hs`}
                         </p>

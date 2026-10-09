@@ -216,36 +216,10 @@ async function PartidosTab({ grupoId }: { grupoId: string }) {
                 <IconChevronRight className="h-4 w-4 shrink-0 text-zinc-500 transition group-open:rotate-90" />
               </summary>
 
-              <ActionForm action={editarPartido} className="flex flex-col gap-3 border-t border-border px-4 py-4">
-                <input type="hidden" name="partido_id" value={p.id} />
-                <div className="flex gap-3">
-                  <Label className="flex-1">
-                    Fecha
-                    <Input type="date" name="fecha" required defaultValue={p.fecha} />
-                  </Label>
-                  <Label className="w-28 shrink-0">
-                    Hora
-                    <HoraSelect defaultValue={p.hora?.slice(0, 5) ?? ""} />
-                  </Label>
-                </div>
-                <Label>
-                  Lugar
-                  <Input type="text" name="lugar" required defaultValue={p.lugar} />
-                </Label>
-                <Label>
-                  Rival / nombre del Equipo 2
-                  <Input type="text" name="rival" required defaultValue={p.rival} />
-                </Label>
-                {!p.jugado && (
-                  <label className="flex items-center gap-2 text-sm text-zinc-300">
-                    <input type="checkbox" name="avisar" defaultChecked className="h-4 w-4 accent-primary-500" />
-                    Avisar a los convocados si cambia la fecha o la hora
-                  </label>
-                )}
-                <div className="flex items-center gap-3">
-                  <SubmitButton pendingText="Guardando..." size="sm">
-                    Guardar
-                  </SubmitButton>
+              {p.desafio_id ? (
+                <div className="flex flex-col gap-3 border-t border-border px-4 py-4 text-sm text-zinc-500">
+                  Es un partido de un desafío contra otro grupo: la fecha, la hora y el lugar los
+                  acuerdan los dos grupos, así que no se editan desde acá.
                   <Link
                     href={`/partidos/${p.id}`}
                     className="text-sm font-medium text-zinc-400 transition hover:text-white"
@@ -253,7 +227,46 @@ async function PartidosTab({ grupoId }: { grupoId: string }) {
                     Ver partido
                   </Link>
                 </div>
-              </ActionForm>
+              ) : (
+                <ActionForm action={editarPartido} className="flex flex-col gap-3 border-t border-border px-4 py-4">
+                  <input type="hidden" name="partido_id" value={p.id} />
+                  <div className="flex gap-3">
+                    <Label className="flex-1">
+                      Fecha
+                      <Input type="date" name="fecha" required defaultValue={p.fecha} />
+                    </Label>
+                    <Label className="w-28 shrink-0">
+                      Hora
+                      <HoraSelect defaultValue={p.hora?.slice(0, 5) ?? ""} />
+                    </Label>
+                  </div>
+                  <Label>
+                    Lugar
+                    <Input type="text" name="lugar" required defaultValue={p.lugar} />
+                  </Label>
+                  <Label>
+                    Rival / nombre del Equipo 2
+                    <Input type="text" name="rival" required defaultValue={p.rival} />
+                  </Label>
+                  {!p.jugado && (
+                    <label className="flex items-center gap-2 text-sm text-zinc-300">
+                      <input type="checkbox" name="avisar" defaultChecked className="h-4 w-4 accent-primary-500" />
+                      Avisar a los convocados si cambia la fecha o la hora
+                    </label>
+                  )}
+                  <div className="flex items-center gap-3">
+                    <SubmitButton pendingText="Guardando..." size="sm">
+                      Guardar
+                    </SubmitButton>
+                    <Link
+                      href={`/partidos/${p.id}`}
+                      className="text-sm font-medium text-zinc-400 transition hover:text-white"
+                    >
+                      Ver partido
+                    </Link>
+                  </div>
+                </ActionForm>
+              )}
             </details>
           </Card>
         );

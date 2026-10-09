@@ -22,6 +22,7 @@ export default function ConvocadosEditor({
   partidoHora,
   bloqueos,
   respuestas,
+  unSoloEquipo = false,
 }: {
   partidoId: string;
   jugadores: Profile[];
@@ -32,6 +33,8 @@ export default function ConvocadosEditor({
   bloqueos: Bloqueo[];
   /** Respuesta de cada convocado, si el grupo pide confirmación. */
   respuestas?: Record<string, Respuesta>;
+  /** En un desafío el Equipo 2 es el otro grupo: solo se elige quién juega. */
+  unSoloEquipo?: boolean;
 }) {
   const router = useRouter();
   const asignacionesIniciales = useMemo(() => {
@@ -199,8 +202,10 @@ export default function ConvocadosEditor({
       <h2 className="mb-3 text-lg font-bold text-white">Convocatoria</h2>
       <Card className="p-4">
         <p className="mb-3 text-xs text-zinc-500">
-          Marcá quién juega y en qué equipo. Para sacar a alguien tocá la ✕ (o de nuevo su
-          equipo). Podés sumar o sacar gente hasta antes de cargar el resultado.
+          {unSoloEquipo
+            ? "Marcá quién juega. Para sacar a alguien tocá la ✕ (o de nuevo Juega)."
+            : "Marcá quién juega y en qué equipo. Para sacar a alguien tocá la ✕ (o de nuevo su equipo)."}{" "}
+          Podés sumar o sacar gente hasta antes de cargar el resultado.
         </p>
         <div className="flex flex-col gap-2">
           {jugadores.map((jugador) => {
@@ -236,19 +241,21 @@ export default function ConvocadosEditor({
                         : "border-border text-zinc-400 hover:text-white"
                     }`}
                   >
-                    Eq. 1
+                    {unSoloEquipo ? "Juega" : "Eq. 1"}
                   </button>
-                  <button
-                    type="button"
-                    onClick={() => elegir(jugador.id, 2)}
-                    className={`rounded-lg border px-2.5 py-1 text-xs font-semibold transition ${
-                      equipo === 2
-                        ? "border-gold-500/40 bg-gold-500/10 text-gold-400"
-                        : "border-border text-zinc-400 hover:text-white"
-                    }`}
-                  >
-                    Eq. 2
-                  </button>
+                  {!unSoloEquipo && (
+                    <button
+                      type="button"
+                      onClick={() => elegir(jugador.id, 2)}
+                      className={`rounded-lg border px-2.5 py-1 text-xs font-semibold transition ${
+                        equipo === 2
+                          ? "border-gold-500/40 bg-gold-500/10 text-gold-400"
+                          : "border-border text-zinc-400 hover:text-white"
+                      }`}
+                    >
+                      Eq. 2
+                    </button>
+                  )}
                   <button
                     type="button"
                     onClick={() => sacar(jugador.id)}

@@ -45,12 +45,16 @@ export async function editarPartido(formData: FormData) {
 
   const { data: anterior } = await supabase
     .from("partidos")
-    .select("grupo_id, fecha, hora, jugado")
+    .select("grupo_id, fecha, hora, jugado, desafio_id")
     .eq("id", partidoId)
     .single();
   if (!anterior) return { error: "Partido no encontrado." };
   if (rolEn(ctx, anterior.grupo_id) !== "admin") {
     return { error: "Solo el admin puede editar partidos." };
+  }
+  // La fecha y el lugar los acuerdan los dos grupos (y el rival es el otro grupo).
+  if (anterior.desafio_id) {
+    return { error: "Es un partido de un desafío: no se puede editar desde acá." };
   }
 
   const { error } = await supabase

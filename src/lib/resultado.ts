@@ -13,6 +13,12 @@ export const RESULTADO_LABEL: Record<Resultado, string> = {
   P: "Perdido",
 };
 
+export const RESULTADO_PLURAL: Record<Resultado, string> = {
+  G: "Ganados",
+  E: "Empatados",
+  P: "Perdidos",
+};
+
 export const RESULTADO_CLASS: Record<Resultado, string> = {
   G: "bg-primary-500/15 text-primary-400",
   E: "bg-white/10 text-zinc-300",

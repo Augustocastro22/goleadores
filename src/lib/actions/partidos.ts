@@ -160,6 +160,11 @@ export async function deletePartido(formData: FormData) {
   const { supabase, isAdmin } = await requireAdminDePartido(partidoId);
   if (!isAdmin) return { error: "Solo el admin puede borrar partidos." };
 
+  const { data: partido } = await supabase.from("partidos").select("desafio_id").eq("id", partidoId).single();
+  if (partido?.desafio_id) {
+    return { error: "Es un partido de un desafío: para que no se juegue, cancelá el desafío." };
+  }
+
   const { error } = await supabase.from("partidos").delete().eq("id", partidoId);
   if (error) return { error: error.message };
 
@@ -183,12 +188,16 @@ export async function actualizarConvocados({ partidoId, participantes }: Convoca
 
   const { data: partido } = await supabase
     .from("partidos")
-    .select("rival, fecha, hora, lugar, jugado")
+    .select("rival, fecha, hora, lugar, jugado, desafio_id")
     .eq("id", partidoId)
     .single();
   if (!partido) return { error: "Partido no encontrado." };
   if (partido.jugado) {
     return { error: "El partido ya se jugó, no se puede editar la convocatoria." };
+  }
+  // En un desafío el Equipo 2 es el otro grupo.
+  if (partido.desafio_id && participantes.some((p) => p.equipo === 2)) {
+    return { error: "En un desafío todos los convocados juegan en el mismo equipo." };
   }
 
   const { data: actualesRaw } = await supabase
@@ -293,10 +302,15 @@ export async function guardarGolesPartido({ partidoId, goles, golesOtros, golesR
 
   const { data: partido } = await supabase
     .from("partidos")
-    .select("rival, jugado, con_votacion, con_mvp, con_peor, votacion_abierta_notificada")
+    .select("rival, fecha, hora, jugado, con_votacion, con_mvp, con_peor, votacion_abierta_notificada, desafio_id")
     .eq("id", partidoId)
     .single();
   if (!partido) return { error: "Partido no encontrado." };
+  // En un desafío, cargar el resultado hace que ninguno de los dos grupos lo
+  // pueda cancelar: no vale hacerlo antes de que se juegue.
+  if (partido.desafio_id && !partidoYaPaso(partido.fecha, partido.hora)) {
+    return { error: "Es un desafío: el resultado se carga después de jugar el partido." };
+  }
 
   // La primera vez que se cargan los goles se decide qué vota el partido
   // (Mejor y/o Peor), según las reglas del grupo en /admin (qué categorías

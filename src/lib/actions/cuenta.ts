@@ -37,10 +37,13 @@ export async function eliminarCuenta(formData: FormData) {
   // propia cuenta (chequeado arriba).
   const admin = createAdminClient();
 
-  const { data: misMembresias } = await admin
+  // Si alguna de estas lecturas falla hay que cortar: sin los miembros, todos
+  // sus grupos parecerían tener solo a esta persona y se borrarían enteros.
+  const { data: misMembresias, error: membresiasError } = await admin
     .from("grupo_miembros")
     .select("grupo_id, rol, grupos(nombre)")
     .eq("jugador_id", user.id);
+  if (membresiasError) return { error: "No se pudo borrar la cuenta, probá de nuevo." };
   const membresias = (misMembresias ?? []) as unknown as {
     grupo_id: string;
     rol: string;
@@ -48,9 +51,10 @@ export async function eliminarCuenta(formData: FormData) {
   }[];
 
   const grupoIds = membresias.map((m) => m.grupo_id);
-  const { data: todosLosMiembros } = grupoIds.length
+  const { data: todosLosMiembros, error: miembrosError } = grupoIds.length
     ? await admin.from("grupo_miembros").select("grupo_id, jugador_id, rol").in("grupo_id", grupoIds)
-    : { data: [] };
+    : { data: [], error: null };
+  if (miembrosError) return { error: "No se pudo borrar la cuenta, probá de nuevo." };
 
   const gruposABorrar: string[] = [];
   const gruposQueDejo: string[] = [];

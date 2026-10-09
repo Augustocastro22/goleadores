@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { getContexto, getMiembros, rolEn } from "@/lib/grupo";
 import { getConfig, grupoVota as votaAlgo } from "@/lib/config";
@@ -12,6 +13,10 @@ import Badge from "@/components/ui/Badge";
 import Avatar from "@/components/ui/Avatar";
 import ConfirmSubmitButton from "@/components/ConfirmSubmitButton";
 import { IconChevronRight } from "@/components/icons";
+import GrupoLogo from "@/components/ui/GrupoLogo";
+import { puedeCancelar, type DesafioVista } from "@/lib/desafios";
+import { CancelarDesafio } from "../desafios/AccionesDesafio";
+import { urlConGrupo } from "@/lib/grupo-cookie";
 import GolesEditor from "./GolesEditor";
 import ConvocadosEditor from "./ConvocadosEditor";
 import { PendientesCard, RespuestaBadge, RespuestaCard, ResumenRespuestas } from "./Confirmacion";
@@ -47,7 +52,7 @@ export default async function PartidoDetailPage({
   const conPeor = partido.con_votacion && partido.con_peor;
 
   // Lo que no depende entre sí se pide todo junto.
-  const [config, { data: participantesRaw }, { data: misVotos }, todosLosJugadores] = await Promise.all([
+  const [config, { data: participantesRaw }, { data: misVotos }, todosLosJugadores, { data: desafioRaw }] = await Promise.all([
     getConfig(supabase, partido.grupo_id),
     supabase
       .from("partido_jugadores")
@@ -55,7 +60,11 @@ export default async function PartidoDetailPage({
       .eq("partido_id", id),
     supabase.from("votos").select("tipo").eq("partido_id", id).eq("jugador_que_vota_id", user.id),
     isAdmin && !partido.jugado ? getMiembros(supabase, partido.grupo_id) : Promise.resolve([] as Profile[]),
+    partido.desafio_id
+      ? supabase.rpc("get_desafios", { p_grupo_id: partido.grupo_id, p_desafio_id: partido.desafio_id })
+      : Promise.resolve({ data: [] }),
   ]);
+  const desafio = ((desafioRaw ?? []) as DesafioVista[])[0] ?? null;
   const grupoVota = votaAlgo(config);
   const participantes = (participantesRaw ?? []) as unknown as ParticipanteRow[];
   const equipo1 = participantes.filter((p) => p.equipo === 1);
@@ -164,6 +173,22 @@ export default async function PartidoDetailPage({
 
   return (
     <div className="flex flex-col gap-8">
+      {desafio && (
+        <Card className="flex items-center gap-3 p-4">
+          <GrupoLogo src={desafio.rival_logo_url} nombre={desafio.rival_nombre} size={40} />
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-sm font-semibold text-white">Desafío vs {desafio.rival_nombre}</p>
+            <p className="truncate text-xs text-zinc-500">
+              {desafio.soy_desafiante ? "Los desafiaron ustedes" : "Los desafiaron a ustedes"} ·{" "}
+              <Link href={urlConGrupo("/partidos/desafios", partido.grupo_id)} className="text-primary-400 hover:text-primary-300">
+                Ver desafíos
+              </Link>
+            </p>
+          </div>
+          <Badge variant="gold">Desafío</Badge>
+        </Card>
+      )}
+
       {conConfirmacion && miRespuesta && <RespuestaCard partidoId={id} respuesta={miRespuesta} />}
 
       {isAdmin && !partido.jugado && (
@@ -180,6 +205,7 @@ export default async function PartidoDetailPage({
               ? Object.fromEntries(participantes.map((p) => [p.jugador_id, p.respuesta]))
               : undefined
           }
+          unSoloEquipo={!!partido.desafio_id}
         />
       )}
 
@@ -265,7 +291,20 @@ export default async function PartidoDetailPage({
         </section>
       )}
 
-      {isAdmin && (
+      {/* Un partido de desafío no se borra: se cancela el desafío (y se borra en los dos grupos). */}
+      {isAdmin && desafio && puedeCancelar(desafio, hoy) && (
+        <section>
+          <CancelarDesafio
+            desafioId={desafio.id}
+            grupoId={partido.grupo_id}
+            rival={desafio.rival_nombre}
+            aceptado
+            botonClassName="w-full rounded-xl border border-danger-500/20 bg-danger-500/10 px-4 py-2.5 text-sm font-semibold text-danger-400 transition hover:bg-danger-500/20"
+          />
+        </section>
+      )}
+
+      {isAdmin && !partido.desafio_id && (
         <section>
           <form
             action={async (formData) => {

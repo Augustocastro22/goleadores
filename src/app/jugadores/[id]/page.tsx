@@ -5,7 +5,7 @@ import { requireGrupo } from "@/lib/grupo";
 import { getConfig } from "@/lib/config";
 import { votacionCerrada } from "@/lib/votacion";
 import type { EstadoVotacion, Profile, RankingRow, Rol } from "@/lib/types";
-import { calcularResultado, RESULTADO_CLASS, type Resultado } from "@/lib/resultado";
+import { calcularResultado, RESULTADO_CLASS, RESULTADO_PLURAL, type Resultado } from "@/lib/resultado";
 import Card from "@/components/ui/Card";
 import Avatar from "@/components/ui/Avatar";
 import Badge from "@/components/ui/Badge";
@@ -112,9 +112,13 @@ export default async function JugadorDetallePage({
       const acc = acumulado.get(mp.partido_id) ?? { e1: 0, e2: 0 };
       const g1 = acc.e1 + mp.partidos.goles_otros;
       const g2 = acc.e2 + mp.partidos.goles_rival;
-      resultadosPorPartido.set(mp.partido_id, calcularResultado(g1, g2));
+      // Desde el lado del jugador: en un partido interno puede estar en el Equipo 2.
+      const resultado = mp.equipo === 2 ? calcularResultado(g2, g1) : calcularResultado(g1, g2);
+      resultadosPorPartido.set(mp.partido_id, resultado);
     }
   }
+  const conteo: Record<Resultado, number> = { G: 0, E: 0, P: 0 };
+  for (const resultado of resultadosPorPartido.values()) conteo[resultado] += 1;
 
   // Racha goleadora: partidos consecutivos (propios) convirtiendo al menos un gol.
   let rachaGolActual = 0;
@@ -243,6 +247,20 @@ export default async function JugadorDetallePage({
           {votaMvp && <StatCol value={vecesMvp} label="MVP" />}
           {votaPeor && <StatCol value={vecesPeor} label="Peor" />}
         </div>
+        {misPartidos.length > 0 && (
+          <div className="flex items-center justify-center gap-4">
+            {(["G", "E", "P"] as const).map((r) => (
+              <span key={r} className="flex items-center gap-1.5 text-xs text-zinc-500">
+                <span
+                  className={`flex h-6 min-w-6 items-center justify-center rounded-full px-1.5 text-xs font-bold tabular-nums ${RESULTADO_CLASS[r]}`}
+                >
+                  {conteo[r]}
+                </span>
+                {RESULTADO_PLURAL[r]}
+              </span>
+            ))}
+          </div>
+        )}
       </Card>
 
       {logros.length > 0 && (

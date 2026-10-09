@@ -41,6 +41,8 @@ export interface Partido {
   con_votacion: boolean;
   con_mvp: boolean;
   con_peor: boolean;
+  /** Si es el partido de este grupo en un desafío contra otro grupo (ver 0022_desafios.sql). */
+  desafio_id: string | null;
 }
 
 export type Equipo = 1 | 2;

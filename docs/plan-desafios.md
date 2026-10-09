@@ -1,7 +1,8 @@
 # Plan: desafíos entre grupos
 
-Estado: **para más adelante**, no está empezado. Antes de implementar, leer
-las guías de `node_modules/next/dist/docs/` que toquen (ver AGENTS.md).
+Estado: **etapa 1 implementada** (migración `0022_desafios.sql`, pantalla
+`/partidos/desafios`). Las etapas 2 a 4 siguen pendientes. Antes de seguir,
+leer las guías de `node_modules/next/dist/docs/` que toquen (ver AGENTS.md).
 
 ## Idea
 
@@ -144,7 +145,8 @@ La convocatoria y la votación siguen avisando como hoy, cada grupo por su lado.
 - **/desafios** (admins; los jugadores ven el historial): recibidos, enviados e
   historial. Botón "Desafiar a un grupo": se pega el código, se ve nombre y
   escudo del otro grupo para confirmar, y se completan fecha, hora y lugar.
-- **/admin:** código de desafío con compartir y regenerar.
+- **Código de desafío:** al pie de /partidos/desafios (no en /admin), con
+  compartir y regenerar.
 - **/partidos/[id]**, si es de desafío: un bloque con el otro grupo, el estado y
   las acciones que correspondan (suspender, proponer fecha, proponer resultado,
   aceptar, contraproponer, "no nos ponemos de acuerdo"), más el historial de
@@ -156,7 +158,7 @@ La convocatoria y la votación siguen avisando como hoy, cada grupo por su lado.
 
 ## Etapas
 
-1. **Desafiar:** código de desafío, crear / aceptar / rechazar / cancelar,
+1. ✅ **Desafiar:** código de desafío, crear / aceptar / rechazar / cancelar,
    partidos vinculados, avisos.
 2. **Suspender y reprogramar,** con la reconfirmación de convocados.
 3. **Resultado:** propuestas, contrapropuestas, auto-aceptación,
@@ -171,7 +173,23 @@ prod.
 - Si un grupo puede apagar los desafíos ("no recibir desafíos" en /admin).
   Solo afecta al propio grupo, así que no tiene el problema de los días de
   auto-aceptación.
-- Límite de desafíos pendientes de un grupo a otro, para que no se pueda
-  spamear.
 - Si un jugador que está en los dos grupos puede quedar convocado en los dos
   lados del mismo partido (hoy nada lo impide).
+
+## Decidido en la etapa 1
+
+- **Un solo desafío pendiente entre dos grupos** (en cualquiera de los dos
+  sentidos), para que no se pueda spamear. Lo controla un índice único.
+- **Vencido no se guarda:** un pendiente cuya fecha ya pasó se muestra como
+  vencido y ya no se puede aceptar. No hace falta cron para eso.
+- **Cancelar un aceptado** (antes de que algún grupo cargue el resultado)
+  borra el partido de los dos grupos y avisa a los convocados. Es la salida
+  hasta que exista suspender y reprogramar (etapa 2).
+- **Los partidos de desafío no se borran ni se editan** desde el partido ni
+  desde /admin: se cancela el desafío. En la convocatoria todos van al mismo
+  equipo.
+- **Arreglos de la revisión** (`0023_desafios_arreglos.sql`): los pendientes
+  vencidos pasan a estado `vencido` en la base (antes trababan nuevos
+  desafíos entre los mismos grupos), al borrar un grupo se cancelan sus
+  pendientes, cancelar recibe el estado que vio el admin, y el resultado de un
+  desafío se carga recién después de jugar el partido.
