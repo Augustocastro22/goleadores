@@ -69,7 +69,7 @@ export default function DesafiarForm({ hoy }: { hoy: string }) {
           }}
         >
           <Label>
-            Código de desafío del otro grupo
+            Link o código de desafío del otro grupo
             <Input
               type="text"
               value={codigo}

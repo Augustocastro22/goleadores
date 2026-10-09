@@ -13,6 +13,8 @@ const NO_AUTH_REQUIRED_PATHS = [
   // La invitación se ve sin sesión: muestra el grupo y ofrece entrar o crear
   // la cuenta (ver src/app/unirse/[codigo]/page.tsx).
   "/unirse/",
+  // Lo mismo con el link de desafío (ver src/app/desafiar/[codigo]/page.tsx).
+  "/desafiar/",
   "/privacidad",
   "/contacto",
   // La imagen de la vista previa de los links: la pide WhatsApp, sin sesión.

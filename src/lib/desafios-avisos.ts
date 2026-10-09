@@ -96,13 +96,20 @@ async function cargarLados(desafioId: string) {
 export async function avisarDesafio(
   desafioId: string,
   evento: EventoDesafio,
-  opts: { grupoQueActua?: string | null; excluir?: string | null; fechaRechazada?: string } = {}
+  opts: {
+    grupoQueActua?: string | null;
+    excluir?: string | null;
+    /** Apodo de quien hizo el cambio, para avisarles a los demás admins de su grupo. */
+    actor?: string | null;
+    fechaRechazada?: string;
+  } = {}
 ) {
   try {
     const cargado = await cargarLados(desafioId);
     if (!cargado) return;
     const { d, lados, pendiente } = cargado;
     const actua = lados.find((l) => l.grupoId === opts.grupoQueActua) ?? null;
+    const quien = opts.actor || "Un admin";
     const marcador = (gd: number | null, gdo: number | null) =>
       `${d.nombre_desafiante} ${gd ?? "?"} – ${gdo ?? "?"} ${d.nombre_desafiado}`;
 
@@ -116,24 +123,31 @@ export async function avisarDesafio(
       let body = "";
 
       switch (evento) {
+        // En los eventos de un solo grupo, a los demás admins del grupo que
+        // actuó se les avisa qué hizo su compañero (al que actuó, nunca).
         case "suspendido":
-          destinatarios = [...lado.convocados, ...(esElQueActua ? [] : lado.admins)];
+          destinatarios = [...lado.convocados, ...lado.admins];
           title = "Se suspendió el partido";
           body = esElQueActua
-            ? `El partido contra ${lado.rival} del ${fechaDesafio(d.fecha, d.hora)} se suspendió.`
+            ? `${quien} suspendió el partido contra ${lado.rival} del ${fechaDesafio(d.fecha, d.hora)}.`
             : `${lado.rival} suspendió el partido del ${fechaDesafio(d.fecha, d.hora)}.`;
           break;
-        case "fecha_propuesta":
-          if (esElQueActua || !d.propuesta_fecha) continue;
+        case "fecha_propuesta": {
+          if (!d.propuesta_fecha) continue;
+          const nueva = `${fechaDesafio(d.propuesta_fecha, d.propuesta_hora)} en ${d.propuesta_lugar}`;
           destinatarios = lado.admins;
-          title = "Proponen otra fecha";
-          body = `${lado.rival} propone jugar el ${fechaDesafio(d.propuesta_fecha, d.propuesta_hora)} en ${d.propuesta_lugar}. Aceptala o rechazala.`;
+          title = esElQueActua ? "Propusieron otra fecha" : "Proponen otra fecha";
+          body = esElQueActua
+            ? `${quien} le propuso a ${lado.rival} jugar el ${nueva}.`
+            : `${lado.rival} propone jugar el ${nueva}. Aceptala o rechazala.`;
           break;
+        }
         case "fecha_rechazada":
-          if (esElQueActua) continue;
           destinatarios = lado.admins;
           title = "Rechazaron la fecha";
-          body = `${lado.rival} no puede el ${opts.fechaRechazada ?? "día propuesto"}. Podés proponer otra.`;
+          body = esElQueActua
+            ? `${quien} le dijo a ${lado.rival} que no pueden el ${opts.fechaRechazada ?? "día propuesto"}.`
+            : `${lado.rival} no puede el ${opts.fechaRechazada ?? "día propuesto"}. Podés proponer otra.`;
           break;
         case "fecha_aceptada":
         case "fecha_auto":
@@ -143,12 +157,16 @@ export async function avisarDesafio(
             `El partido contra ${lado.rival} ahora es el ${fechaDesafio(d.fecha, d.hora)} en ${d.lugar}.` +
             (lado.pideConfirmacion ? " Confirmá si jugás." : "");
           break;
-        case "resultado_propuesto":
-          if (esElQueActua || !pendiente) continue;
+        case "resultado_propuesto": {
+          if (!pendiente) continue;
+          const cargado = marcador(pendiente.goles_desafiante, pendiente.goles_desafiado);
           destinatarios = lado.admins;
           title = "Cargaron el resultado";
-          body = `${lado.rival} cargó ${marcador(pendiente.goles_desafiante, pendiente.goles_desafiado)}. Confirmalo o corregilo.`;
+          body = esElQueActua
+            ? `${quien} cargó ${cargado}. Falta que ${lado.rival} lo confirme.`
+            : `${lado.rival} cargó ${cargado}. Confirmalo o corregilo.`;
           break;
+        }
         case "resultado_verificado":
         case "resultado_auto":
           destinatarios = [...lado.convocados, ...lado.admins];

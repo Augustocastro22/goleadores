@@ -40,6 +40,12 @@ async function adminsDe(grupoId: string | null): Promise<string[]> {
   return (data ?? []).map((m) => m.jugador_id);
 }
 
+/** Apodo de quien hizo un cambio, para el aviso a los demás admins de su grupo. */
+async function apodoDe(userId: string): Promise<string> {
+  const { data } = await createAdminClient().from("profiles").select("apodo").eq("id", userId).maybeSingle();
+  return data?.apodo || "Un admin";
+}
+
 /** Partido de cada grupo de un desafío, con sus convocados (service role, por lo mismo). */
 async function partidosDelDesafio(desafioId: string) {
   const { data, error } = await createAdminClient()
@@ -85,7 +91,11 @@ export async function buscarGrupoParaDesafiar(codigo: string) {
 }
 
 export async function crearDesafio(formData: FormData) {
-  const { supabase, user, grupo } = await getContexto();
+  const ctx = await getContexto();
+  const { supabase, user } = ctx;
+  // Desde el link de desafío se elige el grupo; desde /partidos/desafios es el activo.
+  const grupoElegido = String(formData.get("grupo_id") ?? "") || ctx.grupo?.id || "";
+  const grupo = ctx.grupos.find((g) => g.id === grupoElegido);
   if (!user || grupo?.rol !== "admin") return { error: "Solo el admin puede desafiar a otro grupo." };
 
   const codigo = extraerCodigo(String(formData.get("codigo") ?? ""));
@@ -106,15 +116,22 @@ export async function crearDesafio(formData: FormData) {
   after(async () => {
     const desafio = await getDesafio(desafioId as string);
     if (!desafio?.grupo_desafiado_id) return;
+    const cuando = `${fechaDesafio(fecha, hora)} en ${lugar}`;
     await enviarPush((await adminsDe(desafio.grupo_desafiado_id)).filter((id) => id !== user.id), {
       title: "¡Los desafiaron!",
-      body: `${desafio.nombre_desafiante} quiere jugar el ${fechaDesafio(fecha, hora)} en ${lugar}. Aceptá o rechazá el desafío.`,
+      body: `${desafio.nombre_desafiante} quiere jugar el ${cuando}. Aceptá o rechazá el desafío.`,
       url: urlConGrupo(DESAFIOS_URL, desafio.grupo_desafiado_id),
+    });
+    // Los demás admins del grupo que desafió.
+    await enviarPush((await adminsDe(grupo.id)).filter((id) => id !== user.id), {
+      title: "Mandaron un desafío",
+      body: `${await apodoDe(user.id)} desafió a ${desafio.nombre_desafiado} para el ${cuando}.`,
+      url: urlConGrupo(DESAFIOS_URL, grupo.id),
     });
   });
 
   revalidar();
-  redirect(DESAFIOS_URL);
+  redirect(urlConGrupo(DESAFIOS_URL, grupo.id));
 }
 
 export async function responderDesafio(formData: FormData) {
@@ -145,12 +162,22 @@ export async function responderDesafio(formData: FormData) {
           }
         );
       }
-    } else if (desafio.grupo_desafiante_id) {
-      await enviarPush((await adminsDe(desafio.grupo_desafiante_id)).filter((id) => id !== user.id), {
-        title: "Rechazaron el desafío",
-        body: `${desafio.nombre_desafiado} no juega el ${cuando}.`,
-        url: urlConGrupo(DESAFIOS_URL, desafio.grupo_desafiante_id),
-      });
+    } else {
+      if (desafio.grupo_desafiante_id) {
+        await enviarPush((await adminsDe(desafio.grupo_desafiante_id)).filter((id) => id !== user.id), {
+          title: "Rechazaron el desafío",
+          body: `${desafio.nombre_desafiado} no juega el ${cuando}.`,
+          url: urlConGrupo(DESAFIOS_URL, desafio.grupo_desafiante_id),
+        });
+      }
+      // Los demás admins del grupo que rechazó.
+      if (desafio.grupo_desafiado_id) {
+        await enviarPush((await adminsDe(desafio.grupo_desafiado_id)).filter((id) => id !== user.id), {
+          title: "Rechazaron el desafío",
+          body: `${await apodoDe(user.id)} rechazó el desafío de ${desafio.nombre_desafiante} del ${cuando}.`,
+          url: urlConGrupo(DESAFIOS_URL, desafio.grupo_desafiado_id),
+        });
+      }
     }
   });
 
@@ -197,11 +224,19 @@ export async function cancelarDesafio(formData: FormData) {
   const cuando = fechaDesafio(desafio.fecha, desafio.hora);
 
   after(async () => {
+    const apodo = await apodoDe(user.id);
     if (desafio.estado === "pendiente") {
       await enviarPush((await adminsDe(otroId)).filter((id) => id !== user.id), {
         title: "Cancelaron el desafío",
         body: `${miNombre} retiró el desafío del ${cuando}.`,
         url: urlConGrupo(DESAFIOS_URL, otroId ?? ""),
+      });
+      // Los demás admins del grupo que lo retiró.
+      const otroNombre = soyDesafiante ? desafio.nombre_desafiado : desafio.nombre_desafiante;
+      await enviarPush((await adminsDe(grupoId)).filter((id) => id !== user.id), {
+        title: "Retiraron el desafío",
+        body: `${apodo} retiró el desafío a ${otroNombre} del ${cuando}.`,
+        url: urlConGrupo(DESAFIOS_URL, grupoId),
       });
     } else {
       for (const partido of partidos) {
@@ -210,15 +245,15 @@ export async function cancelarDesafio(formData: FormData) {
           partido.grupo_id === desafio.grupo_desafiante_id ? desafio.nombre_desafiado : desafio.nombre_desafiante;
         const destinatarios = [
           ...partido.partido_jugadores.map((pj) => pj.jugador_id),
-          // Los admins del otro grupo se enteran aunque todavía no se hayan convocado.
-          ...(esMiGrupo ? [] : await adminsDe(partido.grupo_id)),
+          // Los admins de los dos grupos se enteran aunque no estén convocados.
+          ...(await adminsDe(partido.grupo_id)),
         ];
         await enviarPush(
           destinatarios.filter((id) => id !== user.id),
           {
             title: "Se canceló el partido",
             body: esMiGrupo
-              ? `El partido contra ${rival} del ${cuando} se canceló.`
+              ? `${apodo} canceló el partido contra ${rival} del ${cuando}.`
               : `${miNombre} canceló el partido del ${cuando}.`,
             url: urlConGrupo(DESAFIOS_URL, partido.grupo_id),
           }
@@ -264,7 +299,7 @@ async function desdeGrupo(formData: FormData) {
   );
   const grupoId = grupos.find((id) => id === formData.get("grupo_id")) ?? grupos[0];
   if (!grupoId) return null;
-  return { supabase: ctx.supabase, userId: ctx.user.id, desafio, grupoId };
+  return { supabase: ctx.supabase, userId: ctx.user.id, desafio, grupoId, actor: await apodoDe(ctx.user.id) };
 }
 
 const SIN_PERMISO = { error: "Solo un admin de los grupos del desafío puede hacer esto." };
@@ -277,7 +312,7 @@ export async function suspenderDesafio(formData: FormData) {
     p_grupo_id: x.grupoId,
   });
   if (error) return { error: error.message };
-  after(() => avisarDesafio(x.desafio.id, "suspendido", { grupoQueActua: x.grupoId, excluir: x.userId }));
+  after(() => avisarDesafio(x.desafio.id, "suspendido", { grupoQueActua: x.grupoId, excluir: x.userId, actor: x.actor }));
   revalidar();
   return { success: true };
 }
@@ -298,7 +333,7 @@ export async function proponerFechaDesafio(formData: FormData) {
     p_lugar: lugar,
   });
   if (error) return { error: error.message };
-  after(() => avisarDesafio(x.desafio.id, "fecha_propuesta", { grupoQueActua: x.grupoId, excluir: x.userId }));
+  after(() => avisarDesafio(x.desafio.id, "fecha_propuesta", { grupoQueActua: x.grupoId, excluir: x.userId, actor: x.actor }));
   revalidar();
   return { success: true };
 }
@@ -324,7 +359,7 @@ export async function responderFechaDesafio(formData: FormData) {
   after(() =>
     avisarDesafio(x.desafio.id, acepta ? "fecha_aceptada" : "fecha_rechazada", {
       grupoQueActua: x.grupoId,
-      excluir: x.userId,
+      excluir: x.userId, actor: x.actor,
       fechaRechazada,
     })
   );
@@ -353,7 +388,7 @@ export async function proponerResultadoDesafio(formData: FormData) {
   after(() =>
     avisarDesafio(x.desafio.id, resultado === "verificado" ? "resultado_verificado" : "resultado_propuesto", {
       grupoQueActua: x.grupoId,
-      excluir: x.userId,
+      excluir: x.userId, actor: x.actor,
     })
   );
   revalidar();
@@ -368,7 +403,7 @@ export async function aceptarResultadoDesafio(formData: FormData) {
     p_grupo_id: x.grupoId,
   });
   if (error) return { error: error.message };
-  after(() => avisarDesafio(x.desafio.id, "resultado_verificado", { grupoQueActua: x.grupoId, excluir: x.userId }));
+  after(() => avisarDesafio(x.desafio.id, "resultado_verificado", { grupoQueActua: x.grupoId, excluir: x.userId, actor: x.actor }));
   revalidar();
   return { success: true };
 }
@@ -381,7 +416,7 @@ export async function cortarResultadoDesafio(formData: FormData) {
     p_grupo_id: x.grupoId,
   });
   if (error) return { error: error.message };
-  after(() => avisarDesafio(x.desafio.id, "resultado_sin_verificar", { grupoQueActua: x.grupoId, excluir: x.userId }));
+  after(() => avisarDesafio(x.desafio.id, "resultado_sin_verificar", { grupoQueActua: x.grupoId, excluir: x.userId, actor: x.actor }));
   revalidar();
   return { success: true };
 }

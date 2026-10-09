@@ -204,6 +204,10 @@ describe("extraerCodigo", () => {
     expect(extraerCodigo("Desafiá a Los Pibes en Goleadores con este código: 3fa9c01b2e")).toBe("3fa9c01b2e");
   });
 
+  it("saca el código del link de desafío", () => {
+    expect(extraerCodigo("https://goleadores.ar/desafiar/3fa9c01b2e")).toBe("3fa9c01b2e");
+  });
+
   it("acepta el código solo, con espacios o en mayúsculas", () => {
     expect(extraerCodigo("  3FA9C01B2E ")).toBe("3fa9c01b2e");
   });

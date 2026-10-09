@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { requireGrupo } from "@/lib/grupo";
+import { getSiteUrl } from "@/lib/site-url";
 import { hoyArgentina } from "@/lib/confirmacion";
 import { seccionDesafio, type DesafioVista, type SeccionDesafio } from "@/lib/desafios";
 import { regenerarCodigoDesafio } from "@/lib/actions/desafios";
@@ -66,7 +67,7 @@ export default async function DesafiosPage() {
           Todavía no hay desafíos.
           {esAdmin && (
             <span className="mt-1 block">
-              Pedile el código de desafío a un admin del otro grupo, o pasale el de ustedes (está
+              Pedile el link de desafío a un admin del otro grupo, o pasale el de ustedes (está
               abajo).
             </span>
           )}
@@ -92,19 +93,22 @@ export default async function DesafiosPage() {
 
       {esAdmin && grupoRow?.codigo_desafio && (
         <Card className="p-5">
-          <h2 className="mb-1 font-bold text-white">Código de desafío de {grupo.nombre}</h2>
+          <h2 className="mb-1 font-bold text-white">Link de desafío de {grupo.nombre}</h2>
           <p className="mb-4 text-xs text-zinc-500">
-            Pasáselo al admin de otro grupo para que los desafíe. Solo sirve para desafiar: no deja
-            entrar al grupo ni ver nada de ustedes.
+            Mandáselo por WhatsApp al admin de otro grupo: lo abre y los desafía desde ahí. Solo sirve
+            para desafiar: no deja entrar al grupo ni ver nada de ustedes.
           </p>
-          <CodigoDesafio codigo={grupoRow.codigo_desafio} nombreGrupo={grupo.nombre} />
+          <CodigoDesafio
+            url={`${await getSiteUrl()}/desafiar/${grupoRow.codigo_desafio}`}
+            nombreGrupo={grupo.nombre}
+          />
           <ActionForm action={regenerarCodigoDesafio} className="mt-3 flex flex-col gap-1">
             <ConfirmSubmitButton
-              confirmMessage="¿Generar un código nuevo? El actual deja de funcionar (los desafíos que ya mandaron siguen igual)."
+              confirmMessage="¿Generar un link nuevo? El actual deja de funcionar (los desafíos que ya mandaron siguen igual)."
               confirmLabel="Generar"
               className={buttonClass("ghost", "sm", "self-start !px-2 text-xs")}
             >
-              Generar código nuevo
+              Generar link nuevo
             </ConfirmSubmitButton>
           </ActionForm>
         </Card>

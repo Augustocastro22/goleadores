@@ -14,3 +14,22 @@ export const getGrupoDeInvitacion = cache(async (codigo: string) => {
     .maybeSingle<{ nombre: string; logo_url: string | null }>();
   return data ? { nombre: data.nombre, logoUrl: data.logo_url } : null;
 });
+
+/**
+ * Lo mismo para un link de desafío (/desafiar/<codigo>): nombre, escudo y
+ * con cuántos desafíos jugados y sin verificar viene el grupo.
+ */
+export const getGrupoDeDesafio = cache(async (codigo: string) => {
+  const { data } = await createAdminClient()
+    .rpc("get_grupo_por_codigo_desafio", { p_codigo: codigo })
+    .maybeSingle<{ id: string; nombre: string; logo_url: string | null; jugados: number; sin_verificar: number }>();
+  return data
+    ? {
+        id: data.id,
+        nombre: data.nombre,
+        logoUrl: data.logo_url,
+        jugados: Number(data.jugados),
+        sinVerificar: Number(data.sin_verificar),
+      }
+    : null;
+});

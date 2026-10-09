@@ -12,6 +12,7 @@ export default async function SignupPage({
 }) {
   const { error, next } = await searchParams;
   const vieneDeInvitacion = next?.startsWith("/unirse/");
+  const vieneDeDesafio = next?.startsWith("/desafiar/");
 
   return (
     <div className="flex min-h-[70vh] flex-col items-center justify-center">
@@ -21,7 +22,9 @@ export default async function SignupPage({
         <p className="text-sm text-zinc-500">
           {vieneDeInvitacion
             ? "Creá tu cuenta y te sumamos al grupo"
-            : "Sumate para votar y ver tus estadísticas"}
+            : vieneDeDesafio
+              ? "Creá tu cuenta para mandar el desafío"
+              : "Sumate para votar y ver tus estadísticas"}
         </p>
       </div>
 

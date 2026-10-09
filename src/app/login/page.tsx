@@ -12,6 +12,7 @@ export default async function LoginPage({
 }) {
   const { error, aviso, next } = await searchParams;
   const vieneDeInvitacion = next?.startsWith("/unirse/");
+  const vieneDeDesafio = next?.startsWith("/desafiar/");
 
   return (
     <div className="flex min-h-[70vh] flex-col items-center justify-center">
@@ -21,7 +22,9 @@ export default async function LoginPage({
         <p className="text-sm text-zinc-500">
           {vieneDeInvitacion
             ? "Entrá con tu cuenta para sumarte al grupo"
-            : "Entrá para ver partidos y estadísticas"}
+            : vieneDeDesafio
+              ? "Entrá con tu cuenta para mandar el desafío"
+              : "Entrá para ver partidos y estadísticas"}
         </p>
       </div>
 
