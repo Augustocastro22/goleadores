@@ -6,12 +6,15 @@ import Card from "@/components/ui/Card";
 import Avatar from "@/components/ui/Avatar";
 import { IconGoal, IconThumbsDown, IconTrophy } from "@/components/icons";
 import { ComponentType, SVGProps } from "react";
+import GrupoLogo from "@/components/ui/GrupoLogo";
+import { historialDesafios, type DesafioVista, type HistorialRival } from "@/lib/desafios";
+import { RESULTADO_CLASS, RESULTADO_PLURAL } from "@/lib/resultado";
 
 export default async function EstadisticasPage() {
   const { supabase, grupo } = await requireGrupo();
   // Cada ranking de votos se muestra solo si el grupo vota esa categoría (los
   // votos de cuando sí votaba quedan guardados y vuelven si se reactiva).
-  const [config, goleadores, mvp, peor, partidosRes] = await Promise.all([
+  const [config, goleadores, mvp, peor, partidosRes, desafiosRes] = await Promise.all([
     getConfig(supabase, grupo.id),
     supabase.rpc("get_goleadores", { p_grupo_id: grupo.id }),
     supabase.rpc("get_ranking_votos", { p_grupo_id: grupo.id, p_tipo: "MVP" }),
@@ -25,7 +28,9 @@ export default async function EstadisticasPage() {
       .order("fecha", { ascending: false })
       .order("created_at", { ascending: false })
       .limit(10),
+    supabase.rpc("get_desafios", { p_grupo_id: grupo.id }),
   ]);
+  const historial = historialDesafios((desafiosRes.data ?? []) as DesafioVista[]);
   const votacionActiva = grupoVota(config);
 
   // Estado de la votación de los últimos partidos, todos a la vez (no uno
@@ -100,7 +105,44 @@ export default async function EstadisticasPage() {
           ultimoPartidoGanadores={ultimoPeor}
         />
       )}
+      {historial.length > 0 && <HistorialDesafios filas={historial} />}
     </div>
+  );
+}
+
+/** Contra cada grupo desafiado: G/E/P de los resultados verificados y los sin verificar. */
+function HistorialDesafios({ filas }: { filas: HistorialRival[] }) {
+  return (
+    <section>
+      <h2 className="mb-1 text-lg font-bold text-white">Desafíos</h2>
+      <p className="mb-3 text-xs text-zinc-500">
+        Contra otros grupos. Los sin verificar (sin acuerdo en el resultado) no cuentan como ganados ni
+        perdidos.
+      </p>
+      <Card className="divide-y divide-border overflow-hidden py-1">
+        {filas.map((f) => (
+          <div key={f.rivalNombre} className="flex items-center gap-3 px-4 py-3">
+            <GrupoLogo src={f.rivalLogoUrl} nombre={f.rivalNombre} size={32} />
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm font-semibold text-white">vs {f.rivalNombre}</p>
+              {f.sinVerificar > 0 && <p className="text-xs text-zinc-500">{f.sinVerificar} sin verificar</p>}
+            </div>
+            <div className="flex shrink-0 gap-1.5">
+              {(["G", "E", "P"] as const).map((r) => (
+                <span
+                  key={r}
+                  className={`flex h-7 min-w-7 items-center justify-center rounded-full px-1.5 text-xs font-bold tabular-nums ${RESULTADO_CLASS[r]}`}
+                  title={RESULTADO_PLURAL[r]}
+                >
+                  {r === "G" ? f.ganados : r === "E" ? f.empatados : f.perdidos}
+                  {r}
+                </span>
+              ))}
+            </div>
+          </div>
+        ))}
+      </Card>
+    </section>
   );
 }
 

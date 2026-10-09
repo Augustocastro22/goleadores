@@ -74,7 +74,7 @@ export default async function DesafiosPage() {
       ) : (
         SECCIONES.filter((s) => porSeccion.has(s.id)).map((s) => (
           <section key={s.id}>
-            <h2 className="mb-3 text-lg font-bold text-white">{s.titulo}</h2>
+            <h2 className="mb-3 text-lg font-bold text-white">{s.id === "responder" && !esAdmin ? "Esperando respuesta de los admins" : s.titulo}</h2>
             <div className="flex flex-col gap-3">
               {porSeccion.get(s.id)!.map((d) => (
                 <DesafioCard

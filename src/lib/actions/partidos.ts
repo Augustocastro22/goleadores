@@ -9,6 +9,7 @@ import { getContexto, rolEn } from "@/lib/grupo";
 import { urlConGrupo } from "@/lib/grupo-cookie";
 import { hoyArgentina, partidoYaPaso } from "@/lib/confirmacion";
 import type { Respuesta } from "@/lib/types";
+import type { DesafioVista } from "@/lib/desafios";
 
 /** Si el usuario es admin del grupo al que pertenece el partido. */
 async function requireAdminDePartido(partidoId: string) {
@@ -310,6 +311,27 @@ export async function guardarGolesPartido({ partidoId, goles, golesOtros, golesR
   // pueda cancelar: no vale hacerlo antes de que se juegue.
   if (partido.desafio_id && !partidoYaPaso(partido.fecha, partido.hora)) {
     return { error: "Es un desafío: el resultado se carga después de jugar el partido." };
+  }
+  // En un desafío el marcador es el del desafío (el acordado, o la última
+  // versión de este grupo): los goles del rival salen de ahí, y lo que no
+  // suman los jugadores va a "otros". Se ignora lo que venga del form.
+  if (partido.desafio_id) {
+    const { data: desafioRaw } = await supabase.rpc("get_desafios", {
+      p_grupo_id: grupoId,
+      p_desafio_id: partido.desafio_id,
+    });
+    const desafio = ((desafioRaw ?? []) as DesafioVista[])[0];
+    if (!desafio || desafio.marcador_mios === null || desafio.marcador_rival === null) {
+      return { error: "Primero cargá el resultado del desafío (arriba), después los goles de cada uno." };
+    }
+    const deJugadores = goles.reduce((total, g) => total + g.goles, 0);
+    if (deJugadores > desafio.marcador_mios) {
+      return {
+        error: `Cargaste ${deJugadores} goles de jugadores, pero en el resultado del desafío hicieron ${desafio.marcador_mios}.`,
+      };
+    }
+    golesOtros = desafio.marcador_mios - deJugadores;
+    golesRival = desafio.marcador_rival;
   }
 
   // La primera vez que se cargan los goles se decide qué vota el partido

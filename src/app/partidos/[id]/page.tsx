@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { getContexto, getMiembros, rolEn } from "@/lib/grupo";
 import { getConfig, grupoVota as votaAlgo } from "@/lib/config";
@@ -13,11 +12,10 @@ import Badge from "@/components/ui/Badge";
 import Avatar from "@/components/ui/Avatar";
 import ConfirmSubmitButton from "@/components/ConfirmSubmitButton";
 import { IconChevronRight } from "@/components/icons";
-import GrupoLogo from "@/components/ui/GrupoLogo";
-import { puedeCancelar, type DesafioVista } from "@/lib/desafios";
-import { CancelarDesafio } from "../desafios/AccionesDesafio";
-import { urlConGrupo } from "@/lib/grupo-cookie";
+import type { DesafioVista } from "@/lib/desafios";
 import GolesEditor from "./GolesEditor";
+import DesafioPanel, { type PropuestaResultado } from "./DesafioPanel";
+import type { Ocupado } from "./ConvocadosEditor";
 import ConvocadosEditor from "./ConvocadosEditor";
 import { PendientesCard, RespuestaBadge, RespuestaCard, ResumenRespuestas } from "./Confirmacion";
 
@@ -91,19 +89,44 @@ export default async function PartidoDetailPage({
   const jugadorPorId = new Map(participantes.map((p) => [p.jugador_id, p.profiles]));
 
   let bloqueos: Bloqueo[] = [];
+  let ocupados: Ocupado[] = [];
   if (isAdmin && !partido.jugado) {
-    const { data: bloqueosData } = await supabase
-      .from("bloqueos_disponibilidad")
-      .select("*")
-      .in(
-        "jugador_id",
-        todosLosJugadores.map((j) => j.id)
-      )
-      // Los generales y los de este grupo; no los que el jugador marcó para otro grupo.
-      .or(`grupo_id.is.null,grupo_id.eq.${partido.grupo_id}`)
-      .returns<Bloqueo[]>();
+    const [{ data: bloqueosData }, { data: ocupadosData }] = await Promise.all([
+      supabase
+        .from("bloqueos_disponibilidad")
+        .select("*")
+        .in(
+          "jugador_id",
+          todosLosJugadores.map((j) => j.id)
+        )
+        // Los generales y los de este grupo; no los que el jugador marcó para otro grupo.
+        .or(`grupo_id.is.null,grupo_id.eq.${partido.grupo_id}`)
+        .returns<Bloqueo[]>(),
+      // Los que ese día ya están convocados en un partido de otro grupo.
+      supabase.rpc("get_ocupados_otro_grupo", { p_grupo_id: partido.grupo_id, p_fecha: partido.fecha }),
+    ]);
     bloqueos = bloqueosData ?? [];
+    ocupados = (ocupadosData ?? []) as Ocupado[];
   }
+
+  // Desafío: el ida y vuelta del resultado entre los dos grupos.
+  let propuestas: PropuestaResultado[] = [];
+  if (desafio && desafio.resultado_estado !== "sin_cargar") {
+    const { data: propuestasData } = await supabase
+      .from("desafio_resultados")
+      .select("id, propuesto_por_grupo_id, goles_desafiante, goles_desafiado, estado, created_at")
+      .eq("desafio_id", desafio.id)
+      .order("created_at", { ascending: false });
+    propuestas = (propuestasData ?? []).map((p) => ({
+      id: p.id,
+      mia: p.propuesto_por_grupo_id === partido.grupo_id,
+      mios: desafio.soy_desafiante ? p.goles_desafiante : p.goles_desafiado,
+      rival: desafio.soy_desafiante ? p.goles_desafiado : p.goles_desafiante,
+      estado: p.estado,
+      createdAt: p.created_at,
+    }));
+  }
+  const golesDeJugadores = participantes.filter((p) => p.equipo === 1).reduce((t, p) => t + p.goles, 0);
 
   const yaVoteMvp = (misVotos ?? []).some((v) => v.tipo === "MVP");
   const yaVotePeor = (misVotos ?? []).some((v) => v.tipo === "PEOR");
@@ -174,19 +197,14 @@ export default async function PartidoDetailPage({
   return (
     <div className="flex flex-col gap-8">
       {desafio && (
-        <Card className="flex items-center gap-3 p-4">
-          <GrupoLogo src={desafio.rival_logo_url} nombre={desafio.rival_nombre} size={40} />
-          <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-semibold text-white">Desafío vs {desafio.rival_nombre}</p>
-            <p className="truncate text-xs text-zinc-500">
-              {desafio.soy_desafiante ? "Los desafiaron ustedes" : "Los desafiaron a ustedes"} ·{" "}
-              <Link href={urlConGrupo("/partidos/desafios", partido.grupo_id)} className="text-primary-400 hover:text-primary-300">
-                Ver desafíos
-              </Link>
-            </p>
-          </div>
-          <Badge variant="gold">Desafío</Badge>
-        </Card>
+        <DesafioPanel
+          desafio={desafio}
+          grupoId={partido.grupo_id}
+          isAdmin={isAdmin}
+          hoy={hoy}
+          propuestas={propuestas}
+          golesDeJugadores={golesDeJugadores}
+        />
       )}
 
       {conConfirmacion && miRespuesta && <RespuestaCard partidoId={id} respuesta={miRespuesta} />}
@@ -206,6 +224,7 @@ export default async function PartidoDetailPage({
               : undefined
           }
           unSoloEquipo={!!partido.desafio_id}
+          ocupados={ocupados}
         />
       )}
 
@@ -232,6 +251,9 @@ export default async function PartidoDetailPage({
           golesOtrosInit={partido.goles_otros}
           golesRivalInit={partido.goles_rival}
           isAdmin={isAdmin}
+          marcadorDesafio={
+            desafio ? { mios: desafio.marcador_mios, rival: desafio.marcador_rival } : undefined
+          }
         />
       ) : (
         <EventoProgramado
@@ -291,19 +313,7 @@ export default async function PartidoDetailPage({
         </section>
       )}
 
-      {/* Un partido de desafío no se borra: se cancela el desafío (y se borra en los dos grupos). */}
-      {isAdmin && desafio && puedeCancelar(desafio, hoy) && (
-        <section>
-          <CancelarDesafio
-            desafioId={desafio.id}
-            grupoId={partido.grupo_id}
-            rival={desafio.rival_nombre}
-            aceptado
-            botonClassName="w-full rounded-xl border border-danger-500/20 bg-danger-500/10 px-4 py-2.5 text-sm font-semibold text-danger-400 transition hover:bg-danger-500/20"
-          />
-        </section>
-      )}
-
+      {/* Un partido de desafío no se borra: se cancela el desafío, desde su panel (arriba). */}
       {isAdmin && !partido.desafio_id && (
         <section>
           <form

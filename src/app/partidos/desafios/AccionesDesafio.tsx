@@ -3,6 +3,7 @@ import ActionForm from "@/components/ActionForm";
 import SubmitButton from "@/components/SubmitButton";
 import ConfirmSubmitButton from "@/components/ConfirmSubmitButton";
 import { buttonClass } from "@/components/ui/Button";
+import type { EstadoDesafio } from "@/lib/desafios";
 
 /** Aceptar o rechazar un desafío recibido. */
 export function ResponderDesafio({ desafioId, rival }: { desafioId: string; rival: string }) {
@@ -35,32 +36,35 @@ export function CancelarDesafio({
   desafioId,
   grupoId,
   rival,
-  aceptado,
+  estado,
   botonClassName,
 }: {
   desafioId: string;
   /** El grupo desde el que se cancela (el de la pantalla). */
   grupoId: string;
   rival: string;
-  aceptado: boolean;
+  /** El estado que se ve en pantalla (si cambió mientras tanto, la base no cancela). */
+  estado: EstadoDesafio;
   /** Para reemplazar el estilo del botón (en la página del partido va ancho, como Eliminar). */
   botonClassName?: string;
 }) {
+  // Pendiente: todavía no hay partido, se retira el desafío.
+  const partidoArmado = estado !== "pendiente";
   return (
     <ActionForm action={cancelarDesafio} className="flex flex-col gap-1">
       <input type="hidden" name="desafio_id" value={desafioId} />
       <input type="hidden" name="grupo_id" value={grupoId} />
-      <input type="hidden" name="estado" value={aceptado ? "aceptado" : "pendiente"} />
+      <input type="hidden" name="estado" value={estado} />
       <ConfirmSubmitButton
         confirmMessage={
-          aceptado
+          partidoArmado
             ? `¿Cancelar el partido contra ${rival}? Se borra el partido de los dos grupos y se les avisa a los convocados.`
             : `¿Retirar el desafío a ${rival}?`
         }
-        confirmLabel={aceptado ? "Cancelar partido" : "Retirar"}
+        confirmLabel={partidoArmado ? "Cancelar partido" : "Retirar"}
         className={botonClassName ?? buttonClass("ghost", "sm", "!text-danger-400 hover:!text-danger-300")}
       >
-        {aceptado ? "Cancelar partido" : "Retirar desafío"}
+        {partidoArmado ? "Cancelar partido" : "Retirar desafío"}
       </ConfirmSubmitButton>
     </ActionForm>
   );

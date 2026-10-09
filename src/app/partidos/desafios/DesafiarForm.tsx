@@ -18,7 +18,12 @@ import SubmitButton from "@/components/SubmitButton";
 export default function DesafiarForm({ hoy }: { hoy: string }) {
   const [abierto, setAbierto] = useState(false);
   const [codigo, setCodigo] = useState("");
-  const [rival, setRival] = useState<{ nombre: string; logoUrl: string | null } | null>(null);
+  const [rival, setRival] = useState<{
+    nombre: string;
+    logoUrl: string | null;
+    jugados: number;
+    sinVerificar: number;
+  } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [buscando, startBuscar] = useTransition();
 
@@ -83,7 +88,14 @@ export default function DesafiarForm({ hoy }: { hoy: string }) {
         <ActionForm action={crearDesafio} className="flex flex-col gap-3">
           <div className="flex items-center gap-3 rounded-xl border border-border bg-white/5 px-3.5 py-2.5">
             <GrupoLogo src={rival.logoUrl} nombre={rival.nombre} size={36} />
-            <p className="min-w-0 flex-1 truncate font-semibold text-white">{rival.nombre}</p>
+            <div className="min-w-0 flex-1">
+              <p className="truncate font-semibold text-white">{rival.nombre}</p>
+              <p className="truncate text-xs text-zinc-500">
+                {rival.jugados === 0
+                  ? "Todavía no jugó desafíos"
+                  : `${rival.jugados} ${rival.jugados === 1 ? "desafío jugado" : "desafíos jugados"} · ${rival.sinVerificar} sin verificar`}
+              </p>
+            </div>
             <button
               type="button"
               onClick={() => setRival(null)}

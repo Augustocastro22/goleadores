@@ -13,6 +13,19 @@ import { RespuestaSelect, ResumenRespuestas } from "./Confirmacion";
 
 type Equipo = 1 | 2;
 
+/** Un jugador que ese día ya está convocado en un partido de otro grupo (get_ocupados_otro_grupo). */
+export interface Ocupado {
+  jugador_id: string;
+  hora: string | null;
+  /** Si confirmó que juega allá (si no, solo está convocado). */
+  confirmado: boolean;
+}
+
+function textoOcupado(o: Ocupado) {
+  const hora = o.hora ? ` (${o.hora.slice(0, 5)}hs)` : "";
+  return o.confirmado ? `Ya juega con otro grupo ese día${hora}` : `Está convocado en otro grupo ese día${hora}`;
+}
+
 export default function ConvocadosEditor({
   partidoId,
   jugadores,
@@ -23,6 +36,7 @@ export default function ConvocadosEditor({
   bloqueos,
   respuestas,
   unSoloEquipo = false,
+  ocupados = [],
 }: {
   partidoId: string;
   jugadores: Profile[];
@@ -35,6 +49,8 @@ export default function ConvocadosEditor({
   respuestas?: Record<string, Respuesta>;
   /** En un desafío el Equipo 2 es el otro grupo: solo se elige quién juega. */
   unSoloEquipo?: boolean;
+  /** Los que ese día ya están convocados en otro grupo. */
+  ocupados?: Ocupado[];
 }) {
   const router = useRouter();
   const asignacionesIniciales = useMemo(() => {
@@ -74,6 +90,8 @@ export default function ConvocadosEditor({
     }
     return map;
   }, [bloqueos, partidoFecha, partidoHora]);
+
+  const ocupadoPorJugador = useMemo(() => new Map(ocupados.map((o) => [o.jugador_id, o])), [ocupados]);
 
   function empezarEdicion() {
     setMessage(null);
@@ -153,6 +171,7 @@ export default function ConvocadosEditor({
           ) : (
             convocadosActuales.map((jugador) => {
               const bloqueo = bloqueoPorJugador.get(jugador.id);
+              const ocupado = ocupadoPorJugador.get(jugador.id);
               return (
                 <div key={jugador.id} className="flex items-center gap-3 px-4 py-3">
                   <Avatar src={jugador.foto_url} alt={jugador.apodo} size={32} />
@@ -167,6 +186,7 @@ export default function ConvocadosEditor({
                         {bloqueo.nota ? ` (${bloqueo.nota})` : ""}
                       </p>
                     )}
+                    {ocupado && <p className="truncate text-xs text-gold-400">⚠ {textoOcupado(ocupado)}</p>}
                   </div>
                   {respuestas?.[jugador.id] && (
                     <RespuestaSelect
@@ -211,6 +231,7 @@ export default function ConvocadosEditor({
           {jugadores.map((jugador) => {
             const equipo = asignaciones[jugador.id];
             const bloqueo = bloqueoPorJugador.get(jugador.id);
+            const ocupado = ocupadoPorJugador.get(jugador.id);
             return (
               <div
                 key={jugador.id}
@@ -229,6 +250,7 @@ export default function ConvocadosEditor({
                         {bloqueo.nota ? ` (${bloqueo.nota})` : ""}
                       </p>
                     )}
+                    {ocupado && <p className="truncate text-xs text-gold-400">⚠ {textoOcupado(ocupado)}</p>}
                   </div>
                 </div>
                 <div className="flex shrink-0 gap-1.5">

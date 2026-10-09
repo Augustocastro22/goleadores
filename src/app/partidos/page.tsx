@@ -8,7 +8,7 @@ import { buttonClass } from "@/components/ui/Button";
 import { IconChevronRight, IconPlus } from "@/components/icons";
 import PushBanner from "@/components/PushBanner";
 import { hoyArgentina } from "@/lib/confirmacion";
-import { puedeResponder, type DesafioVista } from "@/lib/desafios";
+import { esperaMiRespuesta, type DesafioVista } from "@/lib/desafios";
 
 export default async function PartidosPage() {
   const { supabase, grupo } = await requireGrupo();
@@ -20,10 +20,13 @@ export default async function PartidosPage() {
       .eq("grupo_id", grupo.id)
       .order("fecha", { ascending: false })
       .returns<Partido[]>(),
-    grupo.rol === "admin" ? supabase.rpc("get_desafios", { p_grupo_id: grupo.id }) : Promise.resolve({ data: [] }),
+    supabase.rpc("get_desafios", { p_grupo_id: grupo.id }),
   ]);
   const hoy = hoyArgentina();
-  const desafiosParaResponder = ((desafiosRaw ?? []) as DesafioVista[]).filter((d) => puedeResponder(d, hoy)).length;
+  const desafios = (desafiosRaw ?? []) as DesafioVista[];
+  const desafiosParaResponder =
+    grupo.rol === "admin" ? desafios.filter((d) => esperaMiRespuesta(d, hoy)).length : 0;
+  const desafioPorPartido = new Map(desafios.filter((d) => d.partido_id).map((d) => [d.partido_id, d]));
 
   const resumenPorPartido = new Map<
     string,
@@ -122,7 +125,11 @@ export default async function PartidosPage() {
                       <div className="min-w-0">
                         <p className="truncate font-semibold text-white">vs {partido.rival}</p>
                         <p className="truncate text-sm text-zinc-500">
-                          {partido.desafio_id && <span className="font-medium text-gold-400">Desafío · </span>}
+                          {partido.desafio_id && (
+                            <span className="font-medium text-gold-400">
+                              {etiquetaDesafio(desafioPorPartido.get(partido.id))} ·{" "}
+                            </span>
+                          )}
                           {partido.lugar}
                           {partido.hora && ` · ${partido.hora.slice(0, 5)}hs`}
                         </p>
@@ -140,6 +147,17 @@ export default async function PartidosPage() {
                             {resumen.resultado}
                           </span>
                         </>
+                      ) : desafioPorPartido.get(partido.id)?.marcador_mios != null ? (
+                        // Desafío con resultado pero sin los goles de los jugadores todavía.
+                        <>
+                          <span className="text-sm font-bold tabular-nums text-white">
+                            {desafioPorPartido.get(partido.id)!.marcador_mios}-
+                            {desafioPorPartido.get(partido.id)!.marcador_rival}
+                          </span>
+                          <Badge variant="gold">Faltan goles</Badge>
+                        </>
+                      ) : desafioPorPartido.get(partido.id)?.estado === "suspendido" ? (
+                        <Badge variant="gold">Suspendido</Badge>
                       ) : (
                         <Badge>Programado</Badge>
                       )}
@@ -171,4 +189,12 @@ function ResumenStat({
       <span className="text-[11px] text-zinc-500">{label}</span>
     </div>
   );
+}
+
+/** "Desafío", o con lo que importa de un vistazo: suspendido o sin verificar. */
+function etiquetaDesafio(d: DesafioVista | undefined) {
+  if (d?.estado === "suspendido") return "Desafío suspendido";
+  if (d?.resultado_estado === "sin_verificar") return "Desafío sin verificar";
+  if (d?.resultado_estado === "en_discusion") return "Desafío · resultado a confirmar";
+  return "Desafío";
 }

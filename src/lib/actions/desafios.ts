@@ -9,6 +9,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { getContexto, rolEn } from "@/lib/grupo";
 import { urlConGrupo } from "@/lib/grupo-cookie";
 import { extraerCodigo, fechaDesafio } from "@/lib/desafios";
+import { avisarDesafio } from "@/lib/desafios-avisos";
 
 interface DesafioRow {
   id: string;
@@ -56,8 +57,9 @@ async function getDesafio(desafioId: string) {
 }
 
 function revalidar() {
-  revalidatePath("/partidos");
-  revalidatePath(DESAFIOS_URL);
+  // "layout" incluye /partidos/desafios y la página de cada partido.
+  revalidatePath("/partidos", "layout");
+  revalidatePath("/estadisticas");
 }
 
 /** Nombre y escudo del grupo de un código, para confirmar a quién se desafía antes de mandarlo. */
@@ -69,10 +71,17 @@ export async function buscarGrupoParaDesafiar(codigo: string) {
 
   const { data } = await supabase
     .rpc("get_grupo_por_codigo_desafio", { p_codigo: limpio })
-    .maybeSingle<{ id: string; nombre: string; logo_url: string | null }>();
+    .maybeSingle<{ id: string; nombre: string; logo_url: string | null; jugados: number; sin_verificar: number }>();
   if (!data) return { error: "No hay ningún grupo con ese código de desafío." };
   if (data.id === grupo.id) return { error: "Ese es el código de tu propio grupo." };
-  return { grupo: { nombre: data.nombre, logoUrl: data.logo_url } };
+  return {
+    grupo: {
+      nombre: data.nombre,
+      logoUrl: data.logo_url,
+      jugados: Number(data.jugados),
+      sinVerificar: Number(data.sin_verificar),
+    },
+  };
 }
 
 export async function crearDesafio(formData: FormData) {
@@ -235,5 +244,144 @@ export async function regenerarCodigoDesafio() {
   if (error) return { error: error.message };
 
   revalidatePath(DESAFIOS_URL);
+  return { success: true };
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// Etapas 2 y 3: suspender, reprogramar y resultado. Todas reciben el grupo
+// desde el que se actúa (el de la pantalla) y avisan en segundo plano.
+// ─────────────────────────────────────────────────────────────────────────
+
+/** El desafío y el grupo desde el que actúa el admin (puede ser admin de los dos). */
+async function desdeGrupo(formData: FormData) {
+  const ctx = await getContexto();
+  const desafioId = String(formData.get("desafio_id") ?? "");
+  if (!ctx.user || !desafioId) return null;
+  const desafio = await getDesafio(desafioId);
+  if (!desafio) return null;
+  const grupos = [desafio.grupo_desafiante_id, desafio.grupo_desafiado_id].filter(
+    (id): id is string => !!id && rolEn(ctx, id) === "admin"
+  );
+  const grupoId = grupos.find((id) => id === formData.get("grupo_id")) ?? grupos[0];
+  if (!grupoId) return null;
+  return { supabase: ctx.supabase, userId: ctx.user.id, desafio, grupoId };
+}
+
+const SIN_PERMISO = { error: "Solo un admin de los grupos del desafío puede hacer esto." };
+
+export async function suspenderDesafio(formData: FormData) {
+  const x = await desdeGrupo(formData);
+  if (!x) return SIN_PERMISO;
+  const { error } = await x.supabase.rpc("suspender_desafio", {
+    p_desafio_id: x.desafio.id,
+    p_grupo_id: x.grupoId,
+  });
+  if (error) return { error: error.message };
+  after(() => avisarDesafio(x.desafio.id, "suspendido", { grupoQueActua: x.grupoId, excluir: x.userId }));
+  revalidar();
+  return { success: true };
+}
+
+export async function proponerFechaDesafio(formData: FormData) {
+  const x = await desdeGrupo(formData);
+  if (!x) return SIN_PERMISO;
+  const fecha = String(formData.get("fecha") ?? "");
+  const hora = String(formData.get("hora") ?? "").trim() || null;
+  const lugar = String(formData.get("lugar") ?? "").trim();
+  if (!fecha || !lugar) return { error: "Completá fecha y lugar." };
+
+  const { error } = await x.supabase.rpc("proponer_fecha_desafio", {
+    p_desafio_id: x.desafio.id,
+    p_grupo_id: x.grupoId,
+    p_fecha: fecha,
+    p_hora: hora,
+    p_lugar: lugar,
+  });
+  if (error) return { error: error.message };
+  after(() => avisarDesafio(x.desafio.id, "fecha_propuesta", { grupoQueActua: x.grupoId, excluir: x.userId }));
+  revalidar();
+  return { success: true };
+}
+
+export async function responderFechaDesafio(formData: FormData) {
+  const x = await desdeGrupo(formData);
+  if (!x) return SIN_PERMISO;
+  const acepta = formData.get("acepta") === "true";
+  // Para el aviso del rechazo: después de rechazar la propuesta ya no está.
+  const { data: antes } = await x.supabase
+    .from("desafios")
+    .select("propuesta_fecha, propuesta_hora")
+    .eq("id", x.desafio.id)
+    .single();
+
+  const { error } = await x.supabase.rpc("responder_fecha_desafio", {
+    p_desafio_id: x.desafio.id,
+    p_grupo_id: x.grupoId,
+    p_acepta: acepta,
+  });
+  if (error) return { error: error.message };
+  const fechaRechazada = antes?.propuesta_fecha ? fechaDesafio(antes.propuesta_fecha, antes.propuesta_hora) : undefined;
+  after(() =>
+    avisarDesafio(x.desafio.id, acepta ? "fecha_aceptada" : "fecha_rechazada", {
+      grupoQueActua: x.grupoId,
+      excluir: x.userId,
+      fechaRechazada,
+    })
+  );
+  revalidar();
+  return { success: true };
+}
+
+/** Propone el marcador (también sirve de contrapropuesta). Los goles vienen desde el lado de quien carga. */
+export async function proponerResultadoDesafio(formData: FormData) {
+  const x = await desdeGrupo(formData);
+  if (!x) return SIN_PERMISO;
+  const mios = Number(formData.get("goles_mios"));
+  const rival = Number(formData.get("goles_rival"));
+  if (![mios, rival].every((n) => Number.isInteger(n) && n >= 0 && n <= 99)) {
+    return { error: "Revisá los goles: números enteros de 0 a 99." };
+  }
+  const soyDesafiante = x.grupoId === x.desafio.grupo_desafiante_id;
+
+  const { data: resultado, error } = await x.supabase.rpc("proponer_resultado_desafio", {
+    p_desafio_id: x.desafio.id,
+    p_grupo_id: x.grupoId,
+    p_goles_desafiante: soyDesafiante ? mios : rival,
+    p_goles_desafiado: soyDesafiante ? rival : mios,
+  });
+  if (error) return { error: error.message };
+  after(() =>
+    avisarDesafio(x.desafio.id, resultado === "verificado" ? "resultado_verificado" : "resultado_propuesto", {
+      grupoQueActua: x.grupoId,
+      excluir: x.userId,
+    })
+  );
+  revalidar();
+  return { success: true };
+}
+
+export async function aceptarResultadoDesafio(formData: FormData) {
+  const x = await desdeGrupo(formData);
+  if (!x) return SIN_PERMISO;
+  const { error } = await x.supabase.rpc("aceptar_resultado_desafio", {
+    p_desafio_id: x.desafio.id,
+    p_grupo_id: x.grupoId,
+  });
+  if (error) return { error: error.message };
+  after(() => avisarDesafio(x.desafio.id, "resultado_verificado", { grupoQueActua: x.grupoId, excluir: x.userId }));
+  revalidar();
+  return { success: true };
+}
+
+export async function cortarResultadoDesafio(formData: FormData) {
+  const x = await desdeGrupo(formData);
+  if (!x) return SIN_PERMISO;
+  const { error } = await x.supabase.rpc("cortar_resultado_desafio", {
+    p_desafio_id: x.desafio.id,
+    p_grupo_id: x.grupoId,
+  });
+  if (error) return { error: error.message };
+  after(() => avisarDesafio(x.desafio.id, "resultado_sin_verificar", { grupoQueActua: x.grupoId, excluir: x.userId }));
+  revalidar();
   return { success: true };
 }

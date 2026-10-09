@@ -4,6 +4,7 @@ import { enviarPush } from "@/lib/push/send";
 import { categoriasTexto, fechaLimiteVotacion } from "@/lib/votacion";
 import { revisarEmpates } from "@/lib/votaciones";
 import { urlConGrupo } from "@/lib/grupo-cookie";
+import { avisarDesafio } from "@/lib/desafios-avisos";
 
 /**
  * Corre una vez por día (ver vercel.json). Cierra por vencimiento las
@@ -55,5 +56,14 @@ export async function GET(request: NextRequest) {
     await revisarEmpates(partido.id);
   }
 
-  return NextResponse.json({ cerrados: vencidos.length });
+  // Desafíos: resultados y fechas propuestas sin respuesta en 3 días se
+  // aceptan solos, y los pendientes con fecha pasada quedan vencidos (ver
+  // vencer_propuestas_desafios en 0024_desafios_completo.sql).
+  const { data: desafiosVencidos, error: desafiosError } = await supabase.rpc("vencer_propuestas_desafios");
+  if (desafiosError) console.error("No se pudieron vencer las propuestas de desafíos:", desafiosError);
+  for (const v of (desafiosVencidos ?? []) as { desafio_id: string; tipo: "resultado" | "fecha" }[]) {
+    await avisarDesafio(v.desafio_id, v.tipo === "resultado" ? "resultado_auto" : "fecha_auto");
+  }
+
+  return NextResponse.json({ cerrados: vencidos.length, desafios: (desafiosVencidos ?? []).length });
 }

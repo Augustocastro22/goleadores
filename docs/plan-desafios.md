@@ -1,8 +1,8 @@
 # Plan: desafíos entre grupos
 
-Estado: **etapa 1 implementada** (migración `0022_desafios.sql`, pantalla
-`/partidos/desafios`). Las etapas 2 a 4 siguen pendientes. Antes de seguir,
-leer las guías de `node_modules/next/dist/docs/` que toquen (ver AGENTS.md).
+Estado: **etapas 1 a 4 implementadas** (migraciones `0022`, `0023` y
+`0024_desafios_completo.sql`). Antes de tocarlo, leer las guías de
+`node_modules/next/dist/docs/` que correspondan (ver AGENTS.md).
 
 ## Idea
 
@@ -160,21 +160,28 @@ La convocatoria y la votación siguen avisando como hoy, cada grupo por su lado.
 
 1. ✅ **Desafiar:** código de desafío, crear / aceptar / rechazar / cancelar,
    partidos vinculados, avisos.
-2. **Suspender y reprogramar,** con la reconfirmación de convocados.
-3. **Resultado:** propuestas, contrapropuestas, auto-aceptación,
+2. ✅ **Suspender y reprogramar,** con la reconfirmación de convocados.
+3. ✅ **Resultado:** propuestas, contrapropuestas, auto-aceptación,
    sin verificar, cron.
-4. **Historial entre grupos** en estadísticas.
+4. ✅ **Historial entre grupos** en estadísticas.
 
 Cada etapa se prueba en el proyecto de test antes de correr la migración en
 prod.
 
-## Pendiente de definir
+## Definido al cerrar
 
-- Si un grupo puede apagar los desafíos ("no recibir desafíos" en /admin).
-  Solo afecta al propio grupo, así que no tiene el problema de los días de
-  auto-aceptación.
-- Si un jugador que está en los dos grupos puede quedar convocado en los dos
-  lados del mismo partido (hoy nada lo impide).
+- Un grupo no puede apagar los desafíos (por ahora): si no quiere, rechaza o
+  regenera el código.
+- Un jugador que está en los dos grupos del desafío: nada especial. Pero en
+  cualquier convocatoria (no solo desafíos) se marca al que ese día ya está
+  convocado en un partido de otro grupo ("Ya juega con otro grupo ese día"),
+  calculado en el momento (`get_ocupados_otro_grupo`), sin crear bloqueos.
+- Suspender y proponer otra fecha son dos acciones separadas; la propuesta se
+  acepta sola a los 3 días (cron diario, `vencer_propuestas_desafios`).
+- "No nos ponemos de acuerdo" aparece recién cuando los dos grupos dieron su
+  versión del resultado.
+- En un partido de desafío, los goles de cada jugador se cargan después del
+  resultado del desafío; "otros" es lo que falta para llegar al marcador.
 
 ## Decidido en la etapa 1
 
@@ -193,3 +200,8 @@ prod.
   desafíos entre los mismos grupos), al borrar un grupo se cancelan sus
   pendientes, cancelar recibe el estado que vio el admin, y el resultado de un
   desafío se carga recién después de jugar el partido.
+- **Protecciones en la base** (`0024_desafios_protecciones.sql`): el
+  partido de un desafío no se puede editar ni vincular por la API salteando
+  la app, un grupo manda como mucho 3 desafíos por día al mismo grupo (20 en
+  total), y si un grupo se renombra se actualiza el rival en los partidos del
+  otro grupo.
