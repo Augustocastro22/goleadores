@@ -7,6 +7,7 @@ import Button from "@/components/ui/Button";
 import GrupoLogo from "@/components/ui/GrupoLogo";
 import { Input, Label } from "@/components/ui/Input";
 import HoraSelect from "@/components/HoraSelect";
+import CanchaInput from "@/components/CanchaInput";
 import ActionForm from "@/components/ActionForm";
 import SubmitButton from "@/components/SubmitButton";
 
@@ -15,7 +16,7 @@ import SubmitButton from "@/components/SubmitButton";
  * qué grupo corresponde (nombre y escudo), después se completa cuándo y
  * dónde y se manda.
  */
-export default function DesafiarForm({ hoy }: { hoy: string }) {
+export default function DesafiarForm({ hoy, canchas }: { hoy: string; canchas: { nombre: string }[] }) {
   const [abierto, setAbierto] = useState(false);
   const [codigo, setCodigo] = useState("");
   const [rival, setRival] = useState<{
@@ -117,7 +118,7 @@ export default function DesafiarForm({ hoy }: { hoy: string }) {
           </div>
           <Label>
             Lugar
-            <Input type="text" name="lugar" required maxLength={100} />
+            <CanchaInput canchas={canchas} required />
           </Label>
           <p className="text-xs text-zinc-500">
             Le llega a los admins de {rival.nombre}. Si aceptan, el partido aparece en Partidos de los

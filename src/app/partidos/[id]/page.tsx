@@ -13,6 +13,7 @@ import Avatar from "@/components/ui/Avatar";
 import ConfirmSubmitButton from "@/components/ConfirmSubmitButton";
 import { IconChevronRight } from "@/components/icons";
 import type { DesafioVista } from "@/lib/desafios";
+import { getCanchas } from "@/lib/canchas";
 import GolesEditor from "./GolesEditor";
 import DesafioPanel, { type PropuestaResultado } from "./DesafioPanel";
 import type { Ocupado } from "./ConvocadosEditor";
@@ -50,18 +51,21 @@ export default async function PartidoDetailPage({
   const conPeor = partido.con_votacion && partido.con_peor;
 
   // Lo que no depende entre sí se pide todo junto.
-  const [config, { data: participantesRaw }, { data: misVotos }, todosLosJugadores, { data: desafioRaw }] = await Promise.all([
-    getConfig(supabase, partido.grupo_id),
-    supabase
-      .from("partido_jugadores")
-      .select("jugador_id, goles, equipo, respuesta, profiles(*)")
-      .eq("partido_id", id),
-    supabase.from("votos").select("tipo").eq("partido_id", id).eq("jugador_que_vota_id", user.id),
-    isAdmin && !partido.jugado ? getMiembros(supabase, partido.grupo_id) : Promise.resolve([] as Profile[]),
-    partido.desafio_id
-      ? supabase.rpc("get_desafios", { p_grupo_id: partido.grupo_id, p_desafio_id: partido.desafio_id })
-      : Promise.resolve({ data: [] }),
-  ]);
+  const [config, { data: participantesRaw }, { data: misVotos }, todosLosJugadores, { data: desafioRaw }, canchas] =
+    await Promise.all([
+      getConfig(supabase, partido.grupo_id),
+      supabase
+        .from("partido_jugadores")
+        .select("jugador_id, goles, equipo, respuesta, profiles(*)")
+        .eq("partido_id", id),
+      supabase.from("votos").select("tipo").eq("partido_id", id).eq("jugador_que_vota_id", user.id),
+      isAdmin && !partido.jugado ? getMiembros(supabase, partido.grupo_id) : Promise.resolve([] as Profile[]),
+      partido.desafio_id
+        ? supabase.rpc("get_desafios", { p_grupo_id: partido.grupo_id, p_desafio_id: partido.desafio_id })
+        : Promise.resolve({ data: [] }),
+      // Para proponer otro lugar en un desafío.
+      isAdmin && partido.desafio_id ? getCanchas(supabase, partido.grupo_id) : Promise.resolve([]),
+    ]);
   const desafio = ((desafioRaw ?? []) as DesafioVista[])[0] ?? null;
   const grupoVota = votaAlgo(config);
   const participantes = (participantesRaw ?? []) as unknown as ParticipanteRow[];
@@ -205,6 +209,7 @@ export default async function PartidoDetailPage({
           propuestas={propuestas}
           golesDeJugadores={golesDeJugadores}
           partidoJugado={partido.jugado}
+          canchas={canchas}
         />
       )}
 

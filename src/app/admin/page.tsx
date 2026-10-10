@@ -3,13 +3,16 @@ import { redirect } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/admin";
 import {
   aceptarSolicitud,
+  borrarCancha,
   cambiarRol,
   editarPartido,
   guardarConfig,
   guardarGrupo,
   rechazarSolicitud,
   regenerarInvitacion,
+  renombrarCancha,
   sacarDelGrupo,
+  unificarCanchas,
 } from "@/lib/actions/admin";
 import { getConfig } from "@/lib/config";
 import { getContexto, getMiembros, type MiGrupo } from "@/lib/grupo";
@@ -28,13 +31,16 @@ import ReglasFields from "@/components/ReglasFields";
 import InvitacionLink from "./InvitacionLink";
 import LogoUploader from "./LogoUploader";
 import HoraSelect from "@/components/HoraSelect";
+import CanchaInput from "@/components/CanchaInput";
+import { getCanchas } from "@/lib/canchas";
 
-type Tab = "grupo" | "config" | "partidos" | "usuarios";
+type Tab = "grupo" | "config" | "partidos" | "canchas" | "usuarios";
 
 const TABS: { id: Tab; label: string }[] = [
   { id: "grupo", label: "Grupo" },
   { id: "config", label: "Reglas" },
   { id: "partidos", label: "Partidos" },
+  { id: "canchas", label: "Canchas" },
   { id: "usuarios", label: "Miembros" },
 ];
 
@@ -85,6 +91,7 @@ export default async function AdminPage({
       {tab === "grupo" && <GrupoTab grupo={grupo} />}
       {tab === "config" && <ConfigTab grupoId={grupo.id} />}
       {tab === "partidos" && <PartidosTab grupoId={grupo.id} />}
+      {tab === "canchas" && <CanchasTab grupoId={grupo.id} />}
       {tab === "usuarios" && <UsuariosTab grupoId={grupo.id} miId={user.id} />}
     </div>
   );
@@ -179,6 +186,7 @@ async function PartidosTab({ grupoId }: { grupoId: string }) {
     .order("fecha", { ascending: false })
     .returns<PartidoConCantidad[]>();
   const partidos = data ?? [];
+  const canchas = await getCanchas(supabase, grupoId);
 
   if (partidos.length === 0) {
     return <Card className="px-4 py-3 text-sm text-zinc-500">Todavía no hay partidos.</Card>;
@@ -242,7 +250,7 @@ async function PartidosTab({ grupoId }: { grupoId: string }) {
                   </div>
                   <Label>
                     Lugar
-                    <Input type="text" name="lugar" required defaultValue={p.lugar} />
+                    <CanchaInput canchas={canchas} defaultValue={p.lugar} required />
                   </Label>
                   <Label>
                     Rival / nombre del Equipo 2
@@ -267,6 +275,103 @@ async function PartidosTab({ grupoId }: { grupoId: string }) {
                   </div>
                 </ActionForm>
               )}
+            </details>
+          </Card>
+        );
+      })}
+    </div>
+  );
+}
+
+async function CanchasTab({ grupoId }: { grupoId: string }) {
+  const { supabase } = await getContexto();
+  const canchas = await getCanchas(supabase, grupoId);
+
+  if (canchas.length === 0) {
+    return (
+      <Card className="px-4 py-3 text-sm text-zinc-500">
+        Todavía no hay canchas. Se agregan solas cuando cargás un partido con un lugar nuevo.
+      </Card>
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-2">
+      <p className="text-xs text-zinc-500">
+        Se agregan solas cuando cargás un partido con un lugar nuevo. Acá podés corregir el nombre o, si
+        la misma cancha quedó dos veces, unificarlas.
+      </p>
+      {canchas.map((c) => {
+        const otras = canchas.filter((o) => o.id !== c.id);
+        return (
+          <Card key={c.id} className="overflow-hidden">
+            <details className="group">
+              <summary className="flex cursor-pointer list-none items-center gap-3 px-4 py-3 [&::-webkit-details-marker]:hidden">
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-semibold text-white">{c.nombre}</p>
+                  <p className="text-xs text-zinc-500">
+                    {c.partidos} {c.partidos === 1 ? "partido" : "partidos"}
+                  </p>
+                </div>
+                <IconChevronRight className="h-4 w-4 shrink-0 text-zinc-500 transition group-open:rotate-90" />
+              </summary>
+
+              <div className="flex flex-col gap-4 border-t border-border px-4 py-4">
+                <ActionForm action={renombrarCancha} className="flex flex-col gap-2">
+                  <input type="hidden" name="cancha_id" value={c.id} />
+                  <Label>
+                    Nombre
+                    <Input type="text" name="nombre" required maxLength={100} defaultValue={c.nombre} />
+                  </Label>
+                  <SubmitButton pendingText="Guardando..." size="sm" className="self-start">
+                    Guardar nombre
+                  </SubmitButton>
+                </ActionForm>
+
+                {otras.length > 0 && (
+                  <ActionForm action={unificarCanchas} className="flex flex-col gap-2">
+                    <input type="hidden" name="cancha_id" value={c.id} />
+                    <Label>
+                      Es la misma cancha que…
+                      <select
+                        name="hacia_id"
+                        required
+                        defaultValue=""
+                        className="w-full appearance-none rounded-xl border border-border bg-white/5 px-3.5 py-2.5 text-white outline-none transition focus:border-primary-400/60 focus:ring-2 focus:ring-primary-400/20"
+                      >
+                        <option value="" disabled className="bg-surface">
+                          Elegí una cancha
+                        </option>
+                        {otras.map((o) => (
+                          <option key={o.id} value={o.id} className="bg-surface">
+                            {o.nombre}
+                          </option>
+                        ))}
+                      </select>
+                    </Label>
+                    <ConfirmSubmitButton
+                      confirmMessage={`Los partidos de "${c.nombre}" pasan a la cancha que elegiste y "${c.nombre}" se borra. No se puede deshacer.`}
+                      confirmLabel="Unificar"
+                      className={buttonClass("secondary", "sm", "self-start")}
+                    >
+                      Unificar
+                    </ConfirmSubmitButton>
+                  </ActionForm>
+                )}
+
+                {c.partidos === 0 && (
+                  <ActionForm action={borrarCancha} className="flex flex-col gap-1">
+                    <input type="hidden" name="cancha_id" value={c.id} />
+                    <ConfirmSubmitButton
+                      confirmMessage={`¿Borrar "${c.nombre}"? No tiene partidos.`}
+                      confirmLabel="Borrar"
+                      className={buttonClass("ghost", "sm", "self-start !px-2 text-xs text-danger-400")}
+                    >
+                      Borrar cancha
+                    </ConfirmSubmitButton>
+                  </ActionForm>
+                )}
+              </div>
             </details>
           </Card>
         );

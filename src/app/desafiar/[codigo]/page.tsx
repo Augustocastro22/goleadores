@@ -11,6 +11,8 @@ import { Input, Label } from "@/components/ui/Input";
 import ActionForm from "@/components/ActionForm";
 import SubmitButton from "@/components/SubmitButton";
 import HoraSelect from "@/components/HoraSelect";
+import { getCanchas } from "@/lib/canchas";
+import GrupoYCancha from "./GrupoYCancha";
 
 /** Vista previa del link (la imagen está en opengraph-image.tsx, al lado). */
 export async function generateMetadata({
@@ -40,7 +42,10 @@ export async function generateMetadata({
  */
 export default async function DesafiarPage({ params }: { params: Promise<{ codigo: string }> }) {
   const { codigo } = await params;
-  const [{ user, grupos, grupo: activo }, rival] = await Promise.all([getContexto(), getGrupoDeDesafio(codigo)]);
+  const [{ supabase, user, grupos, grupo: activo }, rival] = await Promise.all([
+    getContexto(),
+    getGrupoDeDesafio(codigo),
+  ]);
 
   if (!rival) {
     return (
@@ -61,6 +66,7 @@ export default async function DesafiarPage({ params }: { params: Promise<{ codig
   const esMiPropioGrupo = grupos.some((g) => g.id === rival.id);
   const preseleccionado = misGruposAdmin.find((g) => g.id === activo?.id) ?? misGruposAdmin[0];
   const next = encodeURIComponent(`/desafiar/${codigo}`);
+  const canchas = await getCanchas(supabase, misGruposAdmin.map((g) => g.id));
 
   return (
     <div className="flex min-h-[60vh] flex-col items-center justify-center">
@@ -103,38 +109,18 @@ export default async function DesafiarPage({ params }: { params: Promise<{ codig
         ) : (
           <ActionForm action={crearDesafio} className="flex flex-col gap-3">
             <input type="hidden" name="codigo" value={codigo} />
-            {misGruposAdmin.length === 1 ? (
-              <input type="hidden" name="grupo_id" value={misGruposAdmin[0].id} />
-            ) : (
-              <Label>
-                Desafiar desde
-                <select
-                  name="grupo_id"
-                  defaultValue={preseleccionado?.id}
-                  className="w-full appearance-none rounded-xl border border-border bg-white/5 px-3.5 py-2.5 text-white outline-none transition focus:border-primary-400/60 focus:ring-2 focus:ring-primary-400/20"
-                >
-                  {misGruposAdmin.map((g) => (
-                    <option key={g.id} value={g.id} className="bg-surface">
-                      {g.nombre}
-                    </option>
-                  ))}
-                </select>
-              </Label>
-            )}
-            <div className="flex gap-3">
-              <Label className="flex-1">
-                Fecha
-                <Input type="date" name="fecha" required min={hoyArgentina()} />
-              </Label>
-              <Label className="w-28 shrink-0">
-                Hora
-                <HoraSelect />
-              </Label>
-            </div>
-            <Label>
-              Lugar
-              <Input type="text" name="lugar" required maxLength={100} />
-            </Label>
+            <GrupoYCancha grupos={misGruposAdmin} preseleccionadoId={preseleccionado?.id} canchas={canchas}>
+              <div className="flex gap-3">
+                <Label className="flex-1">
+                  Fecha
+                  <Input type="date" name="fecha" required min={hoyArgentina()} />
+                </Label>
+                <Label className="w-28 shrink-0">
+                  Hora
+                  <HoraSelect />
+                </Label>
+              </div>
+            </GrupoYCancha>
             <p className="text-xs text-zinc-500">
               {misGruposAdmin.length === 1 ? `Lo mandan como ${misGruposAdmin[0].nombre}. ` : ""}
               Le llega a los admins de {rival.nombre}. Si aceptan, el partido aparece en Partidos de los dos

@@ -93,6 +93,53 @@ export async function editarPartido(formData: FormData) {
   return { success: true };
 }
 
+// Canchas (ver 0026_canchas.sql). Renombrar y unificar cambian también el
+// lugar de los partidos, así que van por RPC; la base valida que sea admin.
+
+export async function renombrarCancha(formData: FormData) {
+  const { supabase, grupo } = await requireAdmin();
+  if (!grupo) return { error: "Solo el admin puede editar las canchas." };
+  const canchaId = String(formData.get("cancha_id") ?? "");
+  const nombre = String(formData.get("nombre") ?? "").trim();
+  if (!canchaId || !nombre) return { error: "Escribí el nombre." };
+
+  const { error } = await supabase.rpc("renombrar_cancha", { p_cancha_id: canchaId, p_nombre: nombre });
+  if (error) return { error: error.message };
+  revalidatePath("/", "layout");
+  return { success: true };
+}
+
+export async function unificarCanchas(formData: FormData) {
+  const { supabase, grupo } = await requireAdmin();
+  if (!grupo) return { error: "Solo el admin puede editar las canchas." };
+  const desde = String(formData.get("cancha_id") ?? "");
+  const hacia = String(formData.get("hacia_id") ?? "");
+  if (!desde || !hacia) return { error: "Elegí con qué cancha unificarla." };
+
+  const { error } = await supabase.rpc("unificar_canchas", { p_desde: desde, p_hacia: hacia });
+  if (error) return { error: error.message };
+  revalidatePath("/", "layout");
+  return { success: true };
+}
+
+/** Solo una cancha sin partidos (por ejemplo, una que se agregó por error). */
+export async function borrarCancha(formData: FormData) {
+  const { supabase, grupo } = await requireAdmin();
+  if (!grupo) return { error: "Solo el admin puede editar las canchas." };
+  const canchaId = String(formData.get("cancha_id") ?? "");
+
+  const { count } = await supabase
+    .from("partidos")
+    .select("id", { count: "exact", head: true })
+    .eq("cancha_id", canchaId);
+  if (count) return { error: "Tiene partidos: si es la misma que otra, unificalas." };
+
+  const { error } = await supabase.from("canchas").delete().eq("id", canchaId).eq("grupo_id", grupo.id);
+  if (error) return { error: error.message };
+  revalidatePath("/admin");
+  return { success: true };
+}
+
 export async function cambiarRol(formData: FormData) {
   const { supabase, grupo, userId } = await requireAdmin();
   if (!grupo) return { error: "Solo el admin puede cambiar roles." };

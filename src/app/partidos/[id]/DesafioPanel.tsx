@@ -29,6 +29,7 @@ import ActionForm from "@/components/ActionForm";
 import SubmitButton from "@/components/SubmitButton";
 import ConfirmSubmitButton from "@/components/ConfirmSubmitButton";
 import HoraSelect from "@/components/HoraSelect";
+import CanchaInput from "@/components/CanchaInput";
 import { CancelarDesafio } from "../desafios/AccionesDesafio";
 import { ESTADO_VARIANT, novedadesDesafio } from "../desafios/DesafioCard";
 
@@ -62,6 +63,7 @@ export default function DesafioPanel({
   propuestas,
   golesDeJugadores,
   partidoJugado,
+  canchas,
 }: {
   desafio: DesafioVista;
   grupoId: string;
@@ -72,6 +74,8 @@ export default function DesafioPanel({
   golesDeJugadores: number;
   /** Si este grupo ya cargó los goles de sus jugadores. */
   partidoJugado: boolean;
+  /** Las canchas del grupo, para proponer otro lugar. */
+  canchas: { nombre: string }[];
 }) {
   const ocultos = (
     <>
@@ -234,7 +238,7 @@ export default function DesafioPanel({
                 </div>
                 <Label>
                   Lugar
-                  <Input type="text" name="lugar" required maxLength={100} defaultValue={d.lugar} />
+                  <CanchaInput canchas={canchas} defaultValue={d.lugar} required />
                 </Label>
                 <p className="text-xs text-zinc-500">
                   La fecha cambia cuando {d.rival_nombre} la acepte (o sola en 3 días si no responde).

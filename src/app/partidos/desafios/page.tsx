@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { requireGrupo } from "@/lib/grupo";
+import { getCanchas } from "@/lib/canchas";
 import { getSiteUrl } from "@/lib/site-url";
 import { hoyArgentina } from "@/lib/confirmacion";
 import { seccionDesafio, type DesafioVista, type SeccionDesafio } from "@/lib/desafios";
@@ -25,11 +26,12 @@ export default async function DesafiosPage() {
   const esAdmin = grupo.rol === "admin";
   const hoy = hoyArgentina();
 
-  const [{ data }, { data: grupoRow }] = await Promise.all([
+  const [{ data }, { data: grupoRow }, canchas] = await Promise.all([
     supabase.rpc("get_desafios", { p_grupo_id: grupo.id }),
     esAdmin
       ? supabase.from("grupos").select("codigo_desafio").eq("id", grupo.id).single()
       : Promise.resolve({ data: null }),
+    esAdmin ? getCanchas(supabase, grupo.id) : Promise.resolve([]),
   ]);
   const desafios = (data ?? []) as DesafioVista[];
 
@@ -60,7 +62,7 @@ export default async function DesafiosPage() {
         </p>
       </div>
 
-      {esAdmin && <DesafiarForm hoy={hoy} />}
+      {esAdmin && <DesafiarForm hoy={hoy} canchas={canchas} />}
 
       {desafios.length === 0 ? (
         <Card className="px-5 py-10 text-center text-sm text-zinc-500">

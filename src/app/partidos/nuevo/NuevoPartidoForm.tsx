@@ -6,6 +6,7 @@ import { createPartido } from "@/lib/actions/partidos";
 import ActionForm from "@/components/ActionForm";
 import SubmitButton from "@/components/SubmitButton";
 import HoraSelect from "@/components/HoraSelect";
+import CanchaInput from "@/components/CanchaInput";
 import Avatar from "@/components/ui/Avatar";
 import { Input, Label } from "@/components/ui/Input";
 import { IconGoal } from "@/components/icons";
@@ -23,11 +24,14 @@ export default function NuevoPartidoForm({
   jugadores,
   hoy,
   pideConfirmacion,
+  canchas,
 }: {
   jugadores: Profile[];
   /** Fecha de hoy en Argentina, para limitar el calendario según el modo. */
   hoy: string;
   pideConfirmacion: boolean;
+  /** Las canchas del grupo, para elegir el lugar. */
+  canchas: { nombre: string }[];
 }) {
   const [modo, setModo] = useState<Modo>("programar");
   const [equipos, setEquipos] = useState<Record<string, EquipoElegido>>({});
@@ -86,7 +90,7 @@ export default function NuevoPartidoForm({
       </div>
       <Label>
         Lugar
-        <Input type="text" name="lugar" required />
+        <CanchaInput canchas={canchas} required />
       </Label>
       <Label>
         Rival / nombre del Equipo 2
