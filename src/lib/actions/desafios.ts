@@ -387,6 +387,22 @@ export async function proponerResultadoDesafio(formData: FormData) {
   }
   const soyDesafiante = x.grupoId === x.desafio.grupo_desafiante_id;
 
+  // Volver a mandar la misma propuesta solo reiniciaría el plazo y le
+  // repetiría el aviso al otro grupo.
+  const { data: pendiente } = await x.supabase
+    .from("desafio_resultados")
+    .select("propuesto_por_grupo_id, goles_desafiante, goles_desafiado")
+    .eq("desafio_id", x.desafio.id)
+    .eq("estado", "pendiente")
+    .maybeSingle();
+  if (
+    pendiente?.propuesto_por_grupo_id === x.grupoId &&
+    pendiente.goles_desafiante === (soyDesafiante ? mios : rival) &&
+    pendiente.goles_desafiado === (soyDesafiante ? rival : mios)
+  ) {
+    return { error: "Ya mandaron ese resultado. Falta que el otro grupo lo confirme." };
+  }
+
   const { data: resultado, error } = await x.supabase.rpc("proponer_resultado_desafio", {
     p_desafio_id: x.desafio.id,
     p_grupo_id: x.grupoId,

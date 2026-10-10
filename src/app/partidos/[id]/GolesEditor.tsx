@@ -49,7 +49,12 @@ export default function GolesEditor({
    * resultado cambia, la base recalcula "otros" y el rival
    * (aplicar_marcador_desafio); si los goles quedan de más se avisa acá.
    */
-  marcadorDesafio?: { mios: number | null; rival: number | null };
+  marcadorDesafio?: {
+    mios: number | null;
+    rival: number | null;
+    /** El otro grupo todavía no confirmó: mios/rival son la última propuesta de este grupo. */
+    aConfirmar: boolean;
+  };
   /** Solo la primera vez que se carga el resultado: el admin elige qué se vota (ver VotacionPartidoFields). */
   votacion?: {
     config: Pick<AppConfig, "vota_mvp" | "vota_peor" | "min_jugadores_votacion">;
@@ -203,7 +208,13 @@ export default function GolesEditor({
             className="w-full"
           >
             {saving ? "Guardando..." : "Guardar goles"}
-          </Button>          {message && (
+          </Button>
+          {marcadorDesafio?.aConfirmar && marcadorDesafio.mios != null && (
+            <p className="text-sm text-zinc-500">
+              El otro grupo todavía no confirmó el resultado. Si cambia, revisá los goles.
+            </p>
+          )}
+          {message && (
             <p
               className={`rounded-xl border px-3.5 py-2.5 text-sm ${
                 message.type === "ok"

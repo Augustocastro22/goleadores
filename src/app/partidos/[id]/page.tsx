@@ -288,7 +288,13 @@ export default async function PartidoDetailPage({
           golesRivalInit={partido.goles_rival}
           isAdmin={isAdmin}
           marcadorDesafio={
-            desafio ? { mios: desafio.marcador_mios, rival: desafio.marcador_rival } : undefined
+            desafio
+              ? {
+                  mios: desafio.marcador_mios,
+                  rival: desafio.marcador_rival,
+                  aConfirmar: desafio.resultado_estado === "en_discusion",
+                }
+              : undefined
           }
           votacion={isAdmin && !partido.jugado ? { config, reglasHref } : undefined}
         />

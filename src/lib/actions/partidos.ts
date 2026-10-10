@@ -337,12 +337,13 @@ export async function guardarGolesPartido({ partidoId, goles, golesOtros, golesR
       p_desafio_id: partido.desafio_id,
     });
     const desafio = ((desafioRaw ?? []) as DesafioVista[])[0];
-    // Los goles se cargan contra el resultado ya cerrado (confirmado o sin
-    // verificar): si se cargaran antes y el resultado cambiara, quedarían
-    // goles de más (o de menos) en la tabla de goleadores.
-    const cerrado = desafio?.resultado_estado === "verificado" || desafio?.resultado_estado === "sin_verificar";
-    if (!desafio || !cerrado || desafio.marcador_mios === null || desafio.marcador_rival === null) {
-      return { error: "Los goles de cada uno se cargan cuando el resultado del desafío esté confirmado (arriba)." };
+    // Los goles se cargan contra la versión del resultado de este grupo (la
+    // confirmada o su última propuesta), sin esperar a que el otro responda.
+    // Si después el resultado cambia, aplicar_marcador_desafio recalcula
+    // "otros" y el rival, y si los goles quedan de más se avisa y se frena
+    // (ver goles-por-corregir.ts).
+    if (!desafio || desafio.marcador_mios === null || desafio.marcador_rival === null) {
+      return { error: "Primero cargá el resultado del desafío (arriba)." };
     }
     const deJugadores = goles.reduce((total, g) => total + g.goles, 0);
     if (deJugadores > desafio.marcador_mios) {
