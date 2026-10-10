@@ -463,9 +463,6 @@ async function UsuariosTab({ grupoId, miId }: { grupoId: string; miId: string })
                   {j.nombre} {j.apellido} <span className="text-zinc-500">({j.apodo})</span>
                 </p>
                 <p className="truncate text-xs text-zinc-500">{auth?.email ?? "sin email"}</p>
-                <p className="truncate text-xs text-zinc-600">
-                  Alta {formatear(j.created_at)} · Último ingreso {formatear(auth?.last_sign_in_at)}
-                </p>
               </div>
               <div className="flex shrink-0 flex-col items-end gap-1.5">
                 <Badge variant={esAdmin ? "gold" : "neutral"}>{esAdmin ? "Admin" : "Jugador"}</Badge>

@@ -13,7 +13,10 @@ import Avatar from "@/components/ui/Avatar";
 import ConfirmSubmitButton from "@/components/ConfirmSubmitButton";
 import { IconChevronRight } from "@/components/icons";
 import type { DesafioVista } from "@/lib/desafios";
-import { getCanchas } from "@/lib/canchas";
+import { getCanchas, parecidas } from "@/lib/canchas";
+import { unificarCanchas } from "@/lib/actions/admin";
+import ActionForm from "@/components/ActionForm";
+import SubmitButton from "@/components/SubmitButton";
 import GolesEditor from "./GolesEditor";
 import DesafioPanel, { type PropuestaResultado } from "./DesafioPanel";
 import type { Ocupado } from "./ConvocadosEditor";
@@ -67,6 +70,11 @@ export default async function PartidoDetailPage({
       isAdmin && partido.desafio_id ? getCanchas(supabase, partido.grupo_id) : Promise.resolve([]),
     ]);
   const desafio = ((desafioRaw ?? []) as DesafioVista[])[0] ?? null;
+  // En un desafío el lugar lo escribió el otro grupo: si quedó en una cancha
+  // nueva parecida a una que el grupo ya tenía ("Gren Park"), se ofrece unificarlas.
+  const canchaNueva = canchas.find((c) => c.id === partido.cancha_id && c.partidos === 1);
+  const canchaExistente = canchaNueva && canchas.find((c) => c.id !== canchaNueva.id && parecidas(c.nombre, canchaNueva.nombre));
+  const canchaParecida = canchaNueva && canchaExistente ? { nueva: canchaNueva, existente: canchaExistente } : null;
   const grupoVota = votaAlgo(config);
   const participantes = (participantesRaw ?? []) as unknown as ParticipanteRow[];
   const equipo1 = participantes.filter((p) => p.equipo === 1);
@@ -211,6 +219,24 @@ export default async function PartidoDetailPage({
           partidoJugado={partido.jugado}
           canchas={canchas}
         />
+      )}
+
+      {canchaParecida && (
+        <Card className="flex flex-col gap-3 p-4">
+          <p className="text-sm text-zinc-300">
+            Este partido quedó en <span className="font-semibold text-white">{canchaParecida.nueva.nombre}</span>,
+            una cancha nueva para el grupo. ¿Es la misma que{" "}
+            <span className="font-semibold text-white">{canchaParecida.existente.nombre}</span>?
+          </p>
+          <ActionForm action={unificarCanchas} className="flex flex-col gap-1">
+            <input type="hidden" name="cancha_id" value={canchaParecida.nueva.id} />
+            <input type="hidden" name="hacia_id" value={canchaParecida.existente.id} />
+            <SubmitButton size="sm" pendingText="Unificando…" className="self-start">
+              Sí, es la misma
+            </SubmitButton>
+          </ActionForm>
+          <p className="text-xs text-zinc-500">Si es otra cancha, ignorá este aviso.</p>
+        </Card>
       )}
 
       {conConfirmacion && miRespuesta && <RespuestaCard partidoId={id} respuesta={miRespuesta} />}

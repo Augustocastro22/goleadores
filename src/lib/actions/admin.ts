@@ -109,9 +109,10 @@ export async function renombrarCancha(formData: FormData) {
   return { success: true };
 }
 
+/** También desde un partido de desafío, que puede no ser del grupo activo: la base valida que sea admin. */
 export async function unificarCanchas(formData: FormData) {
-  const { supabase, grupo } = await requireAdmin();
-  if (!grupo) return { error: "Solo el admin puede editar las canchas." };
+  const { supabase, userId } = await requireAdmin();
+  if (!userId) return { error: "Solo el admin puede editar las canchas." };
   const desde = String(formData.get("cancha_id") ?? "");
   const hacia = String(formData.get("hacia_id") ?? "");
   if (!desde || !hacia) return { error: "Elegí con qué cancha unificarla." };
