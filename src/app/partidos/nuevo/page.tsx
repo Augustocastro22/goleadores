@@ -39,6 +39,7 @@ export default async function NuevoPartidoPage() {
             hoy={hoyArgentina()}
             pideConfirmacion={config.pedir_confirmacion}
             canchas={canchas}
+            config={config}
           />
         )}
       </Card>

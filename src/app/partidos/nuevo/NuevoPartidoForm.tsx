@@ -11,6 +11,8 @@ import Avatar from "@/components/ui/Avatar";
 import { Input, Label } from "@/components/ui/Input";
 import { IconGoal } from "@/components/icons";
 import Marcador from "@/components/Marcador";
+import VotacionPartidoFields, { type VotarEnPartido } from "@/components/VotacionPartidoFields";
+import type { AppConfig } from "@/lib/config";
 import EquipoPicker, { type EquipoElegido } from "./EquipoPicker";
 
 type Modo = "programar" | "jugado";
@@ -25,6 +27,7 @@ export default function NuevoPartidoForm({
   hoy,
   pideConfirmacion,
   canchas,
+  config,
 }: {
   jugadores: Profile[];
   /** Fecha de hoy en Argentina, para limitar el calendario según el modo. */
@@ -32,10 +35,13 @@ export default function NuevoPartidoForm({
   pideConfirmacion: boolean;
   /** Las canchas del grupo, para elegir el lugar. */
   canchas: { nombre: string }[];
+  /** Reglas de votación del grupo, para elegir qué se vota si ya se jugó. */
+  config: Pick<AppConfig, "vota_mvp" | "vota_peor" | "min_jugadores_votacion">;
 }) {
   const [modo, setModo] = useState<Modo>("programar");
   const [equipos, setEquipos] = useState<Record<string, EquipoElegido>>({});
   const [rival, setRival] = useState("");
+  const [votar, setVotar] = useState<VotarEnPartido>({ mvp: true, peor: true });
   const jugado = modo === "jugado";
 
   return (
@@ -141,7 +147,16 @@ export default function NuevoPartidoForm({
       </div>
 
       {jugado && (
-        <GolesFields jugadores={jugadores} equipos={equipos} rival={rival} />
+        <>
+          <GolesFields jugadores={jugadores} equipos={equipos} rival={rival} />
+          <VotacionPartidoFields
+            config={config}
+            cantidadJugadores={Object.values(equipos).filter((e) => e === "1" || e === "2").length}
+            value={votar}
+            onChange={setVotar}
+            reglasHref="/admin?tab=config"
+          />
+        </>
       )}
 
       <SubmitButton

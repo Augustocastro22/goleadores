@@ -1,7 +1,9 @@
 import { notFound, redirect } from "next/navigation";
 import { getContexto, getMiembros, rolEn } from "@/lib/grupo";
 import { getConfig, grupoVota as votaAlgo } from "@/lib/config";
+import Link from "next/link";
 import { deletePartido } from "@/lib/actions/partidos";
+import { urlConGrupo } from "@/lib/grupo-cookie";
 import { votar, votarDesempate } from "@/lib/actions/votos";
 import { votacionCerrada } from "@/lib/votacion";
 import { partidoYaPaso } from "@/lib/confirmacion";
@@ -190,6 +192,8 @@ export default async function PartidoDetailPage({
     }
   }
 
+  const reglasHref = urlConGrupo("/admin?tab=config", partido.grupo_id);
+
   const fecha =
     new Date(partido.fecha + "T00:00:00").toLocaleDateString("es-AR", {
       weekday: "long",
@@ -286,6 +290,7 @@ export default async function PartidoDetailPage({
           marcadorDesafio={
             desafio ? { mios: desafio.marcador_mios, rival: desafio.marcador_rival } : undefined
           }
+          votacion={isAdmin && !partido.jugado ? { config, reglasHref } : undefined}
         />
       ) : (
         <EventoProgramado
@@ -300,12 +305,23 @@ export default async function PartidoDetailPage({
 
       {/* Un partido sin votación de un grupo que ya no vota no muestra nada de votación. */}
       {soyParticipante && partido.jugado && (partido.con_votacion || grupoVota) && (
-        <section>
-          <h2 className="mb-3 text-lg font-bold text-white">Votación</h2>
+        <section className="flex flex-col gap-3">
+          <h2 className="text-lg font-bold text-white">Votación</h2>
+          {/* Una votación abierta ya no se toca: al admin se le muestra dónde apagarla para los próximos. */}
+          {isAdmin && partido.con_votacion && !cerrada && (
+            <p className="-mt-1 text-xs text-zinc-500">
+              Para no votar en los próximos partidos, apagalo en{" "}
+              <Link href={reglasHref} className="text-primary-400 hover:underline">
+                las reglas del grupo
+              </Link>
+              .
+            </p>
+          )}
           {!partido.con_votacion ? (
             <Card className="px-4 py-3 text-sm text-zinc-500">
-              Jugaron {participantes.length}, menos que el mínimo para votar, así que este partido
-              no tiene votación.
+              {participantes.length < config.min_jugadores_votacion
+                ? `Jugaron ${participantes.length}, menos que el mínimo para votar, así que este partido no tiene votación.`
+                : "Este partido no tiene votación."}
             </Card>
           ) : cerrada ? (
             <div className="flex flex-col gap-3">
@@ -449,6 +465,7 @@ function ConvocadosList({
     </div>
   );
 }
+
 
 function DesgloseVotos({ label, filas }: { label: string; filas: RankingRow[] }) {
   if (filas.length === 0) {

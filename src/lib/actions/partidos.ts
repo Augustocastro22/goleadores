@@ -147,7 +147,13 @@ export async function createPartido(formData: FormData) {
   if (jugado) {
     // Lo mismo que cargar los goles desde el partido: lo marca jugado, decide
     // la votación y avisa el resultado.
-    const resultado = await guardarGolesPartido({ partidoId: partido.id, goles, golesOtros, golesRival });
+    const resultado = await guardarGolesPartido({
+      partidoId: partido.id,
+      goles,
+      golesOtros,
+      golesRival,
+      votar: { mvp: formData.get("votar_mvp") !== "0", peor: formData.get("votar_peor") !== "0" },
+    });
     if (resultado.error) {
       revalidatePath("/partidos");
       return { error: `Se creó el partido pero no se pudieron guardar los goles: ${resultado.error}` };
@@ -288,9 +294,15 @@ export interface GolesInput {
   goles: { jugadorId: string; goles: number }[];
   golesOtros: number;
   golesRival: number;
+  /**
+   * Qué categorías eligió votar el admin en este partido (ver
+   * VotacionPartidoFields). Solo cuenta la primera vez y solo puede sacar
+   * categorías de las que dan las reglas del grupo, no agregar.
+   */
+  votar?: { mvp: boolean; peor: boolean };
 }
 
-export async function guardarGolesPartido({ partidoId, goles, golesOtros, golesRival }: GolesInput) {
+export async function guardarGolesPartido({ partidoId, goles, golesOtros, golesRival, votar }: GolesInput) {
   if (!partidoId) return { error: "Partido inválido." };
   const { supabase, isAdmin, grupoId } = await requireAdminDePartido(partidoId);
   if (!isAdmin || !grupoId) return { error: "Solo el admin puede cargar goles." };
@@ -344,7 +356,8 @@ export async function guardarGolesPartido({ partidoId, goles, golesOtros, golesR
 
   // La primera vez que se cargan los goles se decide qué vota el partido
   // (Mejor y/o Peor), según las reglas del grupo en /admin (qué categorías
-  // vota y con qué mínimo de jugadores). Después ya no se reevalúa (ver
+  // vota y con qué mínimo de jugadores) menos lo que el admin sacó para este
+  // partido (votar). Después ya no se reevalúa (ver
   // 0015_admin_config.sql y 0018_votacion_separada.sql): cambiar las reglas
   // no toca partidos ya jugados.
   let votacion = {
@@ -379,7 +392,10 @@ export async function guardarGolesPartido({ partidoId, goles, golesOtros, golesR
         .eq("partido_id", partidoId),
       getConfig(supabase, grupoId),
     ]);
-    votacion = votacionDelPartido(count ?? 0, config);
+    const segunReglas = votacionDelPartido(count ?? 0, config);
+    const con_mvp = segunReglas.con_mvp && (votar?.mvp ?? true);
+    const con_peor = segunReglas.con_peor && (votar?.peor ?? true);
+    votacion = { con_votacion: con_mvp || con_peor, con_mvp, con_peor };
   }
 
   for (const { jugadorId, goles: cantidad } of goles) {

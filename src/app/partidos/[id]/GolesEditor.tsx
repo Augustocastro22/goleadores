@@ -8,6 +8,8 @@ import Button from "@/components/ui/Button";
 import { IconGoal } from "@/components/icons";
 import Marcador from "@/components/Marcador";
 import { guardarGolesPartido } from "@/lib/actions/partidos";
+import VotacionPartidoFields, { type VotarEnPartido } from "@/components/VotacionPartidoFields";
+import type { AppConfig } from "@/lib/config";
 
 interface Jugador {
   jugadorId: string;
@@ -29,6 +31,7 @@ export default function GolesEditor({
   golesRivalInit,
   isAdmin,
   marcadorDesafio,
+  votacion,
 }: {
   partidoId: string;
   rival: string;
@@ -47,6 +50,11 @@ export default function GolesEditor({
    * (aplicar_marcador_desafio); si los goles quedan de más se avisa acá.
    */
   marcadorDesafio?: { mios: number | null; rival: number | null };
+  /** Solo la primera vez que se carga el resultado: el admin elige qué se vota (ver VotacionPartidoFields). */
+  votacion?: {
+    config: Pick<AppConfig, "vota_mvp" | "vota_peor" | "min_jugadores_votacion">;
+    reglasHref: string;
+  };
 }) {
   const esDesafio = marcadorDesafio !== undefined;
   const router = useRouter();
@@ -57,6 +65,7 @@ export default function GolesEditor({
   });
   const [golesOtros, setGolesOtros] = useState(golesOtrosInit);
   const [golesRival, setGolesRival] = useState(golesRivalInit);
+  const [votar, setVotar] = useState<VotarEnPartido>({ mvp: true, peor: true });
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ type: "ok" | "error"; text: string } | null>(null);
 
@@ -74,6 +83,7 @@ export default function GolesEditor({
   const otrosDesafio =
     marcadorDesafio?.mios != null ? Math.max(0, marcadorDesafio.mios - golesDeJugadores) : 0;
   const golesDeMas = marcadorDesafio?.mios != null && golesDeJugadores > marcadorDesafio.mios;
+  const esperandoResultado = esDesafio && marcadorDesafio.mios == null;
 
   async function handleGuardar() {
     setSaving(true);
@@ -83,6 +93,7 @@ export default function GolesEditor({
       goles: Object.entries(goles).map(([jugadorId, cantidad]) => ({ jugadorId, goles: cantidad })),
       golesOtros,
       golesRival,
+      votar: votacion ? votar : undefined,
     });
     setSaving(false);
     if (result.error) {
@@ -173,17 +184,26 @@ export default function GolesEditor({
         </div>
       )}
 
+      {isAdmin && votacion && !esperandoResultado && (
+        <VotacionPartidoFields
+          config={votacion.config}
+          cantidadJugadores={equipo1.length + equipo2.length}
+          value={votar}
+          onChange={setVotar}
+          reglasHref={votacion.reglasHref}
+        />
+      )}
+
       {isAdmin && (
         <div className="flex flex-col gap-2">
           <Button
             type="button"
             onClick={handleGuardar}
-            disabled={saving || (esDesafio && marcadorDesafio.mios == null) || golesDeMas}
+            disabled={saving || esperandoResultado || golesDeMas}
             className="w-full"
           >
             {saving ? "Guardando..." : "Guardar goles"}
-          </Button>
-          {message && (
+          </Button>          {message && (
             <p
               className={`rounded-xl border px-3.5 py-2.5 text-sm ${
                 message.type === "ok"
