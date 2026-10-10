@@ -23,6 +23,8 @@ describe("parecidas", () => {
     expect(parecidas("Ferro", "Once Unidos")).toBe(false);
     expect(parecidas("Cancha 1", "Cancha 2")).toBe(false);
     expect(parecidas("F5", "F7")).toBe(false);
+    expect(parecidas("Cancha C", "Cancha D")).toBe(false);
+    expect(parecidas("Sede Norte A", "Sede Norte B")).toBe(false);
   });
 });
 

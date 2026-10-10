@@ -48,6 +48,12 @@ export function parecidas(a: string, b: string): boolean {
   if (!x || !y || x === y) return false;
   // "Cancha 1" y "Cancha 2" son distintas: los números tienen que coincidir.
   if (x.replace(/\D/g, "") !== y.replace(/\D/g, "")) return false;
+  // Lo mismo con letras sueltas: "Cancha C" y "Cancha D" son distintas.
+  const palabras = (t: string) => t.split(/\s+/).map(normalizarLugar).filter(Boolean);
+  const [pa, pb] = [palabras(a), palabras(b)];
+  if (pa.length === pb.length && pa.some((p, i) => p !== pb[i] && Math.min(p.length, pb[i].length) <= 2)) {
+    return false;
+  }
   const tolerancia = Math.min(x.length, y.length) >= 8 ? 2 : 1;
   return Math.min(x.length, y.length) >= 4 && distancia(x, y) <= tolerancia;
 }
