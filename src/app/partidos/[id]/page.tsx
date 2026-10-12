@@ -504,19 +504,20 @@ function ResultadoVotacion({
         <p className="text-sm font-semibold text-white">{label}</p>
         {pendiente && <Badge variant="gold">Empate · falta definir</Badge>}
       </div>
-      <div className="flex flex-col gap-1.5">
+      {/* Todas las filas iguales (misma foto y alto); el ganador se marca solo con el fondo. */}
+      <div className="-mx-2 flex flex-col gap-1">
         {filas.map((f) => {
           const esGanador = ganadores.includes(f.jugador_id);
           const enDisputa = pendiente && desempate.candidatos.includes(f.jugador_id);
           return (
             <div
               key={f.jugador_id}
-              className={`flex items-center justify-between gap-3 rounded-xl text-sm ${
-                esGanador ? `-mx-2 px-2 py-1.5 ${peor ? "bg-danger-500/10" : "bg-primary-500/10"}` : ""
+              className={`flex items-center justify-between gap-3 rounded-xl px-2 py-1.5 text-sm ${
+                esGanador ? (peor ? "bg-danger-500/10" : "bg-primary-500/10") : ""
               }`}
             >
               <span className="flex min-w-0 items-center gap-2.5">
-                <Avatar src={f.foto_url} alt={f.apodo} size={esGanador ? 32 : 24} />
+                <Avatar src={f.foto_url} alt={f.apodo} size={32} />
                 <span className={`truncate ${esGanador || enDisputa ? "font-semibold text-white" : "text-zinc-400"}`}>
                   {f.nombre} {f.apellido} <span className="text-zinc-500">({f.apodo})</span>
                 </span>
