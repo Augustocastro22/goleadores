@@ -9,7 +9,7 @@ import {
   type DesafioVista,
   type EstadoVisible,
 } from "@/lib/desafios";
-import { calcularResultado, RESULTADO_LABEL } from "@/lib/resultado";
+import { calcularResultado, RESULTADO_LABEL, type Resultado } from "@/lib/resultado";
 import Card from "@/components/ui/Card";
 import Badge, { type BadgeVariant } from "@/components/ui/Badge";
 import GrupoLogo from "@/components/ui/GrupoLogo";
@@ -23,6 +23,12 @@ export const ESTADO_VARIANT: Record<EstadoVisible, BadgeVariant> = {
   rechazado: "danger",
   cancelado: "neutral",
   vencido: "neutral",
+};
+
+const RESULTADO_VARIANT: Record<Resultado, BadgeVariant> = {
+  G: "primary",
+  E: "neutral",
+  P: "danger",
 };
 
 /** Qué está pasando con un desafío, en una o dos líneas (fecha propuesta, resultado). */
@@ -83,7 +89,12 @@ export default function DesafioCard({
   if (estado === "cancelado") {
     detalle = d.cancelado_por_mi_grupo ? "Lo cancelaron ustedes" : `Lo canceló ${d.rival_nombre}`;
   }
-  const novedades = novedadesDesafio(d);
+  // Jugado y con el resultado acordado: el resultado reemplaza a "Aceptado" en el badge.
+  const resultado =
+    d.resultado_estado === "verificado" && d.marcador_mios !== null && d.marcador_rival !== null
+      ? calcularResultado(d.marcador_mios, d.marcador_rival)
+      : null;
+  const novedades = novedadesDesafio(d).filter((linea) => !resultado || !linea.startsWith(RESULTADO_LABEL[resultado]));
 
   return (
     <Card className="flex flex-col gap-3 p-4">
@@ -92,9 +103,15 @@ export default function DesafioCard({
         <div className="min-w-0 flex-1">
           <div className="flex items-center justify-between gap-2">
             <p className="truncate font-semibold text-white">vs {d.rival_nombre}</p>
-            <Badge variant={ESTADO_VARIANT[estado]} className="shrink-0 !px-2 !py-0.5">
-              {ESTADO_DESAFIO_LABEL[estado]}
-            </Badge>
+            {resultado ? (
+              <Badge variant={RESULTADO_VARIANT[resultado]} className="shrink-0 !px-2 !py-0.5 tabular-nums">
+                {RESULTADO_LABEL[resultado]} {d.marcador_mios}-{d.marcador_rival}
+              </Badge>
+            ) : (
+              <Badge variant={ESTADO_VARIANT[estado]} className="shrink-0 !px-2 !py-0.5">
+                {ESTADO_DESAFIO_LABEL[estado]}
+              </Badge>
+            )}
           </div>
           <p className="text-sm text-zinc-500">
             {fechaDesafio(d.fecha, d.hora)} · {d.lugar}

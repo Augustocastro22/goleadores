@@ -68,6 +68,8 @@ export default function EncuestaCard({
     month: "short",
     hour: "2-digit",
     minute: "2-digit",
+    // "20:00", no "08:00 p. m.".
+    hourCycle: "h23",
   });
 
   return (

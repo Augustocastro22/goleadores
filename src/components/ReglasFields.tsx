@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Input } from "@/components/ui/Input";
+import Switch from "@/components/ui/Switch";
 import { MAX_MIN_JUGADORES, type AppConfig } from "@/lib/config";
 
 /**
@@ -31,11 +32,11 @@ export default function ReglasFields({ inicial }: { inicial: AppConfig }) {
         detalle="Después de cada partido los que jugaron votan al peor, y se arma el ranking de Peor Jugador."
       />
       {!votaMvp && !votaPeor && (
-        <p className="ml-6.5 text-xs text-zinc-500">Sin votaciones, el grupo solo lleva goles y partidos.</p>
+        <p className="text-xs text-zinc-500">Sin votaciones, el grupo solo lleva goles y partidos.</p>
       )}
 
       {votaMvp || votaPeor ? (
-        <label className="ml-6.5 flex flex-col gap-1.5 text-sm font-medium text-zinc-300">
+        <label className="flex flex-col gap-1.5 text-sm font-medium text-white">
           Mínimo de jugadores para votar
           <Input
             type="number"
@@ -82,18 +83,6 @@ function CategoriaCheckbox({
   detalle: string;
 }) {
   return (
-    <label className="flex items-start gap-2.5 text-sm text-zinc-300">
-      <input
-        type="checkbox"
-        name={name}
-        checked={checked}
-        onChange={(e) => onChange(e.target.checked)}
-        className="mt-0.5 h-4 w-4 shrink-0 accent-primary-500"
-      />
-      <span>
-        {titulo}
-        <span className="block text-xs font-normal text-zinc-500">{detalle}</span>
-      </span>
-    </label>
+    <Switch name={name} checked={checked} onChange={(e) => onChange(e.target.checked)} titulo={titulo} detalle={detalle} />
   );
 }

@@ -12,6 +12,7 @@ import Card from "@/components/ui/Card";
 import Badge from "@/components/ui/Badge";
 import GrupoLogo from "@/components/ui/GrupoLogo";
 import { Input, Label } from "@/components/ui/Input";
+import Switch from "@/components/ui/Switch";
 import { buttonClass } from "@/components/ui/Button";
 import SubmitButton from "@/components/SubmitButton";
 import ConfirmSubmitButton from "@/components/ConfirmSubmitButton";
@@ -190,15 +191,11 @@ export default async function GruposPage() {
           <div className="flex flex-col gap-3 border-t border-border pt-4">
             <p className="text-xs font-semibold tracking-wide text-zinc-500 uppercase">Reglas</p>
             <ReglasFields inicial={CONFIG_DEFAULTS} />
-            <label className="flex items-start gap-2.5 text-sm text-zinc-300">
-              <input type="checkbox" name="requiere_aprobacion" className="mt-0.5 h-4 w-4 shrink-0 accent-primary-500" />
-              <span>
-                Pedir aprobación para entrar
-                <span className="block text-xs font-normal text-zinc-500">
-                  Quien abra el link de invitación queda pendiente hasta que lo aceptes.
-                </span>
-              </span>
-            </label>
+            <Switch
+              name="requiere_aprobacion"
+              titulo="Pedir aprobación para entrar"
+              detalle="Quien abra el link de invitación queda pendiente hasta que lo aceptes."
+            />
             <p className="text-xs text-zinc-500">Todo esto se puede cambiar después desde Admin.</p>
           </div>
           <SubmitButton pendingText="Creando..." size="sm" className="self-start">

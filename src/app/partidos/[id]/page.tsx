@@ -181,12 +181,14 @@ export default async function PartidoDetailPage({
 
   const reglasHref = urlConGrupo("/admin?tab=config", partido.grupo_id);
 
+  // "Martes, 22 de septiembre": solo la primera en mayúscula (capitalize de CSS haría "De Septiembre").
+  const diaLargo = new Date(partido.fecha + "T00:00:00").toLocaleDateString("es-AR", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+  });
   const fecha =
-    new Date(partido.fecha + "T00:00:00").toLocaleDateString("es-AR", {
-      weekday: "long",
-      day: "numeric",
-      month: "long",
-    }) + (partido.hora ? ` · ${partido.hora.slice(0, 5)}hs` : "");
+    diaLargo.charAt(0).toUpperCase() + diaLargo.slice(1) + (partido.hora ? ` · ${partido.hora.slice(0, 5)}hs` : "");
 
   const toJugador = (p: ParticipanteRow) => ({
     jugadorId: p.jugador_id,
@@ -274,6 +276,7 @@ export default async function PartidoDetailPage({
           golesOtrosInit={partido.goles_otros}
           golesRivalInit={partido.goles_rival}
           isAdmin={isAdmin}
+          jugado={partido.jugado}
           marcadorDesafio={
             desafio
               ? {
@@ -331,6 +334,7 @@ export default async function PartidoDetailPage({
               {conPeor && (
                 <ResultadoVotacion
                   label="Peor Jugador"
+                  peor
                   filas={desglosePeor}
                   desempate={desempates.find((d) => d.tipo === "PEOR") ?? null}
                 />
@@ -400,7 +404,7 @@ function EventoProgramado({
     <div className="flex flex-col gap-6">
       <Card className="p-6">
         <div className="flex items-center justify-between gap-2 text-xs font-medium text-zinc-500">
-          <span className="truncate capitalize">{fecha}</span>
+          <span className="truncate">{fecha}</span>
           <span className="truncate">{lugar}</span>
         </div>
         <div className="mt-4 flex flex-col items-center gap-2">
@@ -465,10 +469,13 @@ function ConvocadosList({
  */
 function ResultadoVotacion({
   label,
+  peor = false,
   filas,
   desempate,
 }: {
   label: string;
+  /** El ganador se marca en rojo en vez de verde. */
+  peor?: boolean;
   filas: RankingRow[];
   desempate: DesempatePartido | null;
 }) {
@@ -502,13 +509,21 @@ function ResultadoVotacion({
           const esGanador = ganadores.includes(f.jugador_id);
           const enDisputa = pendiente && desempate.candidatos.includes(f.jugador_id);
           return (
-            <div key={f.jugador_id} className="flex items-center justify-between gap-3 text-sm">
-              <span className={esGanador || enDisputa ? "font-semibold text-white" : "text-zinc-400"}>
-                {f.nombre} {f.apellido} <span className="text-zinc-500">({f.apodo})</span>
+            <div
+              key={f.jugador_id}
+              className={`flex items-center justify-between gap-3 rounded-xl text-sm ${
+                esGanador ? `-mx-2 px-2 py-1.5 ${peor ? "bg-danger-500/10" : "bg-primary-500/10"}` : ""
+              }`}
+            >
+              <span className="flex min-w-0 items-center gap-2.5">
+                <Avatar src={f.foto_url} alt={f.apodo} size={esGanador ? 32 : 24} />
+                <span className={`truncate ${esGanador || enDisputa ? "font-semibold text-white" : "text-zinc-400"}`}>
+                  {f.nombre} {f.apellido} <span className="text-zinc-500">({f.apodo})</span>
+                </span>
               </span>
               <span
                 className={`shrink-0 font-bold tabular-nums ${
-                  esGanador ? "text-primary-400" : enDisputa ? "text-gold-400" : "text-zinc-500"
+                  esGanador ? (peor ? "text-danger-400" : "text-primary-400") : enDisputa ? "text-gold-400" : "text-zinc-500"
                 }`}
               >
                 {f.votos}

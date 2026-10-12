@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { votacionDelPartido, type AppConfig } from "@/lib/config";
+import Switch from "@/components/ui/Switch";
 
 export type VotarEnPartido = { mvp: boolean; peor: boolean };
 
@@ -38,15 +39,12 @@ export default function VotacionPartidoFields({
       {con_votacion ? (
         <>
           {categorias.map((c) => (
-            <label key={c.clave} className="flex items-center gap-2.5 text-sm text-zinc-300">
-              <input
-                type="checkbox"
-                checked={value[c.clave]}
-                onChange={(e) => onChange({ ...value, [c.clave]: e.target.checked })}
-                className="h-4 w-4 shrink-0 accent-primary-500"
-              />
-              {c.titulo}
-            </label>
+            <Switch
+              key={c.clave}
+              checked={value[c.clave]}
+              onChange={(e) => onChange({ ...value, [c.clave]: e.target.checked })}
+              titulo={c.titulo}
+            />
           ))}
           <input type="hidden" name="votar_mvp" value={value.mvp ? "1" : "0"} />
           <input type="hidden" name="votar_peor" value={value.peor ? "1" : "0"} />

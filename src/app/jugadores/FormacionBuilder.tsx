@@ -7,7 +7,7 @@ import Button from "@/components/ui/Button";
 import Card from "@/components/ui/Card";
 import { IconDownload, IconTrash } from "@/components/icons";
 
-const FUTBOL_OPCIONES = [5, 6, 7, 8, 9] as const;
+const FUTBOL_OPCIONES = [5, 6, 7, 8, 9, 11] as const;
 
 const FORMACIONES_PRESET: Record<number, string[]> = {
   5: ["2-2", "3-1", "1-2-1"],
@@ -15,6 +15,7 @@ const FORMACIONES_PRESET: Record<number, string[]> = {
   7: ["3-2-1", "2-3-1", "2-2-2"],
   8: ["3-3-1", "2-3-2", "3-2-2"],
   9: ["3-3-2", "4-3-1", "3-4-1"],
+  11: ["4-4-2", "4-3-3", "3-5-2"],
 };
 
 interface Slot {
@@ -468,7 +469,7 @@ export default function FormacionBuilder({ jugadores }: { jugadores: Profile[] }
                 key={n}
                 type="button"
                 onClick={() => elegirFutbol(n)}
-                className={`rounded-lg border px-3.5 py-1.5 text-sm font-semibold transition ${
+                className={`rounded-lg border px-3.5 py-1.5 text-sm font-semibold whitespace-nowrap transition ${
                   futbol === n
                     ? "border-primary-500/40 bg-primary-500/15 text-primary-400"
                     : "border-border bg-white/5 text-zinc-400 hover:text-white"
@@ -490,7 +491,7 @@ export default function FormacionBuilder({ jugadores }: { jugadores: Profile[] }
                 key={f}
                 type="button"
                 onClick={() => elegirFormacion(f)}
-                className={`rounded-lg border px-3.5 py-1.5 text-sm font-semibold transition ${
+                className={`rounded-lg border px-3.5 py-1.5 text-sm font-semibold whitespace-nowrap transition ${
                   !usandoCustom && formacionStr === f
                     ? "border-primary-500/40 bg-primary-500/15 text-primary-400"
                     : "border-border bg-white/5 text-zinc-400 hover:text-white"
@@ -502,7 +503,7 @@ export default function FormacionBuilder({ jugadores }: { jugadores: Profile[] }
             <button
               type="button"
               onClick={() => setUsandoCustom(true)}
-              className={`rounded-lg border px-3.5 py-1.5 text-sm font-semibold transition ${
+              className={`rounded-lg border px-3.5 py-1.5 text-sm font-semibold whitespace-nowrap transition ${
                 usandoCustom
                   ? "border-primary-500/40 bg-primary-500/15 text-primary-400"
                   : "border-border bg-white/5 text-zinc-400 hover:text-white"
@@ -578,7 +579,7 @@ export default function FormacionBuilder({ jugadores }: { jugadores: Profile[] }
           })}
         </div>
         <div className="mt-2 flex items-center justify-between px-1">
-          <p className="text-xs text-zinc-500">Arrastrá cada posición para acomodarla a tu gusto.</p>
+          <p className="text-xs text-zinc-500">Dentro de la cancha, arrastrá a cualquiera para moverlo a tu gusto.</p>
           {hayPosicionesCustom && (
             <button
               type="button"
@@ -592,11 +593,8 @@ export default function FormacionBuilder({ jugadores }: { jugadores: Profile[] }
       </div>
 
       <Card className="p-4">
-        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-          <p className="text-xs font-semibold tracking-wide text-zinc-400 uppercase">
-            Plantel disponible{" "}
-            {seleccionado ? "· tocá una posición para ubicarlo o moverlo" : ""}
-          </p>
+        <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
+          <p className="text-xs font-semibold tracking-wide text-zinc-400 uppercase">Plantel disponible</p>
           <div className="flex items-center gap-3">
             {seleccionado?.origen === "slot" && (
               <button
@@ -616,6 +614,12 @@ export default function FormacionBuilder({ jugadores }: { jugadores: Profile[] }
             </button>
           </div>
         </div>
+        {/* Cómo se usa, siempre a la vista: no todos descubren que se puede arrastrar. */}
+        <p className={`mb-3 text-xs ${seleccionado ? "text-primary-400" : "text-zinc-500"}`}>
+          {seleccionado
+            ? "Ahora tocá una posición de la cancha para ubicarlo ahí."
+            : "Arrastrá cada jugador a su posición, o tocalo y después tocá la posición."}
+        </p>
         {disponibles.length === 0 ? (
           <p className="py-2 text-sm text-zinc-500">Todos ubicados en la cancha.</p>
         ) : (

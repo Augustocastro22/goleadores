@@ -22,6 +22,7 @@ import Card from "@/components/ui/Card";
 import Badge from "@/components/ui/Badge";
 import Avatar from "@/components/ui/Avatar";
 import { Input, Label } from "@/components/ui/Input";
+import Switch from "@/components/ui/Switch";
 import SubmitButton from "@/components/SubmitButton";
 import ConfirmSubmitButton from "@/components/ConfirmSubmitButton";
 import { buttonClass } from "@/components/ui/Button";
@@ -34,13 +35,12 @@ import HoraSelect from "@/components/HoraSelect";
 import CanchaInput from "@/components/CanchaInput";
 import { getCanchas } from "@/lib/canchas";
 
-type Tab = "grupo" | "config" | "partidos" | "canchas" | "usuarios";
+type Tab = "grupo" | "config" | "partidos" | "usuarios";
 
 const TABS: { id: Tab; label: string }[] = [
   { id: "grupo", label: "Grupo" },
   { id: "config", label: "Reglas" },
   { id: "partidos", label: "Partidos" },
-  { id: "canchas", label: "Canchas" },
   { id: "usuarios", label: "Miembros" },
 ];
 
@@ -50,6 +50,7 @@ export default async function AdminPage({
   searchParams: Promise<{ tab?: string }>;
 }) {
   const { tab: tabParam } = await searchParams;
+  // Las canchas ahora están al final de Grupo (links viejos con tab=canchas).
   const tab: Tab = TABS.some((t) => t.id === tabParam) ? (tabParam as Tab) : "grupo";
 
   const { supabase, user, grupo } = await getContexto();
@@ -74,13 +75,14 @@ export default async function AdminPage({
           <Link
             key={t.id}
             href={`/admin?tab=${t.id}`}
-            className={`shrink-0 rounded-lg px-4 py-1.5 text-sm font-semibold transition ${
+            className={`relative flex-1 shrink-0 rounded-lg px-2.5 py-1.5 text-center text-[13px] font-semibold whitespace-nowrap transition sm:flex-none sm:px-4 sm:text-sm ${
               tab === t.id ? "bg-primary-500/15 text-primary-400" : "text-zinc-400 hover:text-white"
             }`}
           >
             {t.label}
+            {/* Arriba a la derecha y sin ocupar lugar: así las pestañas entran en un celular. */}
             {t.id === "usuarios" && (solicitudesPendientes ?? 0) > 0 && (
-              <span className="ml-1.5 rounded-full bg-gold-500/20 px-1.5 py-0.5 text-[11px] text-gold-400">
+              <span className="absolute top-0 right-0 flex h-4 min-w-4 items-center justify-center rounded-full bg-gold-500 px-1 text-[10px] font-bold text-black">
                 {solicitudesPendientes}
               </span>
             )}
@@ -91,7 +93,6 @@ export default async function AdminPage({
       {tab === "grupo" && <GrupoTab grupo={grupo} />}
       {tab === "config" && <ConfigTab grupoId={grupo.id} />}
       {tab === "partidos" && <PartidosTab grupoId={grupo.id} />}
-      {tab === "canchas" && <CanchasTab grupoId={grupo.id} />}
       {tab === "usuarios" && <UsuariosTab grupoId={grupo.id} miId={user.id} />}
     </div>
   );
@@ -131,26 +132,22 @@ async function GrupoTab({ grupo }: { grupo: MiGrupo }) {
             Nombre del grupo
             <Input type="text" name="nombre" required maxLength={60} defaultValue={grupo.nombre} />
           </Label>
-          <label className="flex items-start gap-2.5 text-sm text-zinc-300">
-            <input
-              type="checkbox"
-              name="requiere_aprobacion"
-              defaultChecked={grupo.requiere_aprobacion}
-              className="mt-0.5 h-4 w-4 shrink-0 accent-primary-500"
-            />
-            <span>
-              Pedir aprobación para entrar
-              <span className="block text-xs font-normal text-zinc-500">
-                Quien abra el link queda pendiente hasta que un admin lo acepte en Miembros. Sirve
-                si el link se reenvía a gente que no es del grupo.
-              </span>
-            </span>
-          </label>
+          <Switch
+            name="requiere_aprobacion"
+            defaultChecked={grupo.requiere_aprobacion}
+            titulo="Pedir aprobación para entrar"
+            detalle="Quien abra el link queda pendiente hasta que un admin lo acepte en Miembros. Sirve si el link se reenvía a gente que no es del grupo."
+          />
           <SubmitButton pendingText="Guardando..." size="sm" className="self-start">
             Guardar
           </SubmitButton>
         </ActionForm>
       </Card>
+
+      <section className="mt-2 flex flex-col gap-2">
+        <h2 className="font-bold text-white">Canchas</h2>
+        <CanchasLista grupoId={grupo.id} />
+      </section>
     </div>
   );
 }
@@ -283,7 +280,7 @@ async function PartidosTab({ grupoId }: { grupoId: string }) {
   );
 }
 
-async function CanchasTab({ grupoId }: { grupoId: string }) {
+async function CanchasLista({ grupoId }: { grupoId: string }) {
   const { supabase } = await getContexto();
   const canchas = await getCanchas(supabase, grupoId);
 
