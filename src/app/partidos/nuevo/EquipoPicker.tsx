@@ -28,7 +28,7 @@ export default function EquipoPicker({
         type="button"
         onClick={() => alternar("1")}
         aria-pressed={equipo === "1"}
-        className={`rounded-lg border px-2.5 py-1 text-xs font-semibold transition ${
+        className={`rounded-lg border px-2.5 py-1 text-xs font-semibold whitespace-nowrap transition ${
           equipo === "1"
             ? "border-primary-500/40 bg-primary-500/10 text-primary-400"
             : "border-border text-zinc-400 hover:text-white"
@@ -40,7 +40,7 @@ export default function EquipoPicker({
         type="button"
         onClick={() => alternar("2")}
         aria-pressed={equipo === "2"}
-        className={`rounded-lg border px-2.5 py-1 text-xs font-semibold transition ${
+        className={`rounded-lg border px-2.5 py-1 text-xs font-semibold whitespace-nowrap transition ${
           equipo === "2"
             ? "border-gold-500/40 bg-gold-500/10 text-gold-400"
             : "border-border text-zinc-400 hover:text-white"
