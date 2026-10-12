@@ -1,7 +1,7 @@
 import { requireGrupo } from "@/lib/grupo";
 import { getConfig, grupoVota } from "@/lib/config";
 import { votacionCerrada } from "@/lib/votacion";
-import type { EstadoVotacion, RankingRow } from "@/lib/types";
+import type { DesempatePartido, EstadoVotacion, RankingRow } from "@/lib/types";
 import Card from "@/components/ui/Card";
 import Avatar from "@/components/ui/Avatar";
 import { IconGoal, IconThumbsDown, IconTrophy } from "@/components/icons";
@@ -55,8 +55,9 @@ export default async function EstadisticasPage() {
 
   let ultimoMvp: RankingRow[] = [];
   let ultimoPeor: RankingRow[] = [];
+  let ultimoDesempates: DesempatePartido[] = [];
   if (ultimoPartidoCerradoId) {
-    const [ultimoMvpRes, ultimoPeorRes] = await Promise.all([
+    const [ultimoMvpRes, ultimoPeorRes, desempatesRes] = await Promise.all([
       supabase.rpc("get_ganadores_votacion", {
         p_partido_id: ultimoPartidoCerradoId,
         p_tipo: "MVP",
@@ -65,7 +66,9 @@ export default async function EstadisticasPage() {
         p_partido_id: ultimoPartidoCerradoId,
         p_tipo: "PEOR",
       }),
+      supabase.rpc("get_desempates_partido", { p_partido_id: ultimoPartidoCerradoId }),
     ]);
+    ultimoDesempates = (desempatesRes.data ?? []) as DesempatePartido[];
     ultimoMvp = (ultimoMvpRes.data ?? []) as RankingRow[];
     ultimoPeor = (ultimoPeorRes.data ?? []) as RankingRow[];
   }
@@ -89,8 +92,9 @@ export default async function EstadisticasPage() {
           rows={(mvp.data ?? []) as RankingRow[]}
           valueKey="veces_elegido"
           valueLabel="Veces"
-          onlyLideres
+          podio
           ultimoPartidoGanadores={ultimoMvp}
+          ultimoPartidoPendiente={ultimoDesempates.find((d) => d.tipo === "MVP" && !d.resuelto)}
         />
       )}
       {config.vota_peor && (
@@ -101,8 +105,9 @@ export default async function EstadisticasPage() {
           rows={(peor.data ?? []) as RankingRow[]}
           valueKey="veces_elegido"
           valueLabel="Veces"
-          onlyLideres
+          podio
           ultimoPartidoGanadores={ultimoPeor}
+          ultimoPartidoPendiente={ultimoDesempates.find((d) => d.tipo === "PEOR" && !d.resuelto)}
         />
       )}
       {historial.length > 0 && <HistorialDesafios filas={historial} />}
@@ -159,8 +164,9 @@ function RankingList({
   rows,
   valueKey,
   valueLabel,
-  onlyLideres = false,
+  podio = false,
   ultimoPartidoGanadores,
+  ultimoPartidoPendiente,
 }: {
   titulo: string;
   icon: ComponentType<SVGProps<SVGSVGElement>>;
@@ -168,17 +174,22 @@ function RankingList({
   rows: RankingRow[];
   valueKey: "goles" | "veces_elegido";
   valueLabel: string;
-  onlyLideres?: boolean;
+  podio?: boolean;
   ultimoPartidoGanadores?: RankingRow[];
+  /** Empate del último partido que todavía se está definiendo. */
+  ultimoPartidoPendiente?: DesempatePartido;
 }) {
-  let ordenadas = [...rows]
+  const ordenadas = [...rows]
     .filter((r) => (r[valueKey] ?? 0) > 0)
     .sort((a, b) => (b[valueKey] ?? 0) - (a[valueKey] ?? 0));
 
-  if (onlyLideres && ordenadas.length > 0) {
-    const max = ordenadas[0][valueKey] ?? 0;
-    ordenadas = ordenadas.filter((r) => (r[valueKey] ?? 0) === max);
-  }
+  // Los empatados comparten puesto (1, 1, 3…).
+  let filas = ordenadas.map((row) => ({
+    row,
+    puesto: ordenadas.findIndex((r) => (r[valueKey] ?? 0) === (row[valueKey] ?? 0)) + 1,
+  }));
+  // Podio: los tres primeros puestos, con todos los empatados en cada uno.
+  if (podio) filas = filas.filter((f) => f.puesto <= 3);
 
   return (
     <section>
@@ -188,14 +199,15 @@ function RankingList({
         </span>
         <div>
           <h2 className="text-lg font-bold text-white">{titulo}</h2>
-          {onlyLideres && ordenadas.length > 0 && (
-            <p className="text-xs text-zinc-500">
-              {ordenadas.length > 1 ? "Líderes empatados" : "Líder actual"}
-            </p>
-          )}
+          {podio && filas.length > 0 && <p className="text-xs text-zinc-500">Podio</p>}
         </div>
       </div>
-      {ultimoPartidoGanadores && ultimoPartidoGanadores.length > 0 && (
+      {ultimoPartidoPendiente ? (
+        <p className="mb-3 pl-10 text-xs text-zinc-500">
+          Último partido: empataron{" "}
+          <span className="text-zinc-400">{ultimoPartidoPendiente.candidatos_apodos.join(" y ")}</span>, falta definir
+        </p>
+      ) : ultimoPartidoGanadores && ultimoPartidoGanadores.length > 0 && (
         <p className="mb-3 pl-10 text-xs text-zinc-500">
           Último partido:{" "}
           <span className="text-zinc-400">
@@ -205,18 +217,18 @@ function RankingList({
           {ultimoPartidoGanadores[0].votos === 1 ? "voto" : "votos"}
         </p>
       )}
-      {ordenadas.length === 0 ? (
+      {filas.length === 0 ? (
         <Card className="px-5 py-8 text-center text-sm text-zinc-500">Todavía no hay datos.</Card>
       ) : (
         <Card className="divide-y divide-border overflow-hidden py-1">
-          {ordenadas.map((row, i) => (
+          {filas.map(({ row, puesto }) => (
             <div key={row.jugador_id} className="flex items-center gap-3 px-4 py-3">
               <span
                 className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold ${
-                  onlyLideres ? rankBadge[0] : (rankBadge[i] ?? "text-zinc-600")
+                  rankBadge[puesto - 1] ?? "text-zinc-600"
                 }`}
               >
-                {onlyLideres ? 1 : i + 1}
+                {puesto}
               </span>
               <Avatar
                 src={row.foto_url}

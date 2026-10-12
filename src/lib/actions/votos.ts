@@ -53,6 +53,19 @@ export async function votar(formData: FormData) {
     return { error: "La votación de este partido ya está cerrada." };
   }
 
+  // El mismo jugador no puede ser Mejor y Peor en el mismo voto.
+  const { data: votoOtraCategoria } = await supabase
+    .from("votos")
+    .select("id")
+    .eq("partido_id", partidoId)
+    .eq("jugador_que_vota_id", user.id)
+    .eq("jugador_votado_id", jugadorVotadoId)
+    .neq("tipo", tipo)
+    .maybeSingle();
+  if (votoOtraCategoria) {
+    return { error: "No podés votar al mismo jugador como Mejor y Peor." };
+  }
+
   const { error } = await supabase.from("votos").insert({
     partido_id: partidoId,
     jugador_votado_id: jugadorVotadoId,

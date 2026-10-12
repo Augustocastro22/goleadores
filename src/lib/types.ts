@@ -112,6 +112,18 @@ export interface Desempate {
   created_at: string;
 }
 
+/** Lo que ve cualquier miembro de un desempate (get_desempates_partido, 0028_desempate_visible). */
+export interface DesempatePartido {
+  id: string;
+  tipo: TipoVoto;
+  candidatos: string[];
+  candidatos_apodos: string[];
+  resuelto: boolean;
+  ganador_id: string | null;
+  /** Soy de los que lo definen y todavía no voté. */
+  puedo_definir: boolean;
+}
+
 export interface DesempateVoto {
   id: string;
   desempate_id: string;

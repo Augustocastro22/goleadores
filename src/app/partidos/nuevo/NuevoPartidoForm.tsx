@@ -11,6 +11,7 @@ import Avatar from "@/components/ui/Avatar";
 import { Input, Label } from "@/components/ui/Input";
 import { IconGoal } from "@/components/icons";
 import Marcador from "@/components/Marcador";
+import GolesInput from "@/components/GolesInput";
 import VotacionPartidoFields, { type VotarEnPartido } from "@/components/VotacionPartidoFields";
 import type { AppConfig } from "@/lib/config";
 import EquipoPicker, { type EquipoElegido } from "./EquipoPicker";
@@ -260,15 +261,7 @@ function GolesRow({
         <span className="block truncate">{label}</span>
         {detalle && <span className="block text-xs text-zinc-500">{detalle}</span>}
       </span>
-      <input
-        type="number"
-        name={name}
-        min={0}
-        inputMode="numeric"
-        value={value}
-        onChange={(e) => onChange(Math.max(0, Number(e.target.value) || 0))}
-        className="w-16 shrink-0 rounded-lg border border-border bg-white/5 px-2 py-1.5 text-center text-sm text-white outline-none focus:border-primary-400/60 focus:ring-2 focus:ring-primary-400/20"
-      />
+      <GolesInput name={name} value={value} onChange={onChange} />
     </label>
   );
 }

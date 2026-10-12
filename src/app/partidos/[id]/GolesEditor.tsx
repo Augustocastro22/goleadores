@@ -7,6 +7,7 @@ import Avatar from "@/components/ui/Avatar";
 import Button from "@/components/ui/Button";
 import { IconGoal } from "@/components/icons";
 import Marcador from "@/components/Marcador";
+import GolesInput from "@/components/GolesInput";
 import { guardarGolesPartido } from "@/lib/actions/partidos";
 import VotacionPartidoFields, { type VotarEnPartido } from "@/components/VotacionPartidoFields";
 import type { AppConfig } from "@/lib/config";
@@ -251,13 +252,7 @@ function JugadorRow({
         </span>
       </div>
       {isAdmin ? (
-        <input
-          type="number"
-          min={0}
-          value={value}
-          onChange={(e) => onChange(Math.max(0, Number(e.target.value) || 0))}
-          className="w-16 shrink-0 rounded-lg border border-border bg-white/5 px-2 py-1.5 text-center text-sm text-white outline-none focus:border-primary-400/60 focus:ring-2 focus:ring-primary-400/20"
-        />
+        <GolesInput value={value} onChange={onChange} />
       ) : (
         <span className="text-lg font-bold tabular-nums text-white">{value}</span>
       )}
@@ -280,13 +275,7 @@ function InvitadosRow({
         Invitados no registrados <span className="text-zinc-600">(no cuentan para la tabla)</span>
       </span>
       {isAdmin ? (
-        <input
-          type="number"
-          min={0}
-          value={value}
-          onChange={(e) => onChange(Math.max(0, Number(e.target.value) || 0))}
-          className="w-16 shrink-0 rounded-lg border border-border bg-white/5 px-2 py-1.5 text-center text-sm text-white outline-none focus:border-primary-400/60 focus:ring-2 focus:ring-primary-400/20"
-        />
+        <GolesInput value={value} onChange={onChange} />
       ) : (
         <span className="text-lg font-bold tabular-nums text-white">{value}</span>
       )}

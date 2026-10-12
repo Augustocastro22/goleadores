@@ -7,7 +7,7 @@ import { urlConGrupo } from "@/lib/grupo-cookie";
 import { votar, votarDesempate } from "@/lib/actions/votos";
 import { votacionCerrada } from "@/lib/votacion";
 import { partidoYaPaso } from "@/lib/confirmacion";
-import type { Bloqueo, Desempate, EstadoVotacion, Profile, RankingRow, Respuesta } from "@/lib/types";
+import type { Bloqueo, DesempatePartido, EstadoVotacion, Profile, RankingRow, Respuesta } from "@/lib/types";
 import Card from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
 import Badge from "@/components/ui/Badge";
@@ -23,6 +23,7 @@ import GolesEditor from "./GolesEditor";
 import DesafioPanel, { type PropuestaResultado } from "./DesafioPanel";
 import type { Ocupado } from "./ConvocadosEditor";
 import ConvocadosEditor from "./ConvocadosEditor";
+import VotoSelects, { type Candidato } from "./VotoSelects";
 import { PendientesCard, RespuestaBadge, RespuestaCard, ResumenRespuestas } from "./Confirmacion";
 
 interface ParticipanteRow {
@@ -63,7 +64,7 @@ export default async function PartidoDetailPage({
         .from("partido_jugadores")
         .select("jugador_id, goles, equipo, respuesta, profiles(*)")
         .eq("partido_id", id),
-      supabase.from("votos").select("tipo").eq("partido_id", id).eq("jugador_que_vota_id", user.id),
+      supabase.from("votos").select("tipo, jugador_votado_id").eq("partido_id", id).eq("jugador_que_vota_id", user.id),
       isAdmin && !partido.jugado ? getMiembros(supabase, partido.grupo_id) : Promise.resolve([] as Profile[]),
       partido.desafio_id
         ? supabase.rpc("get_desafios", { p_grupo_id: partido.grupo_id, p_desafio_id: partido.desafio_id })
@@ -100,7 +101,6 @@ export default async function PartidoDetailPage({
   );
 
   const soyParticipante = participantes.some((p) => p.jugador_id === user.id);
-  const jugadorPorId = new Map(participantes.map((p) => [p.jugador_id, p.profiles]));
 
   let bloqueos: Bloqueo[] = [];
   let ocupados: Ocupado[] = [];
@@ -142,15 +142,14 @@ export default async function PartidoDetailPage({
   }
   const golesDeJugadores = participantes.filter((p) => p.equipo === 1).reduce((t, p) => t + p.goles, 0);
 
-  const yaVoteMvp = (misVotos ?? []).some((v) => v.tipo === "MVP");
-  const yaVotePeor = (misVotos ?? []).some((v) => v.tipo === "PEOR");
+  const votoMvpId = (misVotos ?? []).find((v) => v.tipo === "MVP")?.jugador_votado_id ?? null;
+  const votoPeorId = (misVotos ?? []).find((v) => v.tipo === "PEOR")?.jugador_votado_id ?? null;
   const candidatos = participantes.filter((p) => p.jugador_id !== user.id);
 
   let cerrada = false;
   let desgloseMvp: RankingRow[] = [];
   let desglosePeor: RankingRow[] = [];
-  let desempates: Desempate[] = [];
-  let misVotosDesempate: string[] = [];
+  let desempates: DesempatePartido[] = [];
   if (partido.jugado && partido.con_votacion) {
     const { data: estadoVotacion } = await supabase
       .rpc("get_estado_votacion", { p_partido_id: id })
@@ -171,24 +170,12 @@ export default async function PartidoDetailPage({
       const [mvpRes, peorRes, desempatesRes] = await Promise.all([
         supabase.rpc("get_desglose_votos", { p_partido_id: id, p_tipo: "MVP" }),
         supabase.rpc("get_desglose_votos", { p_partido_id: id, p_tipo: "PEOR" }),
-        supabase.from("desempates").select("*").eq("partido_id", id).returns<Desempate[]>(),
+        // Todos ven si hay un empate por definir, no solo quienes lo definen.
+        supabase.rpc("get_desempates_partido", { p_partido_id: id }),
       ]);
       desgloseMvp = (mvpRes.data ?? []) as RankingRow[];
       desglosePeor = (peorRes.data ?? []) as RankingRow[];
-      desempates = desempatesRes.data ?? [];
-
-      const pendientes = desempates.filter((d) => !d.resuelto);
-      if (pendientes.length > 0) {
-        const { data: misVotosDesempateRaw } = await supabase
-          .from("desempate_votos")
-          .select("desempate_id")
-          .eq("jugador_que_vota_id", user.id)
-          .in(
-            "desempate_id",
-            pendientes.map((d) => d.id)
-          );
-        misVotosDesempate = (misVotosDesempateRaw ?? []).map((v) => v.desempate_id);
-      }
+      desempates = (desempatesRes.data ?? []) as DesempatePartido[];
     }
   }
 
@@ -309,8 +296,11 @@ export default async function PartidoDetailPage({
         />
       )}
 
-      {/* Un partido sin votación de un grupo que ya no vota no muestra nada de votación. */}
-      {soyParticipante && partido.jugado && (partido.con_votacion || grupoVota) && (
+      {/* Un partido sin votación de un grupo que ya no vota no muestra nada de votación.
+          El admin que no jugó ve cómo quedó, una vez cerrada (mientras está abierta no ve nada). */}
+      {(soyParticipante || (isAdmin && partido.con_votacion && cerrada)) &&
+        partido.jugado &&
+        (partido.con_votacion || grupoVota) && (
         <section className="flex flex-col gap-3">
           <h2 className="text-lg font-bold text-white">Votación</h2>
           {/* Una votación abierta ya no se toca: al admin se le muestra dónde apagarla para los próximos. */}
@@ -332,36 +322,31 @@ export default async function PartidoDetailPage({
           ) : cerrada ? (
             <div className="flex flex-col gap-3">
               {conMvp && (
-                <>
-                  <DesgloseVotos label="Mejor Jugador" filas={desgloseMvp} />
-                  <DesempateInfo
-                    desempate={desempates.find((d) => d.tipo === "MVP") ?? null}
-                    yaVote={misVotosDesempate}
-                    miId={user.id}
-                    jugadorPorId={jugadorPorId}
-                  />
-                </>
+                <ResultadoVotacion
+                  label="Mejor Jugador"
+                  filas={desgloseMvp}
+                  desempate={desempates.find((d) => d.tipo === "MVP") ?? null}
+                />
               )}
               {conPeor && (
-                <>
-                  <DesgloseVotos label="Peor Jugador" filas={desglosePeor} />
-                  <DesempateInfo
-                    desempate={desempates.find((d) => d.tipo === "PEOR") ?? null}
-                    yaVote={misVotosDesempate}
-                    miId={user.id}
-                    jugadorPorId={jugadorPorId}
-                  />
-                </>
+                <ResultadoVotacion
+                  label="Peor Jugador"
+                  filas={desglosePeor}
+                  desempate={desempates.find((d) => d.tipo === "PEOR") ?? null}
+                />
               )}
             </div>
           ) : (
             <VotacionForm
               partidoId={id}
-              candidatos={candidatos}
+              candidatos={candidatos.map((c) => ({
+                id: c.jugador_id,
+                nombre: `${c.profiles.nombre} ${c.profiles.apellido} (${c.profiles.apodo})`,
+              }))}
               conMvp={conMvp}
               conPeor={conPeor}
-              yaVoteMvp={yaVoteMvp}
-              yaVotePeor={yaVotePeor}
+              votoMvpId={votoMvpId}
+              votoPeorId={votoPeorId}
             />
           )}
         </section>
@@ -472,8 +457,21 @@ function ConvocadosList({
   );
 }
 
-
-function DesgloseVotos({ label, filas }: { label: string; filas: RankingRow[] }) {
+/**
+ * Cómo quedó una categoría. Si hubo empate por el primer puesto:
+ * - mientras se define (desempate pendiente) no hay ganador, y se dice clarito;
+ * - si se definió, gana solo el elegido;
+ * - si no había cómo definirlo (o volvió a empatar), cuentan todos los empatados.
+ */
+function ResultadoVotacion({
+  label,
+  filas,
+  desempate,
+}: {
+  label: string;
+  filas: RankingRow[];
+  desempate: DesempatePartido | null;
+}) {
   if (filas.length === 0) {
     return (
       <Card className="px-4 py-3 text-sm text-zinc-500">
@@ -483,20 +481,35 @@ function DesgloseVotos({ label, filas }: { label: string; filas: RankingRow[] })
   }
 
   const maxVotos = filas[0].votos ?? 0;
+  const empatados = filas.filter((f) => (f.votos ?? 0) === maxVotos);
+  const pendiente = desempate !== null && !desempate.resuelto;
+  const ganadores = pendiente
+    ? []
+    : desempate?.ganador_id
+      ? [desempate.ganador_id]
+      : empatados.map((f) => f.jugador_id);
+  const nombresEmpatados = (desempate?.candidatos_apodos ?? empatados.map((f) => f.apodo)).join(" y ");
+  const apodoDe = (id: string) => filas.find((f) => f.jugador_id === id)?.apodo ?? "?";
 
   return (
-    <Card className="p-4">
-      <p className="mb-2 text-sm font-semibold text-white">{label}</p>
+    <Card className="flex flex-col gap-3 p-4">
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-sm font-semibold text-white">{label}</p>
+        {pendiente && <Badge variant="gold">Empate · falta definir</Badge>}
+      </div>
       <div className="flex flex-col gap-1.5">
         {filas.map((f) => {
-          const esGanador = (f.votos ?? 0) === maxVotos;
+          const esGanador = ganadores.includes(f.jugador_id);
+          const enDisputa = pendiente && desempate.candidatos.includes(f.jugador_id);
           return (
             <div key={f.jugador_id} className="flex items-center justify-between gap-3 text-sm">
-              <span className={esGanador ? "font-semibold text-white" : "text-zinc-400"}>
+              <span className={esGanador || enDisputa ? "font-semibold text-white" : "text-zinc-400"}>
                 {f.nombre} {f.apellido} <span className="text-zinc-500">({f.apodo})</span>
               </span>
               <span
-                className={`shrink-0 font-bold tabular-nums ${esGanador ? "text-primary-400" : "text-zinc-500"}`}
+                className={`shrink-0 font-bold tabular-nums ${
+                  esGanador ? "text-primary-400" : enDisputa ? "text-gold-400" : "text-zinc-500"
+                }`}
               >
                 {f.votos}
               </span>
@@ -504,60 +517,37 @@ function DesgloseVotos({ label, filas }: { label: string; filas: RankingRow[] })
           );
         })}
       </div>
+
+      {pendiente ? (
+        desempate.puedo_definir ? (
+          <DefinirDesempate desempate={desempate} />
+        ) : (
+          <p className="border-t border-border pt-3 text-sm text-zinc-400">
+            Empataron {nombresEmpatados}. Todavía <span className="font-semibold text-white">no hay ganador</span>:
+            lo definen con un voto extra los que no votaron a ninguno de los dos.
+          </p>
+        )
+      ) : desempate?.ganador_id ? (
+        <p className="border-t border-border pt-3 text-sm text-zinc-400">
+          Empataron {nombresEmpatados}: se definió con un voto extra y ganó{" "}
+          <span className="font-semibold text-white">{apodoDe(desempate.ganador_id)}</span>.
+        </p>
+      ) : (
+        empatados.length > 1 && (
+          <p className="border-t border-border pt-3 text-sm text-zinc-400">
+            Empataron {nombresEmpatados} y no se pudo definir, así que cuentan todos.
+          </p>
+        )
+      )}
     </Card>
   );
 }
 
-function DesempateInfo({
-  desempate,
-  yaVote,
-  miId,
-  jugadorPorId,
-}: {
-  desempate: Desempate | null;
-  yaVote: string[];
-  miId: string;
-  jugadorPorId: Map<string, Profile>;
-}) {
-  if (!desempate) return null;
-
-  const nombreDe = (id: string) => {
-    const j = jugadorPorId.get(id);
-    return j ? j.apodo : "?";
-  };
-  const nombresEmpatados = desempate.candidatos.map(nombreDe).join(" y ");
-
-  if (desempate.resuelto) {
-    return (
-      <Card className="px-4 py-3 text-sm text-zinc-400">
-        {desempate.ganador_id ? (
-          <>
-            Empate entre {nombresEmpatados}: se definió por revotación y ganó{" "}
-            <span className="font-semibold text-white">{nombreDe(desempate.ganador_id)}</span>.
-          </>
-        ) : (
-          // Volvió a empatar, o quienes tenían que definirlo se fueron del grupo.
-          <>Empate entre {nombresEmpatados}: no se pudo definir, así que cuentan todos.</>
-        )}
-      </Card>
-    );
-  }
-
-  const puedoDefinir = desempate.elegibles.includes(miId) && !yaVote.includes(desempate.id);
-
-  if (!puedoDefinir) {
-    return (
-      <Card className="px-4 py-3 text-sm text-zinc-500">
-        Empate entre {nombresEmpatados}: todavía falta que lo definan.
-      </Card>
-    );
-  }
-
+function DefinirDesempate({ desempate }: { desempate: DesempatePartido }) {
   return (
-    <Card className="flex flex-col gap-3 p-4">
+    <div className="flex flex-col gap-3 border-t border-border pt-3">
       <p className="text-sm text-zinc-300">
-        Empate entre {nombresEmpatados}. Como no votaste a ninguno de los dos, tu voto define quién
-        gana.
+        Empataron {desempate.candidatos_apodos.join(" y ")}. Como no votaste a ninguno, tu voto define quién gana.
       </p>
       <form
         action={async (formData) => {
@@ -577,9 +567,9 @@ function DesempateInfo({
             <option value="" disabled className="bg-surface">
               Elegí un jugador...
             </option>
-            {desempate.candidatos.map((cid) => (
+            {desempate.candidatos.map((cid, i) => (
               <option key={cid} value={cid} className="bg-surface">
-                {nombreDe(cid)}
+                {desempate.candidatos_apodos[i]}
               </option>
             ))}
           </select>
@@ -589,7 +579,7 @@ function DesempateInfo({
           Definir
         </Button>
       </form>
-    </Card>
+    </div>
   );
 }
 
@@ -598,17 +588,17 @@ function VotacionForm({
   candidatos,
   conMvp,
   conPeor,
-  yaVoteMvp,
-  yaVotePeor,
+  votoMvpId,
+  votoPeorId,
 }: {
   partidoId: string;
-  candidatos: ParticipanteRow[];
+  candidatos: Candidato[];
   conMvp: boolean;
   conPeor: boolean;
-  yaVoteMvp: boolean;
-  yaVotePeor: boolean;
+  votoMvpId: string | null;
+  votoPeorId: string | null;
 }) {
-  if ((!conMvp || yaVoteMvp) && (!conPeor || yaVotePeor)) {
+  if ((!conMvp || votoMvpId) && (!conPeor || votoPeorId)) {
     return (
       <Card className="px-4 py-3 text-sm text-zinc-500">Ya votaste en este partido.</Card>
     );
@@ -625,6 +615,8 @@ function VotacionForm({
           "use server";
           const mvpId = String(formData.get("mvp_jugador_id") ?? "");
           const peorId = String(formData.get("peor_jugador_id") ?? "");
+          // El mismo jugador no puede ser Mejor y Peor (votar() también lo frena).
+          if (mvpId && mvpId === peorId) return;
 
           if (mvpId) {
             const votoMvp = new FormData();
@@ -644,56 +636,17 @@ function VotacionForm({
         }}
         className="flex flex-col gap-4"
       >
-        {conMvp &&
-          (yaVoteMvp ? (
-            <p className="text-sm text-zinc-500">Ya votaste Mejor Jugador en este partido.</p>
-          ) : (
-            <VotoSelect label="Mejor Jugador" name="mvp_jugador_id" candidatos={candidatos} />
-          ))}
-        {conPeor &&
-          (yaVotePeor ? (
-            <p className="text-sm text-zinc-500">Ya votaste Peor Jugador en este partido.</p>
-          ) : (
-            <VotoSelect label="Peor Jugador" name="peor_jugador_id" candidatos={candidatos} />
-          ))}
+        <VotoSelects
+          candidatos={candidatos}
+          conMvp={conMvp}
+          conPeor={conPeor}
+          votoMvpId={votoMvpId}
+          votoPeorId={votoPeorId}
+        />
         <Button type="submit" size="sm" className="self-start">
           Votar
         </Button>
       </form>
     </Card>
-  );
-}
-
-function VotoSelect({
-  label,
-  name,
-  candidatos,
-}: {
-  label: string;
-  name: string;
-  candidatos: ParticipanteRow[];
-}) {
-  return (
-    <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:gap-3">
-      <label className="text-sm font-semibold text-zinc-300 sm:w-32 sm:shrink-0">{label}</label>
-      <div className="relative flex-1">
-        <select
-          name={name}
-          required
-          defaultValue=""
-          className="w-full appearance-none rounded-xl border border-border bg-white/5 py-2.5 pr-9 pl-3.5 text-sm text-white outline-none focus:border-primary-400/60 focus:ring-2 focus:ring-primary-400/20"
-        >
-          <option value="" disabled className="bg-surface">
-            Elegí un jugador...
-          </option>
-          {candidatos.map((c) => (
-            <option key={c.jugador_id} value={c.jugador_id} className="bg-surface">
-              {c.profiles.nombre} {c.profiles.apellido} ({c.profiles.apodo})
-            </option>
-          ))}
-        </select>
-        <IconChevronRight className="pointer-events-none absolute top-1/2 right-3 h-4 w-4 -translate-y-1/2 rotate-90 text-zinc-500" />
-      </div>
-    </div>
   );
 }
