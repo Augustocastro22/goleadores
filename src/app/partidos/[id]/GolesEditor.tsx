@@ -176,7 +176,9 @@ export default function GolesEditor({
         )}
       </div>
 
-      {!esDesafio && (
+      {/* Contra un equipo de afuera (nadie del grupo en el Equipo 2) sus goles ya están en el
+          marcador: la lista vacía solo se muestra para cargarlos. */}
+      {!esDesafio && (editando || equipo2.length > 0) && (
         <div>
           <h2 className="mb-3 flex items-center gap-2 text-lg font-bold text-white">
             <IconGoal className="h-5 w-5 text-gold-400" /> Goles · Equipo 2 ({rival})
