@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { login } from "@/lib/actions/auth";
+import { INSTAGRAM_URL } from "@/lib/redes";
 import Card from "@/components/ui/Card";
 import { Input, Label } from "@/components/ui/Input";
 import Button from "@/components/ui/Button";
@@ -77,6 +78,9 @@ export default async function LoginPage({
         <Link href="/contacto" className="hover:text-zinc-400">
           Contacto
         </Link>
+        <a href={INSTAGRAM_URL} target="_blank" rel="noopener noreferrer" className="hover:text-zinc-400">
+          Instagram
+        </a>
       </p>
     </div>
   );

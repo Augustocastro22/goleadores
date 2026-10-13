@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { getContexto } from "@/lib/grupo";
+import { INSTAGRAM_URL, INSTAGRAM_USUARIO } from "@/lib/redes";
 import type { Bloqueo } from "@/lib/types";
 import PerfilForm from "./PerfilForm";
 import DisponibilidadEditor from "./DisponibilidadEditor";
@@ -44,6 +45,14 @@ export default async function PerfilPage() {
         />
         <PushSubscribe />
         <EliminarCuenta />
+        <a
+          href={INSTAGRAM_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-center text-sm text-zinc-400 hover:text-white"
+        >
+          Seguinos en Instagram <span className="font-semibold text-primary-400">@{INSTAGRAM_USUARIO}</span>
+        </a>
         <Link href="/privacidad" className="text-center text-xs text-zinc-500 hover:text-zinc-300">
           Política de privacidad
         </Link>
