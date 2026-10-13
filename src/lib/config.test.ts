@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseConfig, votacionDelPartido } from "./config";
+import { CONFIG_DEFAULTS, parseConfig, REGLAS_GRUPO_NUEVO, votacionDelPartido } from "./config";
 
 const ambas = (min: number) => ({ vota_mvp: true, vota_peor: true, min_jugadores_votacion: min });
 
@@ -76,5 +76,13 @@ describe("parseConfig", () => {
   it("rechaza un mínimo inválido", () => {
     expect(parseConfig(form({ vota_mvp: "on", min_jugadores_votacion: "-1" }))).toHaveProperty("error");
     expect(parseConfig(form({ vota_mvp: "on", min_jugadores_votacion: "2.5" }))).toHaveProperty("error");
+  });
+});
+
+describe("REGLAS_GRUPO_NUEVO", () => {
+  it("un grupo nuevo arranca sin Peor Jugador, sin cambiar los grupos que ya existen", () => {
+    expect(REGLAS_GRUPO_NUEVO.vota_peor).toBe(false);
+    expect(REGLAS_GRUPO_NUEVO.vota_mvp).toBe(true);
+    expect(CONFIG_DEFAULTS.vota_peor).toBe(true);
   });
 });

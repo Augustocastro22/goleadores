@@ -18,7 +18,7 @@ import SubmitButton from "@/components/SubmitButton";
 import ConfirmSubmitButton from "@/components/ConfirmSubmitButton";
 import ActionForm from "@/components/ActionForm";
 import ReglasFields from "@/components/ReglasFields";
-import { CONFIG_DEFAULTS } from "@/lib/config";
+import { REGLAS_GRUPO_NUEVO } from "@/lib/config";
 import { IconChevronRight } from "@/components/icons";
 import { urlConGrupo } from "@/lib/grupo-cookie";
 
@@ -190,7 +190,7 @@ export default async function GruposPage() {
           </Label>
           <div className="flex flex-col gap-3 border-t border-border pt-4">
             <p className="text-xs font-semibold tracking-wide text-zinc-500 uppercase">Reglas</p>
-            <ReglasFields inicial={CONFIG_DEFAULTS} />
+            <ReglasFields inicial={REGLAS_GRUPO_NUEVO} />
             <Switch
               name="requiere_aprobacion"
               titulo="Pedir aprobación para entrar"

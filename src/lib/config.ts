@@ -24,6 +24,13 @@ export const CONFIG_DEFAULTS: AppConfig = {
   pedir_confirmacion: false,
 };
 
+/**
+ * Con qué arranca el form de un grupo nuevo: Peor Jugador apagado (se prende
+ * desde Admin). No se cambia en CONFIG_DEFAULTS porque eso apagaría Peor en los
+ * grupos que ya existen y nunca guardaron esa regla.
+ */
+export const REGLAS_GRUPO_NUEVO: AppConfig = { ...CONFIG_DEFAULTS, vota_peor: false };
+
 export const MAX_MIN_JUGADORES = 50;
 
 export async function getConfig(supabase: SupabaseClient, grupoId: string): Promise<AppConfig> {
