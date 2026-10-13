@@ -59,3 +59,24 @@ export function calcularEmpate(participantes: string[], votos: VotoSimple[]): Em
 
   return { empatados, elegibles, definible };
 }
+
+/** Horas que tienen los elegibles para definir un desempate desde que se abre. */
+export const DESEMPATE_HORAS = 24;
+
+export function cierreDesempate(abiertoEn: string): Date {
+  return new Date(new Date(abiertoEn).getTime() + DESEMPATE_HORAS * 60 * 60 * 1000);
+}
+
+/**
+ * Resultado de un desempate con los votos que hay: gana el que tiene más; si
+ * siguen parejos (o nadie votó) no hay ganador y cuentan todos los empatados.
+ * Así, no votar no le saca nada a nadie: es lo mismo que abstenerse.
+ */
+export function ganadorDesempate(votados: string[]): string | null {
+  const conteo = new Map<string, number>();
+  for (const id of votados) conteo.set(id, (conteo.get(id) ?? 0) + 1);
+  if (conteo.size === 0) return null;
+  const max = Math.max(...conteo.values());
+  const primeros = [...conteo.entries()].filter(([, n]) => n === max);
+  return primeros.length === 1 ? primeros[0][0] : null;
+}

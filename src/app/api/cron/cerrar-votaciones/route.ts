@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { cerrarVotacionSiCorresponde } from "@/lib/votaciones";
+import { cerrarDesempatesVencidos, cerrarVotacionSiCorresponde } from "@/lib/votaciones";
 import { avisarDesafio } from "@/lib/desafios-avisos";
 
 /**
@@ -8,7 +8,8 @@ import { avisarDesafio } from "@/lib/desafios-avisos";
  * votaciones de partidos donde no votó todo el mundo: el cierre "por
  * completar todos los votos" ya se notifica al toque desde votar() en
  * src/lib/actions/votos.ts, y el vencido también se cierra apenas alguien
- * abre el partido. Esto cubre los que nadie abrió.
+ * abre el partido. Esto cubre los que nadie abrió (y lo mismo con los
+ * desempates, que vencen a las 24 h).
  */
 export async function GET(request: NextRequest) {
   const secret = process.env.CRON_SECRET;
@@ -28,6 +29,8 @@ export async function GET(request: NextRequest) {
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
   for (const partido of partidos ?? []) await cerrarVotacionSiCorresponde(partido.id);
+  // Desempates que nadie terminó de definir en su plazo: se deciden con los votos que haya.
+  await cerrarDesempatesVencidos();
 
   // Desafíos: resultados y fechas propuestas sin respuesta en 3 días se
   // aceptan solos, y los pendientes con fecha pasada quedan vencidos (ver

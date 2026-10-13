@@ -6,7 +6,7 @@ import { deletePartido } from "@/lib/actions/partidos";
 import { urlConGrupo } from "@/lib/grupo-cookie";
 import { votar, votarDesempate } from "@/lib/actions/votos";
 import { formatearCierreVotacion, votacionCerrada } from "@/lib/votacion";
-import { cerrarVotacionSiCorresponde } from "@/lib/votaciones";
+import { cerrarDesempatesVencidos, cerrarVotacionSiCorresponde } from "@/lib/votaciones";
 import { formatearMomento, partidoYaPaso, puedeCargarResultado, resultadoHabilitadoDesde } from "@/lib/confirmacion";
 import type { Bloqueo, DesempatePartido, EstadoVotacion, Profile, RankingRow, Respuesta } from "@/lib/types";
 import Card from "@/components/ui/Card";
@@ -159,6 +159,8 @@ export default async function PartidoDetailPage({
   let desgloseMvp: RankingRow[] = [];
   let desglosePeor: RankingRow[] = [];
   let desempates: DesempatePartido[] = [];
+  // Hasta cuándo se puede definir cada desempate abierto.
+  let plazosDesempate = new Map<string, string>();
   if (partido.jugado && partido.con_votacion) {
     const { data: estadoVotacion } = await supabase
       .rpc("get_estado_votacion", { p_partido_id: id })
@@ -180,6 +182,8 @@ export default async function PartidoDetailPage({
       // día): se cierra ahora, así el aviso y los desempates salen antes de
       // mostrar el resultado.
       if (!partido.votacion_cerrada_notificada) await cerrarVotacionSiCorresponde(id);
+      // Lo mismo con un desempate cuyo plazo venció.
+      plazosDesempate = await cerrarDesempatesVencidos(id);
       const [mvpRes, peorRes, desempatesRes] = await Promise.all([
         supabase.rpc("get_desglose_votos", { p_partido_id: id, p_tipo: "MVP" }),
         supabase.rpc("get_desglose_votos", { p_partido_id: id, p_tipo: "PEOR" }),
@@ -355,6 +359,7 @@ export default async function PartidoDetailPage({
                   label="Mejor Jugador"
                   filas={desgloseMvp}
                   desempate={desempates.find((d) => d.tipo === "MVP") ?? null}
+                  plazos={plazosDesempate}
                 />
               )}
               {conPeor && (
@@ -363,6 +368,7 @@ export default async function PartidoDetailPage({
                   peor
                   filas={desglosePeor}
                   desempate={desempates.find((d) => d.tipo === "PEOR") ?? null}
+                  plazos={plazosDesempate}
                 />
               )}
             </div>
@@ -502,12 +508,15 @@ function ResultadoVotacion({
   peor = false,
   filas,
   desempate,
+  plazos,
 }: {
   label: string;
   /** El ganador se marca en rojo en vez de verde. */
   peor?: boolean;
   filas: RankingRow[];
   desempate: DesempatePartido | null;
+  /** Hasta cuándo se puede definir cada desempate abierto (cerrarDesempatesVencidos). */
+  plazos: Map<string, string>;
 }) {
   if (filas.length === 0) {
     return (
@@ -566,16 +575,18 @@ function ResultadoVotacion({
 
       {pendiente ? (
         desempate.puedo_definir ? (
-          <DefinirDesempate desempate={desempate} />
+          <DefinirDesempate desempate={desempate} plazo={plazos.get(desempate.id)} />
         ) : (
           <p className="border-t border-border pt-3 text-sm text-zinc-400">
             Empataron {nombresEmpatados}. Todavía <span className="font-semibold text-white">no hay ganador</span>:
-            lo definen con un voto extra los que no votaron a ninguno de los dos.
+            lo definen con un voto extra los que no votaron a ninguno de los empatados
+            {plazos.get(desempate.id) ? `, hasta el ${formatearCierreVotacion(plazos.get(desempate.id)!)}` : ""}.
+            Si sigue parejo, cuentan todos.
           </p>
         )
       ) : desempate?.ganador_id ? (
         <p className="border-t border-border pt-3 text-sm text-zinc-400">
-          Empataron {nombresEmpatados}: se definió con un voto extra y ganó{" "}
+          Empataron {nombresEmpatados}: se definió por desempate y ganó{" "}
           <span className="font-semibold text-white">{apodoDe(desempate.ganador_id)}</span>.
         </p>
       ) : (
@@ -589,11 +600,12 @@ function ResultadoVotacion({
   );
 }
 
-function DefinirDesempate({ desempate }: { desempate: DesempatePartido }) {
+function DefinirDesempate({ desempate, plazo }: { desempate: DesempatePartido; plazo?: string }) {
   return (
     <div className="flex flex-col gap-3 border-t border-border pt-3">
       <p className="text-sm text-zinc-300">
-        Empataron {desempate.candidatos_apodos.join(" y ")}. Como no votaste a ninguno, tu voto define quién gana.
+        Empataron {desempate.candidatos_apodos.join(" y ")}. Como no votaste a ninguno, tu voto define quién gana
+        {plazo ? ` (hasta el ${formatearCierreVotacion(plazo)})` : ""}.
       </p>
       <form
         action={async (formData) => {

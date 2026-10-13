@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { votacionCerrada } from "@/lib/votacion";
+import { cierreDesempate } from "@/lib/desempate";
 import { cerrarVotacionSiCorresponde, resolverDesempateSiCorresponde } from "@/lib/votaciones";
 import type { Desempate, EstadoVotacion } from "@/lib/types";
 
@@ -102,11 +103,16 @@ export async function votarDesempate(formData: FormData) {
 
   const { data: desempate } = await supabase
     .from("desempates")
-    .select("id, partido_id, tipo, candidatos, elegibles, resuelto")
+    .select("id, partido_id, tipo, candidatos, elegibles, resuelto, created_at")
     .eq("id", desempateId)
-    .single<Pick<Desempate, "id" | "partido_id" | "tipo" | "candidatos" | "elegibles" | "resuelto">>();
+    .single<Pick<Desempate, "id" | "partido_id" | "tipo" | "candidatos" | "elegibles" | "resuelto" | "created_at">>();
   if (!desempate) return { error: "Empate no encontrado." };
   if (desempate.resuelto) return { error: "Este empate ya se definió." };
+  if (new Date() >= cierreDesempate(desempate.created_at)) {
+    await resolverDesempateSiCorresponde(desempateId);
+    revalidatePath(`/partidos/${desempate.partido_id}`);
+    return { error: "Ya venció el plazo para definir este empate." };
+  }
   if (!desempate.elegibles.includes(user.id)) {
     return { error: "No podés definir este empate." };
   }

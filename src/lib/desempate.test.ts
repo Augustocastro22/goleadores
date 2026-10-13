@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { calcularEmpate } from "./desempate";
+import { calcularEmpate, cierreDesempate, ganadorDesempate } from "./desempate";
 
 const participantes7 = ["a", "b", "c", "d", "e", "f", "g"];
 
@@ -127,5 +127,26 @@ describe("calcularEmpate", () => {
     expect(resultado!.empatados.sort()).toEqual(["a", "d", "e"]);
     expect(resultado!.elegibles.sort()).toEqual(["h", "i"]);
     expect(resultado!.definible).toBe(false);
+  });
+});
+
+describe("ganadorDesempate", () => {
+  it("gana el que tiene más votos", () => {
+    expect(ganadorDesempate(["a", "b", "a"])).toBe("a");
+  });
+
+  it("con los votos que hay al vencer: uno solo alcanza", () => {
+    expect(ganadorDesempate(["b"])).toBe("b");
+  });
+
+  it("parejos o sin votos: sin ganador (cuentan todos)", () => {
+    expect(ganadorDesempate(["a", "b"])).toBeNull();
+    expect(ganadorDesempate([])).toBeNull();
+  });
+});
+
+describe("cierreDesempate", () => {
+  it("cierra 24 h después de abrirse", () => {
+    expect(cierreDesempate("2026-10-14T19:00:00Z").toISOString()).toBe("2026-10-15T19:00:00.000Z");
   });
 });

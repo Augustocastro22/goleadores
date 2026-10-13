@@ -1,6 +1,6 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { categoriasTexto, votacionCerrada } from "@/lib/votacion";
-import { calcularEmpate } from "@/lib/desempate";
+import { calcularEmpate, cierreDesempate, DESEMPATE_HORAS, ganadorDesempate } from "@/lib/desempate";
 import { enviarPush } from "@/lib/push/send";
 import { urlConGrupo } from "@/lib/grupo-cookie";
 import type { TipoVoto } from "@/lib/types";
@@ -108,18 +108,21 @@ export async function revisarEmpates(partidoId: string) {
 
     await enviarPush(empate.elegibles, {
       title: "Tenés que definir un empate",
-      body: `Empate en ${categoria} (${nombresEmpatados}) vs ${partido.rival}. Tu voto define quién gana.`,
+      body: `Empate en ${categoria} (${nombresEmpatados}) vs ${partido.rival}. Tu voto define quién gana: tenés ${DESEMPATE_HORAS} horas.`,
       url,
     });
 
+    // A los admins no se les dice quiénes lo definen, solo cuántos.
     const idsElegibles = new Set(empate.elegibles);
     const idsAdminsAAvisar = idsAdmins.filter((id) => !idsElegibles.has(id));
     if (idsAdminsAAvisar.length > 0) {
+      const quienes =
+        empate.elegibles.length === 1
+          ? "Lo define 1 jugador que no votó"
+          : `Lo definen ${empate.elegibles.length} jugadores que no votaron`;
       await enviarPush(idsAdminsAAvisar, {
         title: "Empate a definir",
-        body: `Empate en ${categoria} (${nombresEmpatados}) vs ${partido.rival}. Puede definirlo: ${empate.elegibles
-          .map((id) => apodoPorId.get(id) ?? "?")
-          .join(", ")}.`,
+        body: `Empate en ${categoria} (${nombresEmpatados}) vs ${partido.rival}. ${quienes} a ninguno de los empatados.`,
         url,
       });
     }
@@ -183,52 +186,92 @@ export async function cerrarVotacionSiCorresponde(partidoId: string) {
 
 /**
  * Resuelve un desempate si ya votaron todos los elegibles que siguen en el
- * grupo. Si no queda ninguno que pueda votar, o la revotación vuelve a
- * empatar, se cierra sin ganador: cuenta el empate original (todos los
- * empatados), igual que cuando no se abre desempate.
+ * grupo, o si venció el plazo (DESEMPATE_HORAS): ahí se decide con los votos
+ * que haya (ver ganadorDesempate). Sin ganador (siguen parejos, nadie votó o
+ * no queda nadie que pueda votar) cuenta el empate original: todos los
+ * empatados, igual que cuando no se abre desempate.
+ *
+ * Nunca se dice quiénes lo definieron: solo que se definió.
  */
 export async function resolverDesempateSiCorresponde(desempateId: string) {
   const admin = createAdminClient();
   const { data: desempate } = await admin
     .from("desempates")
-    .select("id, partido_id, tipo, elegibles, resuelto, partidos(rival, grupo_id)")
+    .select("id, partido_id, tipo, candidatos, elegibles, resuelto, created_at, partidos(rival, grupo_id)")
     .eq("id", desempateId)
     .single();
   if (!desempate || desempate.resuelto) return;
   const partido = desempate.partidos as unknown as { rival: string; grupo_id: string } | null;
   if (!partido) return;
 
+  const cierre = cierreDesempate(desempate.created_at);
+  const vencido = new Date() >= cierre;
   const [miembros, { data: votosDesempate }] = await Promise.all([
     miembrosDelGrupo(admin, partido.grupo_id),
-    admin.from("desempate_votos").select("jugador_votado_id").eq("desempate_id", desempateId),
+    admin
+      .from("desempate_votos")
+      .select("jugador_votado_id, jugador_que_vota_id")
+      .eq("desempate_id", desempateId)
+      // Un voto que entró después del plazo (por la API) no cuenta.
+      .lte("created_at", cierre.toISOString()),
   ]);
-  const elegiblesActivos = (desempate.elegibles as string[]).filter((id) => miembros.has(id));
+  const elegiblesActivos = new Set((desempate.elegibles as string[]).filter((id) => miembros.has(id)));
   const votos = votosDesempate ?? [];
-  // Faltan votos de elegibles que siguen en el grupo: todavía no se resuelve.
-  if (elegiblesActivos.length > 0 && votos.length < elegiblesActivos.length) return;
+  // Faltan votos de elegibles que siguen en el grupo y no venció: todavía no se resuelve.
+  const votaronActivos = votos.filter((v) => elegiblesActivos.has(v.jugador_que_vota_id)).length;
+  if (!vencido && votaronActivos < elegiblesActivos.size) return;
 
-  const conteo = new Map<string, number>();
-  for (const v of votos) conteo.set(v.jugador_votado_id, (conteo.get(v.jugador_votado_id) ?? 0) + 1);
-  const maxVotos = conteo.size > 0 ? Math.max(...conteo.values()) : 0;
-  const ganadores = [...conteo.entries()].filter(([, n]) => n === maxVotos).map(([id]) => id);
-  const ganadorId = ganadores.length === 1 ? ganadores[0] : null;
+  const ganadorId = ganadorDesempate(votos.map((v) => v.jugador_votado_id));
 
-  await admin.from("desempates").update({ resuelto: true, ganador_id: ganadorId }).eq("id", desempateId);
+  // Solo quien lo marca resuelto avisa (dos votos a la vez, o un voto y el cron).
+  const { data: marcado } = await admin
+    .from("desempates")
+    .update({ resuelto: true, ganador_id: ganadorId })
+    .eq("id", desempateId)
+    .eq("resuelto", false)
+    .select("id");
+  if (!marcado || marcado.length === 0) return;
 
-  if (ganadorId) {
-    const { data: participantes } = await admin
-      .from("partido_jugadores")
-      .select("jugador_id")
-      .eq("partido_id", desempate.partido_id);
-    await enviarPush(
-      (participantes ?? []).map((p) => p.jugador_id).filter((id) => miembros.has(id)),
-      {
-        title: "Se definió el empate",
-        body: `Ya se sabe quién ganó ${CATEGORIA_LABEL[desempate.tipo as TipoVoto]} vs ${partido.rival}.`,
-        url: urlConGrupo(`/partidos/${desempate.partido_id}`, partido.grupo_id),
-      }
-    );
+  const { data: participantes } = await admin
+    .from("partido_jugadores")
+    .select("jugador_id")
+    .eq("partido_id", desempate.partido_id);
+  const categoria = CATEGORIA_LABEL[desempate.tipo as TipoVoto];
+  const empatados = (desempate.candidatos as string[]).length === 2 ? "los dos" : "todos";
+  await enviarPush(
+    (participantes ?? []).map((p) => p.jugador_id).filter((id) => miembros.has(id)),
+    ganadorId
+      ? {
+          title: "Se definió el empate",
+          body: `Ya se sabe quién ganó ${categoria} vs ${partido.rival}.`,
+          url: urlConGrupo(`/partidos/${desempate.partido_id}`, partido.grupo_id),
+        }
+      : {
+          title: "El empate quedó sin definir",
+          body: `${categoria} vs ${partido.rival}: siguió parejo, así que cuentan ${empatados}.`,
+          url: urlConGrupo(`/partidos/${desempate.partido_id}`, partido.grupo_id),
+        }
+  );
+}
+
+/**
+ * Cierra los desempates sin resolver cuyo plazo ya venció (de un partido, o
+ * todos si no se pasa). Devuelve hasta cuándo se puede definir cada uno de
+ * los que siguen abiertos, para mostrarlo en el partido.
+ */
+export async function cerrarDesempatesVencidos(partidoId?: string): Promise<Map<string, string>> {
+  const admin = createAdminClient();
+  let consulta = admin.from("desempates").select("id, created_at").eq("resuelto", false);
+  if (partidoId) consulta = consulta.eq("partido_id", partidoId);
+  const { data: pendientes } = await consulta;
+
+  const abiertos = new Map<string, string>();
+  for (const d of pendientes ?? []) {
+    const cierre = cierreDesempate(d.created_at);
+    if (new Date() >= cierre) await resolverDesempateSiCorresponde(d.id);
+    else abiertos.set(d.id, cierre.toISOString());
   }
+  return abiertos;
 }
 
 /**
