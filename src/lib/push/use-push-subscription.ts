@@ -6,10 +6,13 @@ import { suscribirPush, desuscribirPush } from "@/lib/actions/push";
 export type PushEstado =
   | "cargando"
   | "no-soportado"
+  | "navegador-app"
   | "requiere-instalar"
   | "denegado"
   | "activo"
   | "inactivo";
+
+export type Plataforma = "ios" | "android" | "escritorio";
 
 function urlBase64ToUint8Array(base64String: string) {
   const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
@@ -18,32 +21,59 @@ function urlBase64ToUint8Array(base64String: string) {
   return Uint8Array.from([...rawData].map((c) => c.charCodeAt(0)));
 }
 
-/** iOS solo entrega push a una PWA agregada a la pantalla de inicio: en una
- * pestaña normal de Safari (o Chrome/iOS, que también es WebKit) el pedido
- * de permiso falla en silencio o nunca aparece. */
-function requiereInstalarEnIOS() {
-  const esIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
-  if (!esIOS) return false;
-  const esStandalone =
+/** iPhone o iPad (el iPad se presenta como "Macintosh", pero con pantalla táctil). */
+function esIOS() {
+  const ua = navigator.userAgent;
+  return /iphone|ipad|ipod/i.test(ua) || (/macintosh/i.test(ua) && navigator.maxTouchPoints > 1);
+}
+
+function plataformaActual(): Plataforma {
+  if (esIOS()) return "ios";
+  if (/android/i.test(navigator.userAgent)) return "android";
+  return "escritorio";
+}
+
+/** Abierta desde el ícono de la pantalla de inicio (no en una pestaña del navegador). */
+function esAppInstalada() {
+  return (
     window.matchMedia("(display-mode: standalone)").matches ||
-    (navigator as unknown as { standalone?: boolean }).standalone === true;
-  return !esStandalone;
+    (navigator as unknown as { standalone?: boolean }).standalone === true
+  );
+}
+
+/**
+ * El navegador de adentro de Instagram, Facebook o TikTok (al tocar un link
+ * desde ahí): no recibe notificaciones ni se puede instalar.
+ */
+function esNavegadorDeApp() {
+  return /instagram|fban|fbav|fb_iab|tiktok|musical_ly|bytedancewebview/i.test(navigator.userAgent);
 }
 
 /** Estado y acciones de la suscripción push del dispositivo actual. */
 export function usePushSubscription() {
   const [estado, setEstado] = useState<PushEstado>("cargando");
+  const [plataforma, setPlataforma] = useState<Plataforma>("escritorio");
   const [working, setWorking] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     async function check() {
-      if (!("serviceWorker" in navigator) || !("PushManager" in window) || !("Notification" in window)) {
-        setEstado("no-soportado");
+      setPlataforma(plataformaActual());
+      // Antes que ver si hay soporte: en estos casos el navegador dice que no
+      // soporta notificaciones, pero hay un paso para habilitarlas.
+      if (esNavegadorDeApp()) {
+        setEstado("navegador-app");
         return;
       }
-      if (requiereInstalarEnIOS()) {
+      // iOS solo entrega push a la app agregada a la pantalla de inicio: en
+      // una pestaña de Safari (o de Chrome, que en iOS también es Safari) ni
+      // siquiera existen Notification ni PushManager.
+      if (esIOS() && !esAppInstalada()) {
         setEstado("requiere-instalar");
+        return;
+      }
+      if (!("serviceWorker" in navigator) || !("PushManager" in window) || !("Notification" in window)) {
+        setEstado("no-soportado");
         return;
       }
       if (Notification.permission === "denied") {
@@ -61,13 +91,14 @@ export function usePushSubscription() {
     setWorking(true);
     setError(null);
     try {
-      if (requiereInstalarEnIOS()) {
-        setEstado("requiere-instalar");
+      const permiso = await Notification.requestPermission();
+      if (permiso === "denied") {
+        setEstado("denegado");
         return;
       }
-      const permiso = await Notification.requestPermission();
       if (permiso !== "granted") {
-        setEstado("denegado");
+        // Cerró el cartel sin elegir: se puede volver a pedir.
+        setError("No elegiste ninguna opción. Tocá Activar de nuevo y elegí Permitir.");
         return;
       }
 
@@ -116,5 +147,5 @@ export function usePushSubscription() {
     }
   }
 
-  return { estado, working, error, activar, desactivar };
+  return { estado, plataforma, working, error, activar, desactivar };
 }

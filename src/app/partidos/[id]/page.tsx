@@ -5,8 +5,9 @@ import Link from "next/link";
 import { deletePartido } from "@/lib/actions/partidos";
 import { urlConGrupo } from "@/lib/grupo-cookie";
 import { votar, votarDesempate } from "@/lib/actions/votos";
-import { votacionCerrada } from "@/lib/votacion";
-import { partidoYaPaso } from "@/lib/confirmacion";
+import { formatearCierreVotacion, votacionCerrada } from "@/lib/votacion";
+import { cerrarVotacionSiCorresponde } from "@/lib/votaciones";
+import { formatearMomento, partidoYaPaso, puedeCargarResultado, resultadoHabilitadoDesde } from "@/lib/confirmacion";
 import type { Bloqueo, DesempatePartido, EstadoVotacion, Profile, RankingRow, Respuesta } from "@/lib/types";
 import Card from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
@@ -101,6 +102,14 @@ export default async function PartidoDetailPage({
   );
 
   const soyParticipante = participantes.some((p) => p.jugador_id === user.id);
+  // Convocados que se fueron del grupo antes de que salir los sacara de los
+  // partidos pendientes (0029_votacion_24h.sql): el admin los tiene que ver para sacarlos.
+  const idsMiembros = new Set(todosLosJugadores.map((j) => j.id));
+  const exMiembrosConvocados =
+    isAdmin && !partido.jugado
+      ? participantes.filter((p) => !idsMiembros.has(p.jugador_id)).map((p) => p.profiles)
+      : [];
+  const resultadoHabilitado = puedeCargarResultado(partido.fecha, partido.hora);
 
   let bloqueos: Bloqueo[] = [];
   let ocupados: Ocupado[] = [];
@@ -158,7 +167,7 @@ export default async function PartidoDetailPage({
     const votosMvp = estadoVotacion?.votos_mvp ?? 0;
     const votosPeor = estadoVotacion?.votos_peor ?? 0;
     cerrada = votacionCerrada({
-      fechaPartido: partido.fecha,
+      cierraEn: partido.votacion_cierra_en,
       totalParticipantes,
       votosMvp,
       votosPeor,
@@ -167,6 +176,10 @@ export default async function PartidoDetailPage({
     });
 
     if (cerrada) {
+      // Venció el plazo y todavía no se cerró (el cron corre una vez por
+      // día): se cierra ahora, así el aviso y los desempates salen antes de
+      // mostrar el resultado.
+      if (!partido.votacion_cerrada_notificada) await cerrarVotacionSiCorresponde(id);
       const [mvpRes, peorRes, desempatesRes] = await Promise.all([
         supabase.rpc("get_desglose_votos", { p_partido_id: id, p_tipo: "MVP" }),
         supabase.rpc("get_desglose_votos", { p_partido_id: id, p_tipo: "PEOR" }),
@@ -237,7 +250,8 @@ export default async function PartidoDetailPage({
       {isAdmin && !partido.jugado && (
         <ConvocadosEditor
           partidoId={id}
-          jugadores={todosLosJugadores}
+          jugadores={[...todosLosJugadores, ...exMiembrosConvocados]}
+          exMiembroIds={exMiembrosConvocados.map((j) => j.id)}
           equipo1IdsInit={equipo1.map((p) => p.jugador_id)}
           equipo2IdsInit={equipo2.map((p) => p.jugador_id)}
           partidoFecha={partido.fecha}
@@ -265,7 +279,7 @@ export default async function PartidoDetailPage({
         />
       )}
 
-      {partido.jugado || isAdmin ? (
+      {partido.jugado || (isAdmin && resultadoHabilitado) ? (
         <GolesEditor
           partidoId={id}
           rival={partido.rival}
@@ -296,6 +310,13 @@ export default async function PartidoDetailPage({
           equipo1={equipo1}
           equipo2={equipo2}
           conConfirmacion={conConfirmacion}
+          aviso={
+            isAdmin
+              ? `El resultado lo vas a poder cargar desde el ${formatearMomento(
+                  resultadoHabilitadoDesde(partido.fecha, partido.hora)
+                )}.`
+              : undefined
+          }
         />
       )}
 
@@ -306,6 +327,11 @@ export default async function PartidoDetailPage({
         (partido.con_votacion || grupoVota) && (
         <section className="flex flex-col gap-3">
           <h2 className="text-lg font-bold text-white">Votación</h2>
+          {partido.con_votacion && !cerrada && partido.votacion_cierra_en && (
+            <p className="-mt-1 text-sm text-zinc-400">
+              Se puede votar hasta el {formatearCierreVotacion(partido.votacion_cierra_en)}.
+            </p>
+          )}
           {/* Una votación abierta ya no se toca: al admin se le muestra dónde apagarla para los próximos. */}
           {isAdmin && partido.con_votacion && !cerrada && (
             <p className="-mt-1 text-xs text-zinc-500">
@@ -387,6 +413,7 @@ function EventoProgramado({
   equipo1,
   equipo2,
   conConfirmacion,
+  aviso,
 }: {
   rival: string;
   fecha: string;
@@ -394,6 +421,8 @@ function EventoProgramado({
   equipo1: ParticipanteRow[];
   equipo2: ParticipanteRow[];
   conConfirmacion: boolean;
+  /** Para el admin: desde cuándo puede cargar el resultado. */
+  aviso?: string;
 }) {
   // Con confirmación, los que dijeron que no van aparte.
   const enEquipo = (lista: ParticipanteRow[]) =>
@@ -413,6 +442,7 @@ function EventoProgramado({
           {conConfirmacion && (
             <ResumenRespuestas respuestas={[...equipo1, ...equipo2].map((p) => p.respuesta)} />
           )}
+          {aviso && <p className="mt-1 text-center text-xs text-zinc-500">{aviso}</p>}
         </div>
       </Card>
 

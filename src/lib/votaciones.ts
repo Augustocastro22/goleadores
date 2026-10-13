@@ -127,16 +127,17 @@ export async function revisarEmpates(partidoId: string) {
 }
 
 /**
- * Si la votación del partido terminó de completarse (votaron todos los que
- * jugaron y siguen en el grupo) y todavía no se avisó, avisa a los que
- * jugaron, la marca como cerrada y abre los desempates que correspondan.
- * Se llama después de cada voto y cuando alguien se va del grupo.
+ * Si la votación del partido se cerró (votaron todos los que jugaron y
+ * siguen en el grupo, o venció el plazo) y todavía no se avisó, la marca
+ * cerrada, avisa a los que jugaron y abre los desempates que correspondan.
+ * Se llama después de cada voto, cuando alguien se va del grupo, al abrir el
+ * partido y desde el cron.
  */
 export async function cerrarVotacionSiCorresponde(partidoId: string) {
   const admin = createAdminClient();
   const { data: partido } = await admin
     .from("partidos")
-    .select("grupo_id, fecha, rival, jugado, con_votacion, con_mvp, con_peor, votacion_cerrada_notificada")
+    .select("grupo_id, rival, jugado, con_votacion, con_mvp, con_peor, votacion_cierra_en, votacion_cerrada_notificada")
     .eq("id", partidoId)
     .single();
   if (!partido || !partido.jugado || !partido.con_votacion || partido.votacion_cerrada_notificada) return;
@@ -149,7 +150,7 @@ export async function cerrarVotacionSiCorresponde(partidoId: string) {
   const votosDeMiembros = (votos ?? []).filter((v) => miembros.has(v.jugador_que_vota_id));
 
   const cerrada = votacionCerrada({
-    fechaPartido: partido.fecha,
+    cierraEn: partido.votacion_cierra_en,
     totalParticipantes: (participantes ?? []).filter((p) => miembros.has(p.jugador_id)).length,
     votosMvp: votosDeMiembros.filter((v) => v.tipo === "MVP").length,
     votosPeor: votosDeMiembros.filter((v) => v.tipo === "PEOR").length,
@@ -157,6 +158,17 @@ export async function cerrarVotacionSiCorresponde(partidoId: string) {
     conPeor: partido.con_peor,
   });
   if (!cerrada) return;
+
+  // Se marca antes de avisar, y solo si nadie la marcó en el medio (dos votos
+  // a la vez, un voto y el cron, o alguien que abre el partido): el aviso y
+  // los desempates salen una sola vez.
+  const { data: marcada } = await admin
+    .from("partidos")
+    .update({ votacion_cerrada_notificada: true })
+    .eq("id", partidoId)
+    .eq("votacion_cerrada_notificada", false)
+    .select("id");
+  if (!marcada || marcada.length === 0) return;
 
   await enviarPush(
     (participantes ?? []).map((p) => p.jugador_id).filter((id) => miembros.has(id)),
@@ -166,7 +178,6 @@ export async function cerrarVotacionSiCorresponde(partidoId: string) {
       url: urlConGrupo(`/partidos/${partidoId}`, partido.grupo_id),
     }
   );
-  await admin.from("partidos").update({ votacion_cerrada_notificada: true }).eq("id", partidoId);
   await revisarEmpates(partidoId);
 }
 

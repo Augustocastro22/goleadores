@@ -4,13 +4,25 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { enviarPush } from "@/lib/push/send";
 import { getConfig, votacionDelPartido } from "@/lib/config";
-import { categoriasTexto } from "@/lib/votacion";
+import { categoriasTexto, VOTACION_HORAS } from "@/lib/votacion";
 import { getContexto, rolEn } from "@/lib/grupo";
 import { urlConGrupo } from "@/lib/grupo-cookie";
-import { hoyArgentina, partidoYaPaso } from "@/lib/confirmacion";
+import {
+  formatearMomento,
+  hoyArgentina,
+  partidoYaPaso,
+  puedeCargarResultado,
+  resultadoHabilitadoDesde,
+} from "@/lib/confirmacion";
 import type { Respuesta } from "@/lib/types";
 import type { DesafioVista } from "@/lib/desafios";
 import { errorGolesPorCorregir, golesPorCorregir } from "@/lib/goles-por-corregir";
+
+function errorResultadoAntesDeTiempo(fecha: string, hora: string | null) {
+  return `Ese partido todavía no terminó: el resultado se puede cargar desde el ${formatearMomento(
+    resultadoHabilitadoDesde(fecha, hora)
+  )}.`;
+}
 
 /** Si el usuario es admin del grupo al que pertenece el partido. */
 async function requireAdminDePartido(partidoId: string) {
@@ -90,6 +102,9 @@ export async function createPartido(formData: FormData) {
   const hoy = hoyArgentina();
   if (jugado && fecha > hoy) {
     return { error: "Ese partido todavía no se jugó: cargalo con \"Programar\"." };
+  }
+  if (jugado && !puedeCargarResultado(fecha, hora)) {
+    return { error: errorResultadoAntesDeTiempo(fecha, hora) };
   }
   if (!jugado && fecha < hoy) {
     return { error: "Esa fecha ya pasó: para cargar un partido que ya se jugó, elegí \"Ya se jugó\"." };
@@ -323,10 +338,11 @@ export async function guardarGolesPartido({ partidoId, goles, golesOtros, golesR
     .eq("id", partidoId)
     .single();
   if (!partido) return { error: "Partido no encontrado." };
-  // En un desafío, cargar el resultado hace que ninguno de los dos grupos lo
-  // pueda cancelar: no vale hacerlo antes de que se juegue.
-  if (partido.desafio_id && !partidoYaPaso(partido.fecha, partido.hora)) {
-    return { error: "Es un desafío: el resultado se carga después de jugar el partido." };
+  // El resultado se carga una hora después de la hora del partido. Uno ya
+  // jugado se puede corregir siempre, salvo un desafío: cargarle el
+  // resultado hace que ninguno de los dos grupos lo pueda cancelar.
+  if (!puedeCargarResultado(partido.fecha, partido.hora) && (!partido.jugado || partido.desafio_id)) {
+    return { error: errorResultadoAntesDeTiempo(partido.fecha, partido.hora) };
   }
   // En un desafío el marcador es el del desafío (el acordado, o la última
   // versión de este grupo): los goles del rival salen de ahí, y lo que no
@@ -440,7 +456,7 @@ export async function guardarGolesPartido({ partidoId, goles, golesOtros, golesR
       avisarVotacion
         ? {
             title: "¡Se abrió la votación!",
-            body: `${resultado}. Votá ${categoriasTexto({ conMvp: votacion.con_mvp, conPeor: votacion.con_peor })} del partido.`,
+            body: `${resultado}. Votá ${categoriasTexto({ conMvp: votacion.con_mvp, conPeor: votacion.con_peor })} del partido: tenés ${VOTACION_HORAS} horas.`,
             url: urlConGrupo(`/partidos/${partidoId}`, grupoId),
           }
         : {

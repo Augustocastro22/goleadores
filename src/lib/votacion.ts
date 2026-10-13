@@ -1,40 +1,51 @@
-/** Días desde el partido antes de cerrar la votación aunque no hayan votado todos. */
-export const VOTACION_DIAS_LIMITE = 7;
+import { formatearMomento } from "@/lib/confirmacion";
 
-export function fechaLimiteVotacion(fechaPartido: string): Date {
-  const limite = new Date(fechaPartido + "T00:00:00");
-  limite.setDate(limite.getDate() + VOTACION_DIAS_LIMITE);
-  return limite;
+/**
+ * Horas que dura la votación desde que se carga el resultado. El límite lo
+ * fija la base al pasar el partido a jugado (partidos.votacion_cierra_en,
+ * ver 0029_votacion_24h.sql); esto es solo para los textos.
+ */
+export const VOTACION_HORAS = 24;
+
+/** Si ya pasó el límite de la votación (sin límite todavía no vence). */
+export function votacionVencida(cierraEn: string | null, ahora: Date = new Date()): boolean {
+  return cierraEn !== null && ahora >= new Date(cierraEn);
 }
 
 /**
  * Cierra cuando votaron todos en las categorías que tiene el partido (una
  * categoría apagada no se espera), o al vencer el plazo. Mismo criterio que
- * get_ranking_votos (0018_votacion_separada.sql).
+ * votacion_cerrada() en la base (0029_votacion_24h.sql).
  */
 export function votacionCerrada({
-  fechaPartido,
+  cierraEn,
   totalParticipantes,
   votosMvp,
   votosPeor,
   conMvp = true,
   conPeor = true,
+  ahora = new Date(),
 }: {
-  fechaPartido: string;
+  /** partidos.votacion_cierra_en */
+  cierraEn: string | null;
   totalParticipantes: number;
   votosMvp: number;
   votosPeor: number;
   conMvp?: boolean;
   conPeor?: boolean;
+  ahora?: Date;
 }): boolean {
+  if (votacionVencida(cierraEn, ahora)) return true;
   if (totalParticipantes === 0) return false;
-  const completa =
-    (!conMvp || votosMvp >= totalParticipantes) && (!conPeor || votosPeor >= totalParticipantes);
-  if (completa) return true;
-  return new Date() > fechaLimiteVotacion(fechaPartido);
+  return (!conMvp || votosMvp >= totalParticipantes) && (!conPeor || votosPeor >= totalParticipantes);
 }
 
 /** "Mejor Jugador y Peor Jugador", "Mejor Jugador" o "Peor Jugador". */
 export function categoriasTexto({ conMvp, conPeor }: { conMvp: boolean; conPeor: boolean }): string {
   return [conMvp && "Mejor Jugador", conPeor && "Peor Jugador"].filter(Boolean).join(" y ");
+}
+
+/** "mié 15/10 a las 16:00": hasta cuándo se puede votar. */
+export function formatearCierreVotacion(cierraEn: string): string {
+  return formatearMomento(new Date(cierraEn));
 }

@@ -37,9 +37,12 @@ export default function ConvocadosEditor({
   respuestas,
   unSoloEquipo = false,
   ocupados = [],
+  exMiembroIds = [],
 }: {
   partidoId: string;
   jugadores: Profile[];
+  /** Convocados que ya no están en el grupo: solo se los puede sacar. */
+  exMiembroIds?: string[];
   equipo1IdsInit: string[];
   equipo2IdsInit: string[];
   partidoFecha: string;
@@ -92,6 +95,7 @@ export default function ConvocadosEditor({
   }, [bloqueos, partidoFecha, partidoHora]);
 
   const ocupadoPorJugador = useMemo(() => new Map(ocupados.map((o) => [o.jugador_id, o])), [ocupados]);
+  const exMiembros = useMemo(() => new Set(exMiembroIds), [exMiembroIds]);
 
   function empezarEdicion() {
     setMessage(null);
@@ -187,8 +191,11 @@ export default function ConvocadosEditor({
                       </p>
                     )}
                     {ocupado && <p className="truncate text-xs text-gold-400">⚠ {textoOcupado(ocupado)}</p>}
+                    {exMiembros.has(jugador.id) && (
+                      <p className="truncate text-xs text-danger-400">Ya no está en el grupo: sacalo con Editar.</p>
+                    )}
                   </div>
-                  {respuestas?.[jugador.id] && (
+                  {respuestas?.[jugador.id] && !exMiembros.has(jugador.id) && (
                     <RespuestaSelect
                       // Si la respuesta cambia desde otro lado, arranca de nuevo con la nueva.
                       key={respuestas[jugador.id]}
@@ -232,6 +239,9 @@ export default function ConvocadosEditor({
             const equipo = asignaciones[jugador.id];
             const bloqueo = bloqueoPorJugador.get(jugador.id);
             const ocupado = ocupadoPorJugador.get(jugador.id);
+            const exMiembro = exMiembros.has(jugador.id);
+            // Uno que se fue del grupo no se puede volver a convocar: una vez sacado, no se lista.
+            if (exMiembro && !equipo) return null;
             return (
               <div
                 key={jugador.id}
@@ -251,21 +261,24 @@ export default function ConvocadosEditor({
                       </p>
                     )}
                     {ocupado && <p className="truncate text-xs text-gold-400">⚠ {textoOcupado(ocupado)}</p>}
+                    {exMiembro && <p className="truncate text-xs text-danger-400">Ya no está en el grupo</p>}
                   </div>
                 </div>
                 <div className="flex shrink-0 gap-1.5">
-                  <button
-                    type="button"
-                    onClick={() => elegir(jugador.id, 1)}
-                    className={`rounded-lg border px-2.5 py-1 text-xs font-semibold whitespace-nowrap transition ${
-                      equipo === 1
-                        ? "border-primary-500/40 bg-primary-500/10 text-primary-400"
-                        : "border-border text-zinc-400 hover:text-white"
-                    }`}
-                  >
-                    {unSoloEquipo ? "Juega" : "Eq. 1"}
-                  </button>
-                  {!unSoloEquipo && (
+                  {!exMiembro && (
+                    <button
+                      type="button"
+                      onClick={() => elegir(jugador.id, 1)}
+                      className={`rounded-lg border px-2.5 py-1 text-xs font-semibold whitespace-nowrap transition ${
+                        equipo === 1
+                          ? "border-primary-500/40 bg-primary-500/10 text-primary-400"
+                          : "border-border text-zinc-400 hover:text-white"
+                      }`}
+                    >
+                      {unSoloEquipo ? "Juega" : "Eq. 1"}
+                    </button>
+                  )}
+                  {!unSoloEquipo && !exMiembro && (
                     <button
                       type="button"
                       onClick={() => elegir(jugador.id, 2)}

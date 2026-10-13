@@ -23,7 +23,7 @@ export async function votar(formData: FormData) {
 
   const { data: partido } = await supabase
     .from("partidos")
-    .select("fecha, jugado, con_votacion, con_mvp, con_peor")
+    .select("jugado, con_votacion, con_mvp, con_peor, votacion_cierra_en")
     .eq("id", partidoId)
     .single();
   if (!partido) return { error: "Partido no encontrado." };
@@ -42,7 +42,7 @@ export async function votar(formData: FormData) {
   if (
     estado &&
     votacionCerrada({
-      fechaPartido: partido.fecha,
+      cierraEn: partido.votacion_cierra_en,
       totalParticipantes: estado.total_participantes,
       votosMvp: estado.votos_mvp,
       votosPeor: estado.votos_peor,

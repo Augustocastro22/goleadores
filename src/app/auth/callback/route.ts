@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import type { EmailOtpType } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
+import { rutaInterna } from "@/lib/ruta-interna";
 
 /**
  * Destino de los links que manda Supabase por mail:
@@ -13,9 +14,8 @@ export async function GET(request: NextRequest) {
   const tokenHash = searchParams.get("token_hash");
   const type = searchParams.get("type") as EmailOtpType | null;
   const code = searchParams.get("code");
-  const nextParam = searchParams.get("next");
   // Solo rutas internas (evita open redirects).
-  const next = nextParam?.startsWith("/") && !nextParam.startsWith("//") ? nextParam : null;
+  const next = rutaInterna(searchParams.get("next"));
   const destino = type === "recovery" || !next ? "/actualizar-password" : next;
 
   const supabase = await createClient();

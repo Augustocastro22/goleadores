@@ -21,7 +21,7 @@ export default async function EstadisticasPage() {
     supabase.rpc("get_ranking_votos", { p_grupo_id: grupo.id, p_tipo: "PEOR" }),
     supabase
       .from("partidos")
-      .select("id, fecha, con_mvp, con_peor")
+      .select("id, fecha, con_mvp, con_peor, votacion_cierra_en")
       .eq("grupo_id", grupo.id)
       .eq("jugado", true)
       .eq("con_votacion", true)
@@ -42,7 +42,7 @@ export default async function EstadisticasPage() {
         .rpc("get_estado_votacion", { p_partido_id: partido.id })
         .single<EstadoVotacion>();
       return votacionCerrada({
-        fechaPartido: partido.fecha,
+        cierraEn: partido.votacion_cierra_en,
         totalParticipantes: estado?.total_participantes ?? 0,
         votosMvp: estado?.votos_mvp ?? 0,
         votosPeor: estado?.votos_peor ?? 0,

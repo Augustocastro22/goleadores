@@ -4,11 +4,11 @@ import { redirect } from "next/navigation";
 import { createClient as createSupabaseJsClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import { getSiteUrl } from "@/lib/site-url";
+import { rutaInterna } from "@/lib/ruta-interna";
 
 /** Destino después de entrar: solo rutas internas (evita open redirects). */
 function destino(formData: FormData) {
-  const next = String(formData.get("next") ?? "");
-  return next.startsWith("/") && !next.startsWith("//") ? next : "/partidos";
+  return rutaInterna(String(formData.get("next") ?? "")) ?? "/partidos";
 }
 
 function conNext(path: string, formData: FormData) {

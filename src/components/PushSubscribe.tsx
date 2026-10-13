@@ -2,10 +2,11 @@
 
 import Card from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
+import PushInstrucciones from "@/components/PushInstrucciones";
 import { usePushSubscription } from "@/lib/push/use-push-subscription";
 
 export default function PushSubscribe() {
-  const { estado, working, error, activar, desactivar } = usePushSubscription();
+  const { estado, plataforma, working, error, activar, desactivar } = usePushSubscription();
 
   if (estado === "cargando") return null;
 
@@ -14,28 +15,12 @@ export default function PushSubscribe() {
       <div>
         <p className="font-semibold text-white">Notificaciones</p>
         <p className="mt-0.5 text-sm text-zinc-500">
-          Recibí un aviso cuando se crea un partido nuevo y cuando se abre o cierra la votación.
+          Te avisamos cuando te convocan a un partido, cuando se abre o cierra la votación y cuando hay
+          novedades de un desafío.
         </p>
       </div>
 
-      {estado === "no-soportado" && (
-        <p className="text-sm text-zinc-500">Tu navegador no soporta notificaciones push.</p>
-      )}
-
-      {estado === "requiere-instalar" && (
-        <p className="text-sm text-zinc-500">
-          En iPhone, Safari solo entrega notificaciones a apps agregadas a la pantalla de inicio.
-          Tocá <span className="text-zinc-300">Compartir → Agregar a inicio</span>, abrí la app
-          desde ese ícono y volvé acá para activarlas.
-        </p>
-      )}
-
-      {estado === "denegado" && (
-        <p className="text-sm text-zinc-500">
-          Bloqueaste las notificaciones para este sitio. Para activarlas, habilitalas desde los
-          permisos del navegador.
-        </p>
-      )}
+      <PushInstrucciones estado={estado} plataforma={plataforma} className="text-sm text-zinc-500" />
 
       {estado === "inactivo" && (
         <Button type="button" size="sm" onClick={activar} disabled={working} className="self-start">

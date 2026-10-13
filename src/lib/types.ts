@@ -41,6 +41,8 @@ export interface Partido {
   con_votacion: boolean;
   con_mvp: boolean;
   con_peor: boolean;
+  /** Hasta cuándo se vota: lo fija la base al cargar el resultado (ver 0029_votacion_24h.sql). */
+  votacion_cierra_en: string | null;
   /** La cancha del grupo donde se juega (la asigna la base según `lugar`, ver 0026_canchas.sql). */
   cancha_id: string | null;
   /** Si es el partido de este grupo en un desafío contra otro grupo (ver 0022_desafios.sql). */

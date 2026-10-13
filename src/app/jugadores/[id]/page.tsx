@@ -24,6 +24,7 @@ interface PartidoJugadoRow {
     con_votacion: boolean;
     con_mvp: boolean;
     con_peor: boolean;
+    votacion_cierra_en: string | null;
   };
 }
 
@@ -65,7 +66,7 @@ export default async function JugadorDetallePage({
     supabase.rpc("get_ranking_votos", { p_grupo_id: grupo.id, p_tipo: "PEOR" }),
     supabase
       .from("partido_jugadores")
-      .select("partido_id, goles, equipo, partidos!inner(fecha, rival, lugar, goles_rival, goles_otros, jugado, grupo_id, con_votacion, con_mvp, con_peor)")
+      .select("partido_id, goles, equipo, partidos!inner(fecha, rival, lugar, goles_rival, goles_otros, jugado, grupo_id, con_votacion, con_mvp, con_peor, votacion_cierra_en)")
       .eq("jugador_id", id)
       .eq("partidos.jugado", true)
       .eq("partidos.grupo_id", grupo.id),
@@ -156,7 +157,7 @@ export default async function JugadorDetallePage({
         .rpc("get_estado_votacion", { p_partido_id: mp.partido_id })
         .single<EstadoVotacion>();
       const cerrada = votacionCerrada({
-        fechaPartido: mp.partidos.fecha,
+        cierraEn: mp.partidos.votacion_cierra_en,
         totalParticipantes: estado?.total_participantes ?? 0,
         votosMvp: estado?.votos_mvp ?? 0,
         votosPeor: estado?.votos_peor ?? 0,
