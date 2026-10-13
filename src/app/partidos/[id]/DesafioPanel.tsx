@@ -138,7 +138,7 @@ export default function DesafioPanel({
             </ActionForm>
           </div>
         )}
-        {d.propuesta_fecha && d.propuesta_vence_en && (
+        {d.propuesta_fecha && d.propuesta_vence_en && !d.resultado_cargado && (
           <p className="text-xs text-zinc-500">Si nadie responde, la fecha nueva se acepta sola el {diaDe(d.propuesta_vence_en)}.</p>
         )}
       </Card>

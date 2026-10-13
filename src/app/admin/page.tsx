@@ -110,7 +110,7 @@ async function GrupoTab({ grupo }: { grupo: MiGrupo }) {
           del grupo.
         </p>
         <InvitacionLink url={url} nombreGrupo={grupo.nombre} />
-        <ActionForm action={regenerarInvitacion} className="mt-3 flex flex-col gap-1">
+        <ActionForm action={regenerarInvitacion} grupoId={grupo.id} className="mt-3 flex flex-col gap-1">
           <ConfirmSubmitButton
             confirmMessage="¿Generar un link nuevo? El link actual deja de funcionar (los que ya se sumaron siguen en el grupo)."
             confirmLabel="Generar"
@@ -123,11 +123,11 @@ async function GrupoTab({ grupo }: { grupo: MiGrupo }) {
 
       <Card className="p-5">
         <h2 className="mb-3 font-bold text-white">Escudo</h2>
-        <LogoUploader nombre={grupo.nombre} logoInicial={grupo.logo_url} />
+        <LogoUploader grupoId={grupo.id} nombre={grupo.nombre} logoInicial={grupo.logo_url} />
       </Card>
 
       <Card className="p-5">
-        <ActionForm action={guardarGrupo} className="flex flex-col gap-4">
+        <ActionForm action={guardarGrupo} grupoId={grupo.id} className="flex flex-col gap-4">
           <Label>
             Nombre del grupo
             <Input type="text" name="nombre" required maxLength={60} defaultValue={grupo.nombre} />
@@ -158,7 +158,7 @@ async function ConfigTab({ grupoId }: { grupoId: string }) {
 
   return (
     <Card className="p-5">
-      <ActionForm action={guardarConfig} className="flex flex-col gap-4">
+      <ActionForm action={guardarConfig} grupoId={grupoId} className="flex flex-col gap-4">
         <ReglasFields inicial={config} />
         <p className="text-xs text-zinc-500">
           Los cambios aplican a los partidos a los que todavía no se les cargaron los goles; los
@@ -233,7 +233,7 @@ async function PartidosTab({ grupoId }: { grupoId: string }) {
                   </Link>
                 </div>
               ) : (
-                <ActionForm action={editarPartido} className="flex flex-col gap-3 border-t border-border px-4 py-4">
+                <ActionForm action={editarPartido} grupoId={grupoId} className="flex flex-col gap-3 border-t border-border px-4 py-4">
                   <input type="hidden" name="partido_id" value={p.id} />
                   <div className="flex gap-3">
                     <Label className="flex-1">
@@ -314,7 +314,7 @@ async function CanchasLista({ grupoId }: { grupoId: string }) {
               </summary>
 
               <div className="flex flex-col gap-4 border-t border-border px-4 py-4">
-                <ActionForm action={renombrarCancha} className="flex flex-col gap-2">
+                <ActionForm action={renombrarCancha} grupoId={grupoId} className="flex flex-col gap-2">
                   <input type="hidden" name="cancha_id" value={c.id} />
                   <Label>
                     Nombre
@@ -326,7 +326,7 @@ async function CanchasLista({ grupoId }: { grupoId: string }) {
                 </ActionForm>
 
                 {otras.length > 0 && (
-                  <ActionForm action={unificarCanchas} className="flex flex-col gap-2">
+                  <ActionForm action={unificarCanchas} grupoId={grupoId} className="flex flex-col gap-2">
                     <input type="hidden" name="cancha_id" value={c.id} />
                     <Label>
                       Es la misma cancha que…
@@ -357,7 +357,7 @@ async function CanchasLista({ grupoId }: { grupoId: string }) {
                 )}
 
                 {c.partidos === 0 && (
-                  <ActionForm action={borrarCancha} className="flex flex-col gap-1">
+                  <ActionForm action={borrarCancha} grupoId={grupoId} className="flex flex-col gap-1">
                     <input type="hidden" name="cancha_id" value={c.id} />
                     <ConfirmSubmitButton
                       confirmMessage={`¿Borrar "${c.nombre}"? No tiene partidos.`}
@@ -423,7 +423,7 @@ async function UsuariosTab({ grupoId, miId }: { grupoId: string; miId: string })
                   <p className="truncate text-xs text-zinc-600">Pidió entrar el {formatear(created_at)}</p>
                 </div>
                 <div className="flex shrink-0 items-center gap-1">
-                  <ActionForm action={rechazarSolicitud} className="flex flex-col items-end">
+                  <ActionForm action={rechazarSolicitud} grupoId={grupoId} className="flex flex-col items-end">
                     <input type="hidden" name="jugador_id" value={j!.id} />
                     <ConfirmSubmitButton
                       confirmMessage={`¿Rechazar a ${j!.apodo}?`}
@@ -433,7 +433,7 @@ async function UsuariosTab({ grupoId, miId }: { grupoId: string; miId: string })
                       Rechazar
                     </ConfirmSubmitButton>
                   </ActionForm>
-                  <ActionForm action={aceptarSolicitud} className="flex flex-col items-end">
+                  <ActionForm action={aceptarSolicitud} grupoId={grupoId} className="flex flex-col items-end">
                     <input type="hidden" name="jugador_id" value={j!.id} />
                     <SubmitButton pendingText="..." size="sm">
                       Aceptar
@@ -464,7 +464,7 @@ async function UsuariosTab({ grupoId, miId }: { grupoId: string; miId: string })
               <div className="flex shrink-0 flex-col items-end gap-1.5">
                 <Badge variant={esAdmin ? "gold" : "neutral"}>{esAdmin ? "Admin" : "Jugador"}</Badge>
                 {j.id !== miId && (
-                  <ActionForm action={cambiarRol} className="flex flex-col items-end gap-1">
+                  <ActionForm action={cambiarRol} grupoId={grupoId} className="flex flex-col items-end gap-1">
                     <input type="hidden" name="jugador_id" value={j.id} />
                     <input type="hidden" name="rol" value={esAdmin ? "jugador" : "admin"} />
                     <ConfirmSubmitButton
@@ -481,7 +481,7 @@ async function UsuariosTab({ grupoId, miId }: { grupoId: string; miId: string })
                   </ActionForm>
                 )}
                 {j.id !== miId && (
-                  <ActionForm action={sacarDelGrupo} className="flex flex-col items-end gap-1">
+                  <ActionForm action={sacarDelGrupo} grupoId={grupoId} className="flex flex-col items-end gap-1">
                     <input type="hidden" name="jugador_id" value={j.id} />
                     <ConfirmSubmitButton
                       confirmMessage={`¿Sacar a ${j.apodo} del grupo? Sus partidos jugados quedan en el historial.`}

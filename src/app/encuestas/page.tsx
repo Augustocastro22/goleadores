@@ -64,7 +64,7 @@ export default async function EncuestasPage() {
         </p>
       </div>
 
-      <CrearEncuestaForm />
+      <CrearEncuestaForm grupoId={grupo.id} />
 
       {(encuestas ?? []).length === 0 ? (
         <p className="py-8 text-center text-sm text-zinc-500">Todavía no hay encuestas.</p>

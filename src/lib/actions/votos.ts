@@ -89,6 +89,39 @@ export async function votar(formData: FormData) {
   return { success: true };
 }
 
+/**
+ * El form de votación del partido: Mejor y/o Peor en un solo envío. Devuelve
+ * el error para mostrarlo (antes se descartaba y nadie sabía si había votado).
+ */
+export async function votarPartido(formData: FormData) {
+  const partidoId = String(formData.get("partido_id") ?? "");
+  const mvpId = String(formData.get("mvp_jugador_id") ?? "");
+  const peorId = String(formData.get("peor_jugador_id") ?? "");
+  if (!mvpId && !peorId) return { error: "Elegí a quién votar." };
+  if (mvpId && mvpId === peorId) return { error: "No podés votar al mismo jugador como Mejor y Peor." };
+
+  for (const [tipo, jugadorId] of [
+    ["MVP", mvpId],
+    ["PEOR", peorId],
+  ] as const) {
+    if (!jugadorId) continue;
+    const voto = new FormData();
+    voto.set("partido_id", partidoId);
+    voto.set("tipo", tipo);
+    voto.set("jugador_votado_id", jugadorId);
+    const resultado = await votar(voto);
+    if (resultado.error) {
+      return {
+        error:
+          tipo === "PEOR" && mvpId
+            ? `Se guardó tu voto de Mejor Jugador, pero no el de Peor: ${resultado.error}`
+            : resultado.error,
+      };
+    }
+  }
+  return { success: true };
+}
+
 /** Vota en la revotación de desempate (solo para quien es elegible). */
 export async function votarDesempate(formData: FormData) {
   const desempateId = String(formData.get("desempate_id") ?? "");

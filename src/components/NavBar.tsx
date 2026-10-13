@@ -7,6 +7,7 @@ import NavLinks from "./NavLinks";
 import BottomNav from "./BottomNav";
 import GrupoSwitcher from "./GrupoSwitcher";
 import ConfirmSubmitButton from "./ConfirmSubmitButton";
+import PushEndpointCampo from "./PushEndpointCampo";
 import { IconLogout, IconSettings } from "./icons";
 
 export default async function NavBar() {
@@ -55,6 +56,7 @@ export default async function NavBar() {
               <span className="hidden sm:inline">{profile?.apodo ?? "Perfil"}</span>
             </Link>
             <form action={logout}>
+              <PushEndpointCampo />
               <ConfirmSubmitButton
                 title="Salir"
                 confirmMessage="¿Cerrar sesión? Para volver a entrar vas a tener que ingresar de nuevo."

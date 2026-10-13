@@ -8,15 +8,22 @@ import { urlConGrupo } from "@/lib/grupo-cookie";
 import { filasConfig, parseConfig } from "@/lib/config";
 import { revisarTrasSalida } from "@/lib/votaciones";
 
-/** Todo lo de /admin opera sobre el grupo activo, y solo si es admin ahí. */
-async function requireAdmin() {
+/**
+ * Todo lo de /admin opera sobre el grupo que se estaba mirando (el grupo_id
+ * que manda el form, ver ActionForm), y solo si es admin ahí. No sobre el de
+ * la cookie: si cambió de grupo en otra pestaña, "Guardar" pisaba el otro
+ * grupo. Sin grupo_id (una pantalla vieja) se usa el activo.
+ */
+async function requireAdmin(desde: FormData | string) {
   const ctx = await getContexto();
-  const grupo = ctx.user && ctx.grupo?.rol === "admin" ? ctx.grupo : null;
+  const grupoId = typeof desde === "string" ? desde : String(desde.get("grupo_id") ?? "");
+  const pedido = grupoId ? ctx.grupos.find((g) => g.id === grupoId) : ctx.grupo;
+  const grupo = ctx.user && pedido?.rol === "admin" ? pedido : null;
   return { ctx, supabase: ctx.supabase, grupo, userId: ctx.user?.id ?? null };
 }
 
 export async function guardarConfig(formData: FormData) {
-  const { supabase, grupo, userId } = await requireAdmin();
+  const { supabase, grupo, userId } = await requireAdmin(formData);
   if (!grupo || !userId) return { error: "Solo el admin puede cambiar la configuración." };
 
   const config = parseConfig(formData);
@@ -31,7 +38,7 @@ export async function guardarConfig(formData: FormData) {
 }
 
 export async function editarPartido(formData: FormData) {
-  const { ctx, supabase } = await requireAdmin();
+  const { ctx, supabase } = await requireAdmin(formData);
 
   const partidoId = String(formData.get("partido_id") ?? "");
   const fecha = String(formData.get("fecha") ?? "");
@@ -97,7 +104,7 @@ export async function editarPartido(formData: FormData) {
 // lugar de los partidos, así que van por RPC; la base valida que sea admin.
 
 export async function renombrarCancha(formData: FormData) {
-  const { supabase, grupo } = await requireAdmin();
+  const { supabase, grupo } = await requireAdmin(formData);
   if (!grupo) return { error: "Solo el admin puede editar las canchas." };
   const canchaId = String(formData.get("cancha_id") ?? "");
   const nombre = String(formData.get("nombre") ?? "").trim();
@@ -111,7 +118,7 @@ export async function renombrarCancha(formData: FormData) {
 
 /** También desde un partido de desafío, que puede no ser del grupo activo: la base valida que sea admin. */
 export async function unificarCanchas(formData: FormData) {
-  const { supabase, userId } = await requireAdmin();
+  const { supabase, userId } = await requireAdmin(formData);
   if (!userId) return { error: "Solo el admin puede editar las canchas." };
   const desde = String(formData.get("cancha_id") ?? "");
   const hacia = String(formData.get("hacia_id") ?? "");
@@ -125,7 +132,7 @@ export async function unificarCanchas(formData: FormData) {
 
 /** Solo una cancha sin partidos (por ejemplo, una que se agregó por error). */
 export async function borrarCancha(formData: FormData) {
-  const { supabase, grupo } = await requireAdmin();
+  const { supabase, grupo } = await requireAdmin(formData);
   if (!grupo) return { error: "Solo el admin puede editar las canchas." };
   const canchaId = String(formData.get("cancha_id") ?? "");
 
@@ -142,7 +149,7 @@ export async function borrarCancha(formData: FormData) {
 }
 
 export async function cambiarRol(formData: FormData) {
-  const { supabase, grupo, userId } = await requireAdmin();
+  const { supabase, grupo, userId } = await requireAdmin(formData);
   if (!grupo) return { error: "Solo el admin puede cambiar roles." };
 
   const jugadorId = String(formData.get("jugador_id") ?? "");
@@ -166,7 +173,7 @@ export async function cambiarRol(formData: FormData) {
 }
 
 export async function sacarDelGrupo(formData: FormData) {
-  const { supabase, grupo, userId } = await requireAdmin();
+  const { supabase, grupo, userId } = await requireAdmin(formData);
   if (!grupo) return { error: "Solo el admin puede sacar gente del grupo." };
 
   const jugadorId = String(formData.get("jugador_id") ?? "");
@@ -191,7 +198,7 @@ export async function sacarDelGrupo(formData: FormData) {
 
 /** Nombre del grupo y si el link de invitación pide aprobación del admin. */
 export async function guardarGrupo(formData: FormData) {
-  const { supabase, grupo } = await requireAdmin();
+  const { supabase, grupo } = await requireAdmin(formData);
   if (!grupo) return { error: "Solo el admin puede cambiar los datos del grupo." };
 
   const nombre = String(formData.get("nombre") ?? "").trim();
@@ -210,8 +217,8 @@ export async function guardarGrupo(formData: FormData) {
 }
 
 /** Invalida el link de invitación anterior (por si se filtró) y genera uno nuevo. */
-export async function regenerarInvitacion() {
-  const { supabase, grupo } = await requireAdmin();
+export async function regenerarInvitacion(formData: FormData) {
+  const { supabase, grupo } = await requireAdmin(formData);
   if (!grupo) return { error: "Solo el admin puede renovar la invitación." };
 
   const { error } = await supabase
@@ -225,7 +232,7 @@ export async function regenerarInvitacion() {
 }
 
 export async function aceptarSolicitud(formData: FormData) {
-  const { supabase, grupo } = await requireAdmin();
+  const { supabase, grupo } = await requireAdmin(formData);
   if (!grupo) return { error: "Solo el admin puede aceptar solicitudes." };
 
   const jugadorId = String(formData.get("jugador_id") ?? "");
@@ -250,7 +257,7 @@ export async function aceptarSolicitud(formData: FormData) {
 }
 
 export async function rechazarSolicitud(formData: FormData) {
-  const { supabase, grupo } = await requireAdmin();
+  const { supabase, grupo } = await requireAdmin(formData);
   if (!grupo) return { error: "Solo el admin puede rechazar solicitudes." };
 
   const jugadorId = String(formData.get("jugador_id") ?? "");
@@ -272,7 +279,7 @@ const MAX_LOGO_BYTES = 2 * 1024 * 1024; // 2 MB (llega ya redimensionado a 256px
 
 /** Sube (o reemplaza) el escudo del grupo activo. */
 export async function subirLogoGrupo(formData: FormData) {
-  const { supabase, grupo } = await requireAdmin();
+  const { supabase, grupo } = await requireAdmin(formData);
   if (!grupo) return { error: "Solo el admin puede cambiar el escudo." };
 
   const file = formData.get("file") as File | null;
@@ -296,8 +303,8 @@ export async function subirLogoGrupo(formData: FormData) {
   return { success: true, logo_url };
 }
 
-export async function quitarLogoGrupo() {
-  const { supabase, grupo } = await requireAdmin();
+export async function quitarLogoGrupo(grupoId: string) {
+  const { supabase, grupo } = await requireAdmin(grupoId);
   if (!grupo) return { error: "Solo el admin puede cambiar el escudo." };
 
   await supabase.storage.from("logos").remove([`${grupo.id}/logo.png`]);

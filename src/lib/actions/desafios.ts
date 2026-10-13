@@ -217,7 +217,9 @@ export async function cancelarDesafio(formData: FormData) {
 
   // Los convocados se leen antes, porque cancelar borra los partidos.
   // Si no se pueden leer no se cancela: los convocados se quedarían sin aviso.
-  const partidos = desafio.estado === "aceptado" ? await partidosDelDesafio(desafioId) : [];
+  // Un suspendido también tiene sus partidos (y convocados a los que avisar).
+  const conPartidos = desafio.estado === "aceptado" || desafio.estado === "suspendido";
+  const partidos = conPartidos ? await partidosDelDesafio(desafioId) : [];
   if (!partidos) return { error: "No se pudo cancelar, probá de nuevo." };
 
   const { error } = await supabase.rpc("cancelar_desafio", {

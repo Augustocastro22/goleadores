@@ -10,7 +10,7 @@ import { IconClose, IconPlus } from "@/components/icons";
 
 const MAX_OPCIONES = 8;
 
-export default function CrearEncuestaForm() {
+export default function CrearEncuestaForm({ grupoId }: { grupoId: string }) {
   const router = useRouter();
   const formRef = useRef<HTMLFormElement>(null);
   const [abierto, setAbierto] = useState(false);
@@ -57,6 +57,7 @@ export default function CrearEncuestaForm() {
   return (
     <Card className="p-4">
       <form ref={formRef} action={handleSubmit} className="flex flex-col gap-4">
+        <input type="hidden" name="grupo_id" value={grupoId} />
         <Label>
           Pregunta
           <Input type="text" name="pregunta" required maxLength={200} placeholder="¿Qué día jugamos?" />

@@ -16,10 +16,17 @@ export const ActionFormPendingContext = createContext(false);
 export default function ActionForm({
   action,
   className,
+  grupoId,
   children,
 }: {
   action: (formData: FormData) => Promise<Resultado>;
   className?: string;
+  /**
+   * El grupo que se está mirando en la pantalla (va como grupo_id): la acción
+   * opera sobre ese y no sobre el de la cookie, que puede haber cambiado en
+   * otra pestaña.
+   */
+  grupoId?: string;
   children: React.ReactNode;
 }) {
   const [estado, formAction, pending] = useActionState<Resultado, FormData>(
@@ -36,6 +43,7 @@ export default function ActionForm({
         startTransition(() => formAction(formData));
       }}
     >
+      {grupoId && <input type="hidden" name="grupo_id" value={grupoId} />}
       <ActionFormPendingContext.Provider value={pending}>{children}</ActionFormPendingContext.Provider>
       {estado?.error && (
         <p aria-live="polite" className="text-sm text-danger-400">

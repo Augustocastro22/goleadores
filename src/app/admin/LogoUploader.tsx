@@ -6,7 +6,15 @@ import { resizeAndCompressImage } from "@/lib/image";
 import GrupoLogo from "@/components/ui/GrupoLogo";
 import Button from "@/components/ui/Button";
 
-export default function LogoUploader({ nombre, logoInicial }: { nombre: string; logoInicial: string | null }) {
+export default function LogoUploader({
+  grupoId,
+  nombre,
+  logoInicial,
+}: {
+  grupoId: string;
+  nombre: string;
+  logoInicial: string | null;
+}) {
   const [logo, setLogo] = useState(logoInicial);
   const [subiendo, setSubiendo] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -26,6 +34,7 @@ export default function LogoUploader({ nombre, logoInicial }: { nombre: string; 
       const comprimida = await resizeAndCompressImage(file, 256, 0.9, "png");
       const formData = new FormData();
       formData.set("file", comprimida);
+      formData.set("grupo_id", grupoId);
       const result = await subirLogoGrupo(formData);
       if (result.error) setError(result.error);
       else if (result.logo_url) setLogo(result.logo_url);
@@ -40,7 +49,7 @@ export default function LogoUploader({ nombre, logoInicial }: { nombre: string; 
   async function handleQuitar() {
     setSubiendo(true);
     setError(null);
-    const result = await quitarLogoGrupo();
+    const result = await quitarLogoGrupo(grupoId);
     setSubiendo(false);
     if (result.error) setError(result.error);
     else setLogo(null);

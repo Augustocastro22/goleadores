@@ -37,7 +37,8 @@ export function novedadesDesafio(d: DesafioVista): string[] {
   if (d.estado === "suspendido") {
     lineas.push(d.suspendido_por_mi_grupo ? "Lo suspendieron ustedes." : `Lo suspendió ${d.rival_nombre}.`);
   }
-  if (d.propuesta_fecha) {
+  // Con resultado la propuesta de otra fecha ya no va (la base la descarta).
+  if (d.propuesta_fecha && !d.resultado_cargado) {
     const cuando = `${fechaDesafio(d.propuesta_fecha, d.propuesta_hora)} en ${d.propuesta_lugar}`;
     lineas.push(
       d.propuesta_es_mia

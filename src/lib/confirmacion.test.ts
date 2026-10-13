@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatearMomento, partidoYaPaso, puedeCargarResultado, resultadoHabilitadoDesde } from "./confirmacion";
+import { formatearMomento, instanteArgentina, partidoYaPaso, puedeCargarResultado, resultadoHabilitadoDesde } from "./confirmacion";
 
 // 5 de octubre de 2026, 18:30 en Argentina (UTC-3).
 const ahora = new Date("2026-10-05T21:30:00Z");
@@ -57,5 +57,16 @@ describe("puedeCargarResultado", () => {
 describe("formatearMomento", () => {
   it("muestra día, fecha y hora de Argentina", () => {
     expect(formatearMomento(new Date("2026-10-14T19:00:00Z"))).toBe("mié 14/10 a las 16:00");
+  });
+});
+
+describe("instanteArgentina", () => {
+  it("toma la hora del datetime-local como de Argentina", () => {
+    expect(instanteArgentina("2026-10-15T20:00")?.toISOString()).toBe("2026-10-15T23:00:00.000Z");
+  });
+
+  it("rechaza lo que no tiene ese formato", () => {
+    expect(instanteArgentina("")).toBeNull();
+    expect(instanteArgentina("mañana")).toBeNull();
   });
 });

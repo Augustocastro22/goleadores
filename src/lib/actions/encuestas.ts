@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getContexto } from "@/lib/grupo";
 import { urlConGrupo } from "@/lib/grupo-cookie";
 import { encuestaCerrada } from "@/lib/encuestas";
+import { instanteArgentina } from "@/lib/confirmacion";
 import { enviarPush } from "@/lib/push/send";
 import type { ResultadoEncuesta } from "@/lib/types";
 
@@ -18,15 +19,19 @@ export async function crearEncuesta(formData: FormData) {
 
   if (!pregunta) return { error: "Escribí la pregunta." };
   if (!cierraEnRaw) return { error: "Elegí cuándo cierra." };
-  const cierraEn = new Date(cierraEnRaw);
-  if (Number.isNaN(cierraEn.getTime()) || cierraEn <= new Date()) {
+  const cierraEn = instanteArgentina(cierraEnRaw);
+  if (!cierraEn || cierraEn <= new Date()) {
     return { error: "La fecha de cierre tiene que ser en el futuro." };
   }
   if (opciones.length < MIN_OPCIONES) return { error: `Cargá al menos ${MIN_OPCIONES} opciones.` };
   if (opciones.length > MAX_OPCIONES) return { error: `Máximo ${MAX_OPCIONES} opciones.` };
 
-  const { supabase, user, grupo } = await getContexto();
+  const ctx = await getContexto();
+  const { supabase, user } = ctx;
   if (!user) return { error: "No autenticado." };
+  // El grupo que estaba mirando (no el de la cookie, que pudo cambiar en otra pestaña).
+  const grupoId = String(formData.get("grupo_id") ?? "");
+  const grupo = grupoId ? ctx.grupos.find((g) => g.id === grupoId) : ctx.grupo;
   if (!grupo) return { error: "Primero sumate a un grupo." };
 
   const { data: encuesta, error } = await supabase

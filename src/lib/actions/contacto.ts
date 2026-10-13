@@ -1,11 +1,20 @@
 "use server";
 
+import { headers } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { enviarPush } from "@/lib/push/send";
 
 const MOTIVOS = ["borrar_cuenta", "mis_datos", "otro"] as const;
 const MAX_MENSAJES_POR_HORA = 3;
+const MAX_MENSAJES_TOTAL_POR_HORA = 20;
+
+/** IP de quien manda: en Vercel, el primer valor de x-forwarded-for lo pone Vercel. */
+async function ipDelPedido(): Promise<string | null> {
+  const h = await headers();
+  const ip = h.get("x-forwarded-for")?.split(",")[0]?.trim() || h.get("x-real-ip")?.trim();
+  return ip || null;
+}
 
 /**
  * Guarda un mensaje del formulario de contacto (tabla mensajes_contacto, ver
@@ -18,7 +27,10 @@ export async function enviarMensajeContacto(formData: FormData) {
   if (String(formData.get("sitio_web") ?? "")) return { success: true };
 
   const motivo = String(formData.get("motivo") ?? "");
-  const nombre = String(formData.get("nombre") ?? "").trim();
+  // Sin saltos de línea: va en el asunto del mail.
+  const nombre = String(formData.get("nombre") ?? "")
+    .replace(/[\r\n]+/g, " ")
+    .trim();
   const email = String(formData.get("email") ?? "").trim().toLowerCase();
   const mensaje = String(formData.get("mensaje") ?? "").trim();
 
@@ -35,20 +47,35 @@ export async function enviarMensajeContacto(formData: FormData) {
     data: { user },
   } = await supabase.auth.getUser();
 
+  // Límites por hora: por email, por IP (el email lo escribe el que manda, así
+  // que solo no alcanza) y en total, para que un script no llene la tabla ni
+  // mande una lluvia de mails y avisos.
   const admin = createAdminClient();
+  const ip = await ipDelPedido();
   const haceUnaHora = new Date(Date.now() - 60 * 60 * 1000).toISOString();
-  const { count } = await admin
-    .from("mensajes_contacto")
-    .select("id", { count: "exact", head: true })
-    .eq("email", email)
-    .gte("created_at", haceUnaHora);
-  if ((count ?? 0) >= MAX_MENSAJES_POR_HORA) {
+  const contar = (columna?: "email" | "ip", valor?: string) => {
+    let consulta = admin
+      .from("mensajes_contacto")
+      .select("id", { count: "exact", head: true })
+      .gte("created_at", haceUnaHora);
+    if (columna && valor) consulta = consulta.eq(columna, valor);
+    return consulta;
+  };
+  const [porEmail, porIp, total] = await Promise.all([
+    contar("email", email),
+    ip ? contar("ip", ip) : Promise.resolve({ count: 0 }),
+    contar(),
+  ]);
+  if ((porEmail.count ?? 0) >= MAX_MENSAJES_POR_HORA || (porIp.count ?? 0) >= MAX_MENSAJES_POR_HORA) {
     return { error: "Ya recibimos varios mensajes tuyos. Probá de nuevo en un rato." };
+  }
+  if ((total.count ?? 0) >= MAX_MENSAJES_TOTAL_POR_HORA) {
+    return { error: "Estamos recibiendo muchos mensajes. Probá de nuevo en un rato." };
   }
 
   const { error } = await admin
     .from("mensajes_contacto")
-    .insert({ user_id: user?.id ?? null, motivo, nombre, email, mensaje });
+    .insert({ user_id: user?.id ?? null, motivo, nombre, email, mensaje, ip });
   if (error) return { error: "No se pudo enviar el mensaje. Probá de nuevo." };
 
   await avisarPorMail({ motivo, nombre, email, mensaje });

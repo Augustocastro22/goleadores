@@ -117,8 +117,17 @@ export async function signup(formData: FormData) {
   redirect(destino(formData));
 }
 
-export async function logout() {
+export async function logout(formData?: FormData) {
   const supabase = await createClient();
+  // La suscripción push de este dispositivo deja de ser de quien sale (ver
+  // PushEndpointCampo). Si vuelve a entrar alguien, se la reasigna al abrir la app.
+  const endpoint = String(formData?.get("push_endpoint") ?? "");
+  if (endpoint) {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (user) await supabase.from("push_subscriptions").delete().eq("endpoint", endpoint).eq("user_id", user.id);
+  }
   await supabase.auth.signOut();
   redirect("/login");
 }

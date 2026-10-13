@@ -83,6 +83,16 @@ export function usePushSubscription() {
       const registration = await navigator.serviceWorker.ready;
       const subscription = await registration.pushManager.getSubscription();
       setEstado(subscription ? "activo" : "inactivo");
+      // El navegador la tiene: se asegura de que en la base esté a nombre de
+      // quien está ahora (al cerrar sesión se borra, ver PushEndpointCampo).
+      if (subscription) {
+        const json = subscription.toJSON();
+        if (json.keys?.p256dh && json.keys.auth) {
+          suscribirPush({ endpoint: subscription.endpoint, p256dh: json.keys.p256dh, auth: json.keys.auth }).catch(
+            () => {}
+          );
+        }
+      }
     }
     check().catch(() => setEstado("no-soportado"));
   }, []);

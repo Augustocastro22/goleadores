@@ -59,7 +59,11 @@ export default function EncuestaCard({
   async function handleEliminar() {
     const formData = new FormData();
     formData.set("encuesta_id", encuestaId);
-    await eliminarEncuesta(formData);
+    const result = await eliminarEncuesta(formData);
+    if (result.error) {
+      setError(result.error);
+      return;
+    }
     router.refresh();
   }
 
@@ -70,6 +74,8 @@ export default function EncuestaCard({
     minute: "2-digit",
     // "20:00", no "08:00 p. m.".
     hourCycle: "h23",
+    // En el servidor (UTC) y en el celu tiene que dar la misma hora.
+    timeZone: "America/Argentina/Buenos_Aires",
   });
 
   return (

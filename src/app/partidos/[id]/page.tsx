@@ -4,13 +4,12 @@ import { getConfig, grupoVota as votaAlgo } from "@/lib/config";
 import Link from "next/link";
 import { deletePartido } from "@/lib/actions/partidos";
 import { urlConGrupo } from "@/lib/grupo-cookie";
-import { votar, votarDesempate } from "@/lib/actions/votos";
+import { votarDesempate, votarPartido } from "@/lib/actions/votos";
 import { formatearCierreVotacion, votacionCerrada } from "@/lib/votacion";
 import { cerrarDesempatesVencidos, cerrarVotacionSiCorresponde } from "@/lib/votaciones";
 import { formatearMomento, partidoYaPaso, puedeCargarResultado, resultadoHabilitadoDesde } from "@/lib/confirmacion";
 import type { Bloqueo, DesempatePartido, EstadoVotacion, Profile, RankingRow, Respuesta } from "@/lib/types";
 import Card from "@/components/ui/Card";
-import Button from "@/components/ui/Button";
 import Badge from "@/components/ui/Badge";
 import Avatar from "@/components/ui/Avatar";
 import ConfirmSubmitButton from "@/components/ConfirmSubmitButton";
@@ -238,7 +237,7 @@ export default async function PartidoDetailPage({
             una cancha nueva para el grupo. ¿Es la misma que{" "}
             <span className="font-semibold text-white">{canchaParecida.existente.nombre}</span>?
           </p>
-          <ActionForm action={unificarCanchas} className="flex flex-col gap-1">
+          <ActionForm action={unificarCanchas} grupoId={partido.grupo_id} className="flex flex-col gap-1">
             <input type="hidden" name="cancha_id" value={canchaParecida.nueva.id} />
             <input type="hidden" name="hacia_id" value={canchaParecida.existente.id} />
             <SubmitButton size="sm" pendingText="Unificando…" className="self-start">
@@ -249,7 +248,10 @@ export default async function PartidoDetailPage({
         </Card>
       )}
 
-      {conConfirmacion && miRespuesta && <RespuestaCard partidoId={id} respuesta={miRespuesta} />}
+      {/* Una vez que empezó el partido ya no se cambia: lo corrige el admin. */}
+      {conConfirmacion && miRespuesta && !partidoYaPaso(partido.fecha, partido.hora) && (
+        <RespuestaCard partidoId={id} respuesta={miRespuesta} />
+      )}
 
       {isAdmin && !partido.jugado && (
         <ConvocadosEditor
@@ -391,12 +393,7 @@ export default async function PartidoDetailPage({
       {/* Un partido de desafío no se borra: se cancela el desafío, desde su panel (arriba). */}
       {isAdmin && !partido.desafio_id && (
         <section>
-          <form
-            action={async (formData) => {
-              "use server";
-              await deletePartido(formData);
-            }}
-          >
+          <ActionForm action={deletePartido} className="flex flex-col gap-2">
             <input type="hidden" name="partido_id" value={id} />
             <ConfirmSubmitButton
               confirmMessage="¿Seguro que querés borrar este partido? Se pierden los goles y los votos cargados."
@@ -405,7 +402,7 @@ export default async function PartidoDetailPage({
             >
               Eliminar partido
             </ConfirmSubmitButton>
-          </form>
+          </ActionForm>
         </section>
       )}
     </div>
@@ -608,36 +605,32 @@ function DefinirDesempate({ desempate, plazo }: { desempate: DesempatePartido; p
         Empataron {desempate.candidatos_apodos.join(" y ")}. Como no votaste a ninguno, tu voto define quién gana
         {plazo ? ` (hasta el ${formatearCierreVotacion(plazo)})` : ""}.
       </p>
-      <form
-        action={async (formData) => {
-          "use server";
-          await votarDesempate(formData);
-        }}
-        className="flex flex-col gap-3 sm:flex-row sm:items-center"
-      >
+      <ActionForm action={votarDesempate} className="flex flex-col gap-2">
         <input type="hidden" name="desempate_id" value={desempate.id} />
-        <div className="relative flex-1">
-          <select
-            name="jugador_votado_id"
-            required
-            defaultValue=""
-            className="w-full appearance-none rounded-xl border border-border bg-white/5 py-2.5 pr-9 pl-3.5 text-sm text-white outline-none focus:border-primary-400/60 focus:ring-2 focus:ring-primary-400/20"
-          >
-            <option value="" disabled className="bg-surface">
-              Elegí un jugador...
-            </option>
-            {desempate.candidatos.map((cid, i) => (
-              <option key={cid} value={cid} className="bg-surface">
-                {desempate.candidatos_apodos[i]}
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+          <div className="relative flex-1">
+            <select
+              name="jugador_votado_id"
+              required
+              defaultValue=""
+              className="w-full appearance-none rounded-xl border border-border bg-white/5 py-2.5 pr-9 pl-3.5 text-sm text-white outline-none focus:border-primary-400/60 focus:ring-2 focus:ring-primary-400/20"
+            >
+              <option value="" disabled className="bg-surface">
+                Elegí un jugador...
               </option>
-            ))}
-          </select>
-          <IconChevronRight className="pointer-events-none absolute top-1/2 right-3 h-4 w-4 -translate-y-1/2 rotate-90 text-zinc-500" />
+              {desempate.candidatos.map((cid, i) => (
+                <option key={cid} value={cid} className="bg-surface">
+                  {desempate.candidatos_apodos[i]}
+                </option>
+              ))}
+            </select>
+            <IconChevronRight className="pointer-events-none absolute top-1/2 right-3 h-4 w-4 -translate-y-1/2 rotate-90 text-zinc-500" />
+          </div>
+          <SubmitButton pendingText="Enviando..." size="sm">
+            Definir
+          </SubmitButton>
         </div>
-        <Button type="submit" size="sm">
-          Definir
-        </Button>
-      </form>
+      </ActionForm>
     </div>
   );
 }
@@ -669,32 +662,8 @@ function VotacionForm({
 
   return (
     <Card className="flex flex-col gap-4 p-4">
-      <form
-        action={async (formData) => {
-          "use server";
-          const mvpId = String(formData.get("mvp_jugador_id") ?? "");
-          const peorId = String(formData.get("peor_jugador_id") ?? "");
-          // El mismo jugador no puede ser Mejor y Peor (votar() también lo frena).
-          if (mvpId && mvpId === peorId) return;
-
-          if (mvpId) {
-            const votoMvp = new FormData();
-            votoMvp.set("partido_id", partidoId);
-            votoMvp.set("tipo", "MVP");
-            votoMvp.set("jugador_votado_id", mvpId);
-            await votar(votoMvp);
-          }
-
-          if (peorId) {
-            const votoPeor = new FormData();
-            votoPeor.set("partido_id", partidoId);
-            votoPeor.set("tipo", "PEOR");
-            votoPeor.set("jugador_votado_id", peorId);
-            await votar(votoPeor);
-          }
-        }}
-        className="flex flex-col gap-4"
-      >
+      <ActionForm action={votarPartido} className="flex flex-col gap-4">
+        <input type="hidden" name="partido_id" value={partidoId} />
         <VotoSelects
           candidatos={candidatos}
           conMvp={conMvp}
@@ -702,10 +671,10 @@ function VotacionForm({
           votoMvpId={votoMvpId}
           votoPeorId={votoPeorId}
         />
-        <Button type="submit" size="sm" className="self-start">
+        <SubmitButton pendingText="Votando..." size="sm" className="self-start">
           Votar
-        </Button>
-      </form>
+        </SubmitButton>
+      </ActionForm>
     </Card>
   );
 }

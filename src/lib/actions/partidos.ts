@@ -497,7 +497,7 @@ export async function responderConvocatoria(partidoId: string, juega: boolean) {
     p_juega: juega,
   });
   if (error) return { error: error.message };
-  if (!ok) return { error: "El partido ya se jugó, no se puede cambiar." };
+  if (!ok) return { error: "El partido ya empezó: si hay que cambiar quién jugó, avisale a un admin." };
 
   const { grupo_id, rival, fecha } = anterior.partidos;
   const avisar = juega ? anterior.respuesta === "no_juega" : anterior.respuesta !== "no_juega";

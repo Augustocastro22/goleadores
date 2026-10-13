@@ -143,6 +143,10 @@ describe("suspender y reprogramar", () => {
     );
     expect(puedeResponderFecha(desafio("aceptado", "2026-10-10", true))).toBe(false);
   });
+
+  it("con resultado ya no se responde la fecha propuesta", () => {
+    expect(puedeResponderFecha(desafio("aceptado", "2026-10-10", true, true, { propuesta_es_mia: false }))).toBe(false);
+  });
 });
 
 describe("resultado", () => {

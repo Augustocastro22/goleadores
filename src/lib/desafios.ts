@@ -96,8 +96,9 @@ export function puedeReprogramar(d: D<"estado" | "resultado_cargado">): boolean 
 }
 
 /** Aceptar o rechazar la fecha que propuso el otro grupo. */
-export function puedeResponderFecha(d: D<"estado" | "propuesta_es_mia">): boolean {
-  return enJuego(d.estado) && d.propuesta_es_mia === false;
+export function puedeResponderFecha(d: D<"estado" | "propuesta_es_mia" | "resultado_cargado">): boolean {
+  // Con resultado ya no se cambia la fecha (la base tampoco la aplica, ver 0030).
+  return enJuego(d.estado) && d.propuesta_es_mia === false && !d.resultado_cargado;
 }
 
 /** Cargar (o contraproponer) el resultado: después del partido, mientras no quedó cerrado. */
@@ -138,7 +139,9 @@ export function desafiosConGolesDeMas<T extends D<"partido_id" | "marcador_mios"
 
 /** Si hay algo que el admin de este grupo tiene que responder. */
 export function esperaMiRespuesta(
-  d: D<"estado" | "fecha" | "soy_desafiante" | "propuesta_es_mia" | "resultado_estado" | "resultado_pendiente_es_mio">,
+  d: D<
+    "estado" | "fecha" | "soy_desafiante" | "propuesta_es_mia" | "resultado_cargado" | "resultado_estado" | "resultado_pendiente_es_mio"
+  >,
   hoy: string
 ): boolean {
   return puedeResponder(d, hoy) || puedeResponderFecha(d) || puedeConfirmarResultado(d);
@@ -146,7 +149,9 @@ export function esperaMiRespuesta(
 
 /** Dónde va en /partidos/desafios: lo que espera respuesta, lo que viene y lo que ya pasó. */
 export function seccionDesafio(
-  d: D<"estado" | "fecha" | "soy_desafiante" | "propuesta_es_mia" | "resultado_estado" | "resultado_pendiente_es_mio">,
+  d: D<
+    "estado" | "fecha" | "soy_desafiante" | "propuesta_es_mia" | "resultado_cargado" | "resultado_estado" | "resultado_pendiente_es_mio"
+  >,
   hoy: string
 ): SeccionDesafio {
   if (esperaMiRespuesta(d, hoy)) return "responder";

@@ -69,3 +69,14 @@ export function formatearMomento(momento: Date): string {
   const dia = partes.weekday.replace(".", "");
   return `${dia} ${partes.day}/${partes.month} a las ${partes.hour}:${partes.minute}`;
 }
+
+/**
+ * Un "2026-10-15T20:00" de un `<input type="datetime-local">` como hora de
+ * Argentina. new Date() lo tomaría en la zona del servidor, que en Vercel es
+ * UTC: una encuesta "hasta las 20" cerraba a las 17.
+ */
+export function instanteArgentina(fechaHora: string): Date | null {
+  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(fechaHora)) return null;
+  const instante = new Date(`${fechaHora}:00-03:00`);
+  return Number.isNaN(instante.getTime()) ? null : instante;
+}
