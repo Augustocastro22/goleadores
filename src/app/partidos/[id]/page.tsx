@@ -592,7 +592,8 @@ function ResultadoVotacion({
       ) : (
         empatados.length > 1 && (
           <p className="border-t border-border pt-3 text-sm text-zinc-400">
-            Empataron {nombresEmpatados} y no se pudo definir, así que cuentan todos.
+            Empataron {nombresEmpatados} y no se pudo definir, así que cuentan{" "}
+            {empatados.length === 2 ? "los dos" : "todos"}.
           </p>
         )
       )}
