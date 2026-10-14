@@ -109,6 +109,8 @@ export default async function PartidoDetailPage({
       ? participantes.filter((p) => !idsMiembros.has(p.jugador_id)).map((p) => p.profiles)
       : [];
   const resultadoHabilitado = puedeCargarResultado(partido.fecha, partido.hora);
+  // Todavía sin el editor de goles: arriba va la tarjeta del partido.
+  const programado = !(partido.jugado || (isAdmin && resultadoHabilitado));
 
   let bloqueos: Bloqueo[] = [];
   let ocupados: Ocupado[] = [];
@@ -248,6 +250,22 @@ export default async function PartidoDetailPage({
         </Card>
       )}
 
+      {programado && (
+        <PartidoProgramadoCard
+          rival={partido.rival}
+          fecha={fecha}
+          lugar={partido.lugar}
+          respuestas={conConfirmacion ? participantes.map((p) => p.respuesta) : null}
+          aviso={
+            isAdmin
+              ? `El resultado lo vas a poder cargar desde el ${formatearMomento(
+                  resultadoHabilitadoDesde(partido.fecha, partido.hora)
+                )}.`
+              : undefined
+          }
+        />
+      )}
+
       {/* Una vez que empezó el partido ya no se cambia: lo corrige el admin. */}
       {conConfirmacion && miRespuesta && !partidoYaPaso(partido.fecha, partido.hora) && (
         <RespuestaCard partidoId={id} respuesta={miRespuesta} />
@@ -270,6 +288,9 @@ export default async function PartidoDetailPage({
           }
           unSoloEquipo={!!partido.desafio_id}
           ocupados={ocupados}
+          rival={partido.rival}
+          // El resumen ya está en la tarjeta del partido, justo arriba.
+          mostrarResumen={!programado}
         />
       )}
 
@@ -285,7 +306,7 @@ export default async function PartidoDetailPage({
         />
       )}
 
-      {partido.jugado || (isAdmin && resultadoHabilitado) ? (
+      {!programado ? (
         <GolesEditor
           partidoId={id}
           rival={partido.rival}
@@ -309,21 +330,14 @@ export default async function PartidoDetailPage({
           votacion={isAdmin && !partido.jugado ? { config, reglasHref } : undefined}
         />
       ) : (
-        <EventoProgramado
-          rival={partido.rival}
-          fecha={fecha}
-          lugar={partido.lugar}
-          equipo1={equipo1}
-          equipo2={equipo2}
-          conConfirmacion={conConfirmacion}
-          aviso={
-            isAdmin
-              ? `El resultado lo vas a poder cargar desde el ${formatearMomento(
-                  resultadoHabilitadoDesde(partido.fecha, partido.hora)
-                )}.`
-              : undefined
-          }
-        />
+        !isAdmin && (
+          <ConvocadosProgramados
+            rival={partido.rival}
+            equipo1={equipo1}
+            equipo2={equipo2}
+            conConfirmacion={conConfirmacion}
+          />
+        )
       )}
 
       {/* Un partido sin votación de un grupo que ya no vota no muestra nada de votación.
@@ -409,23 +423,49 @@ export default async function PartidoDetailPage({
   );
 }
 
-function EventoProgramado({
+/** Arriba de todo en un partido que todavía no se jugó: cuándo, dónde, contra quién y cuántos van. */
+function PartidoProgramadoCard({
   rival,
   fecha,
   lugar,
-  equipo1,
-  equipo2,
-  conConfirmacion,
+  respuestas,
   aviso,
 }: {
   rival: string;
   fecha: string;
   lugar: string;
+  /** Si el grupo pide confirmación, las respuestas de los convocados. */
+  respuestas: Respuesta[] | null;
+  /** Para el admin: desde cuándo puede cargar el resultado. */
+  aviso?: string;
+}) {
+  return (
+    <Card className="p-6">
+      <div className="flex items-center justify-between gap-2 text-xs font-medium text-zinc-500">
+        <span className="truncate">{fecha}</span>
+        <span className="truncate">{lugar}</span>
+      </div>
+      <div className="mt-4 flex flex-col items-center gap-2">
+        <Badge>Partido programado</Badge>
+        <p className="text-lg font-bold text-white">vs {rival}</p>
+        {respuestas && <ResumenRespuestas respuestas={respuestas} />}
+        {aviso && <p className="mt-1 text-center text-xs text-zinc-500">{aviso}</p>}
+      </div>
+    </Card>
+  );
+}
+
+/** Los convocados de un partido que todavía no se jugó, para quien no es admin (el admin usa ConvocadosEditor). */
+function ConvocadosProgramados({
+  rival,
+  equipo1,
+  equipo2,
+  conConfirmacion,
+}: {
+  rival: string;
   equipo1: ParticipanteRow[];
   equipo2: ParticipanteRow[];
   conConfirmacion: boolean;
-  /** Para el admin: desde cuándo puede cargar el resultado. */
-  aviso?: string;
 }) {
   // Con confirmación, los que dijeron que no van aparte.
   const enEquipo = (lista: ParticipanteRow[]) =>
@@ -434,21 +474,6 @@ function EventoProgramado({
 
   return (
     <div className="flex flex-col gap-6">
-      <Card className="p-6">
-        <div className="flex items-center justify-between gap-2 text-xs font-medium text-zinc-500">
-          <span className="truncate">{fecha}</span>
-          <span className="truncate">{lugar}</span>
-        </div>
-        <div className="mt-4 flex flex-col items-center gap-2">
-          <Badge>Partido programado</Badge>
-          <p className="text-lg font-bold text-white">vs {rival}</p>
-          {conConfirmacion && (
-            <ResumenRespuestas respuestas={[...equipo1, ...equipo2].map((p) => p.respuesta)} />
-          )}
-          {aviso && <p className="mt-1 text-center text-xs text-zinc-500">{aviso}</p>}
-        </div>
-      </Card>
-
       <ConvocadosList
         titulo="Convocados · Equipo 1 (Nosotros)"
         jugadores={enEquipo(equipo1)}

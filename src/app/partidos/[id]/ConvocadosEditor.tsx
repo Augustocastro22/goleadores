@@ -38,9 +38,15 @@ export default function ConvocadosEditor({
   unSoloEquipo = false,
   ocupados = [],
   exMiembroIds = [],
+  rival,
+  mostrarResumen = true,
 }: {
   partidoId: string;
   jugadores: Profile[];
+  /** Para el título del Equipo 2. */
+  rival?: string;
+  /** El "2 juegan · 6 sin responder": no hace falta si ya está en la tarjeta del partido. */
+  mostrarResumen?: boolean;
   /** Convocados que ya no están en el grupo: solo se los puede sacar. */
   exMiembroIds?: string[];
   equipo1IdsInit: string[];
@@ -76,13 +82,21 @@ export default function ConvocadosEditor({
     return map;
   }, [jugadores]);
 
-  const convocadosActuales = useMemo(
-    () =>
-      [...equipo1IdsInit, ...equipo2IdsInit]
+  // Por equipo (los títulos solo si hay Equipo 2) y, con confirmación,
+  // primero los que juegan, después los que no respondieron y al final los que no.
+  const equiposActuales = useMemo(() => {
+    const orden: Record<Respuesta, number> = { juega: 0, pendiente: 1, no_juega: 2 };
+    const perfiles = (ids: string[]) =>
+      ids
         .map((id) => jugadorPorId.get(id))
-        .filter((j): j is Profile => Boolean(j)),
-    [equipo1IdsInit, equipo2IdsInit, jugadorPorId]
-  );
+        .filter((j): j is Profile => Boolean(j))
+        .sort((a, b) => (respuestas ? orden[respuestas[a.id]] - orden[respuestas[b.id]] : 0));
+    return [
+      { titulo: "Equipo 1 (Nosotros)", jugadores: perfiles(equipo1IdsInit) },
+      { titulo: `Equipo 2${rival ? ` (${rival})` : ""}`, jugadores: perfiles(equipo2IdsInit) },
+    ].filter((e) => e.jugadores.length > 0);
+  }, [equipo1IdsInit, equipo2IdsInit, jugadorPorId, respuestas, rival]);
+  const hayConvocados = equiposActuales.length > 0;
 
   const bloqueoPorJugador = useMemo(() => {
     const map = new Map<string, Bloqueo>();
@@ -164,51 +178,61 @@ export default function ConvocadosEditor({
             Editar
           </button>
         </div>
-        {respuestas && convocadosActuales.length > 0 && (
+        {mostrarResumen && respuestas && hayConvocados && (
           <div className="-mt-1 mb-3">
             <ResumenRespuestas respuestas={Object.values(respuestas)} />
           </div>
         )}
-        <Card className="divide-y divide-border overflow-hidden py-1">
-          {convocadosActuales.length === 0 ? (
-            <p className="px-4 py-3 text-sm text-zinc-500">Todavía no hay nadie convocado.</p>
-          ) : (
-            convocadosActuales.map((jugador) => {
-              const bloqueo = bloqueoPorJugador.get(jugador.id);
-              const ocupado = ocupadoPorJugador.get(jugador.id);
-              return (
-                <div key={jugador.id} className="flex items-center gap-3 px-4 py-3">
-                  <Avatar src={jugador.foto_url} alt={jugador.apodo} size={32} />
-                  <div className="min-w-0 flex-1">
-                    <span className="block truncate text-sm text-zinc-200">
-                      {jugador.nombre} {jugador.apellido}{" "}
-                      <span className="text-zinc-500">({jugador.apodo})</span>
-                    </span>
-                    {bloqueo && (
-                      <p className="truncate text-xs text-gold-400">
-                        ⚠ Dijo que no puede: {describirBloqueo(bloqueo)}
-                        {bloqueo.nota ? ` (${bloqueo.nota})` : ""}
-                      </p>
-                    )}
-                    {ocupado && <p className="truncate text-xs text-gold-400">⚠ {textoOcupado(ocupado)}</p>}
-                    {exMiembros.has(jugador.id) && (
-                      <p className="truncate text-xs text-danger-400">Ya no está en el grupo: sacalo con Editar.</p>
-                    )}
-                  </div>
-                  {respuestas?.[jugador.id] && !exMiembros.has(jugador.id) && (
-                    <RespuestaSelect
-                      // Si la respuesta cambia desde otro lado, arranca de nuevo con la nueva.
-                      key={respuestas[jugador.id]}
-                      partidoId={partidoId}
-                      jugadorId={jugador.id}
-                      respuesta={respuestas[jugador.id]}
-                    />
-                  )}
-                </div>
-              );
-            })
-          )}
-        </Card>
+        {!hayConvocados && (
+          <Card className="px-4 py-3 text-sm text-zinc-500">Todavía no hay nadie convocado.</Card>
+        )}
+        <div className="flex flex-col gap-3">
+          {equiposActuales.map((equipo) => (
+            <div key={equipo.titulo}>
+              {equiposActuales.length > 1 && (
+                <p className="mb-1.5 text-xs font-semibold tracking-wide text-zinc-500 uppercase">
+                  {equipo.titulo}
+                </p>
+              )}
+              <Card className="divide-y divide-border overflow-hidden py-1">
+                {equipo.jugadores.map((jugador) => {
+                  const bloqueo = bloqueoPorJugador.get(jugador.id);
+                  const ocupado = ocupadoPorJugador.get(jugador.id);
+                  return (
+                    <div key={jugador.id} className="flex items-center gap-3 px-4 py-3">
+                      <Avatar src={jugador.foto_url} alt={jugador.apodo} size={32} />
+                      <div className="min-w-0 flex-1">
+                        <span className="block truncate text-sm text-zinc-200">
+                          {jugador.nombre} {jugador.apellido}{" "}
+                          <span className="text-zinc-500">({jugador.apodo})</span>
+                        </span>
+                        {bloqueo && (
+                          <p className="truncate text-xs text-gold-400">
+                            ⚠ Dijo que no puede: {describirBloqueo(bloqueo)}
+                            {bloqueo.nota ? ` (${bloqueo.nota})` : ""}
+                          </p>
+                        )}
+                        {ocupado && <p className="truncate text-xs text-gold-400">⚠ {textoOcupado(ocupado)}</p>}
+                        {exMiembros.has(jugador.id) && (
+                          <p className="truncate text-xs text-danger-400">Ya no está en el grupo: sacalo con Editar.</p>
+                        )}
+                      </div>
+                      {respuestas?.[jugador.id] && !exMiembros.has(jugador.id) && (
+                        <RespuestaSelect
+                          // Si la respuesta cambia desde otro lado, arranca de nuevo con la nueva.
+                          key={respuestas[jugador.id]}
+                          partidoId={partidoId}
+                          jugadorId={jugador.id}
+                          respuesta={respuestas[jugador.id]}
+                        />
+                      )}
+                    </div>
+                  );
+                })}
+              </Card>
+            </div>
+          ))}
+        </div>
         {message && (
           <p
             className={`mt-2 rounded-xl border px-3.5 py-2.5 text-sm ${
