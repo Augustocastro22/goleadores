@@ -151,3 +151,12 @@ export function IconSettings(props: SVGProps<SVGSVGElement>) {
     </svg>
   );
 }
+
+export function IconRefresh(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" strokeWidth={2} stroke="currentColor" {...props}>
+      <path d="M20 12a8 8 0 1 1-2.34-5.66" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M20 4v4h-4" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
