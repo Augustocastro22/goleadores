@@ -194,13 +194,14 @@ export async function imagenRanking({
             width: "100%",
             height: altoPedestal[i],
             marginTop: 16,
-            paddingTop: historia ? 18 : 10,
+            paddingTop: historia ? 22 : 12,
             borderRadius: "24px 24px 0 0",
             background: SUPERFICIE,
             borderTop: `6px solid ${color}`,
-            fontSize: historia ? 64 : 44,
+            // Discreto: el orden ya lo dicen la altura y el color; el número aclara los empates.
+            fontSize: historia ? 38 : 28,
             fontWeight: 800,
-            color,
+            color: GRIS_OSCURO,
           }}
         >
           {f.puesto}
