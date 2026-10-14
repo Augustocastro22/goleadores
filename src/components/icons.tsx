@@ -160,3 +160,12 @@ export function IconRefresh(props: SVGProps<SVGSVGElement>) {
     </svg>
   );
 }
+
+export function IconShare(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" strokeWidth={1.8} stroke="currentColor" {...props}>
+      <path d="M12 15V3m0 0L8 7m4-4 4 4" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M8 11H6a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-6a2 2 0 0 0-2-2h-2" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}

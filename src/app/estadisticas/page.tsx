@@ -7,6 +7,7 @@ import Avatar from "@/components/ui/Avatar";
 import { IconGoal, IconThumbsDown, IconTrophy } from "@/components/icons";
 import { ComponentType, SVGProps } from "react";
 import GrupoLogo from "@/components/ui/GrupoLogo";
+import { BotonCompartir } from "@/components/Compartir";
 import { historialDesafios, type DesafioVista, type HistorialRival } from "@/lib/desafios";
 import { RESULTADO_CLASS, RESULTADO_PLURAL } from "@/lib/resultado";
 
@@ -82,6 +83,7 @@ export default async function EstadisticasPage() {
         iconClassName="bg-primary-500/15 text-primary-400"
         rows={(goleadores.data ?? []) as RankingRow[]}
         valueKey="goles"
+        compartir={{ ruta: `/api/compartir?que=goleadores&grupo=${grupo.id}`, titulo: "Tabla de goleadores", archivo: "goleadores" }}
         valueLabel="Goles"
       />
       {config.vota_mvp && (
@@ -167,7 +169,10 @@ function RankingList({
   podio = false,
   ultimoPartidoGanadores,
   ultimoPartidoPendiente,
+  compartir,
 }: {
+  /** La imagen para compartir esta tabla (ver src/components/Compartir.tsx). */
+  compartir?: { ruta: string; titulo: string; archivo: string };
   titulo: string;
   icon: ComponentType<SVGProps<SVGSVGElement>>;
   iconClassName: string;
@@ -197,10 +202,11 @@ function RankingList({
         <span className={`flex h-8 w-8 items-center justify-center rounded-lg ${iconClassName}`}>
           <Icon className="h-4 w-4" />
         </span>
-        <div>
+        <div className="min-w-0 flex-1">
           <h2 className="text-lg font-bold text-white">{titulo}</h2>
           {podio && filas.length > 0 && <p className="text-xs text-zinc-500">Podio</p>}
         </div>
+        {compartir && filas.length > 0 && <BotonCompartir {...compartir} />}
       </div>
       {ultimoPartidoPendiente ? (
         <p className="mb-3 pl-10 text-xs text-zinc-500">
