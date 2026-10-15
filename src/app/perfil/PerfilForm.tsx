@@ -17,6 +17,12 @@ export default function PerfilForm({ profile, rol }: { profile: Profile; rol: Ro
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  // "Guardar cambios" solo cuando cambió algo respecto de lo guardado.
+  const datos = (fd: FormData) => JSON.stringify(["nombre", "apellido", "apodo"].map((k) => String(fd.get(k) ?? "").trim()));
+  const [guardado, setGuardado] = useState(() =>
+    JSON.stringify([profile.nombre, profile.apellido, profile.apodo].map((v) => v.trim()))
+  );
+  const [actual, setActual] = useState(guardado);
 
   async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -56,6 +62,7 @@ export default function PerfilForm({ profile, rol }: { profile: Profile; rol: Ro
     if (result.error) {
       setMessage({ type: "error", text: result.error });
     } else {
+      setGuardado(datos(formData));
       setMessage({ type: "ok", text: "Perfil actualizado." });
     }
   }
@@ -94,7 +101,11 @@ export default function PerfilForm({ profile, rol }: { profile: Profile; rol: Ro
       </Card>
 
       <Card className="p-6">
-        <form action={handleSubmit} className="flex flex-col gap-4">
+        <form
+          action={handleSubmit}
+          onInput={(e) => setActual(datos(new FormData(e.currentTarget)))}
+          className="flex flex-col gap-4"
+        >
           <Label>
             Nombre
             <Input type="text" name="nombre" defaultValue={profile.nombre} required />
@@ -107,7 +118,7 @@ export default function PerfilForm({ profile, rol }: { profile: Profile; rol: Ro
             Apodo
             <Input type="text" name="apodo" defaultValue={profile.apodo} required />
           </Label>
-          <Button type="submit" disabled={saving} className="mt-1">
+          <Button type="submit" disabled={saving || actual === guardado} className="mt-1">
             {saving ? "Guardando..." : "Guardar cambios"}
           </Button>
         </form>

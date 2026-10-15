@@ -127,7 +127,7 @@ async function GrupoTab({ grupo }: { grupo: MiGrupo }) {
       </Card>
 
       <Card className="p-5">
-        <ActionForm action={guardarGrupo} grupoId={grupo.id} className="flex flex-col gap-4">
+        <ActionForm action={guardarGrupo} soloConCambios grupoId={grupo.id} className="flex flex-col gap-4">
           <Label>
             Nombre del grupo
             <Input type="text" name="nombre" required maxLength={60} defaultValue={grupo.nombre} />
@@ -158,7 +158,7 @@ async function ConfigTab({ grupoId }: { grupoId: string }) {
 
   return (
     <Card className="p-5">
-      <ActionForm action={guardarConfig} grupoId={grupoId} className="flex flex-col gap-4">
+      <ActionForm action={guardarConfig} soloConCambios grupoId={grupoId} className="flex flex-col gap-4">
         <ReglasFields inicial={config} />
         <p className="text-xs text-zinc-500">
           Los cambios aplican a los partidos a los que todavía no se les cargaron los goles; los
@@ -233,7 +233,7 @@ async function PartidosTab({ grupoId }: { grupoId: string }) {
                   </Link>
                 </div>
               ) : (
-                <ActionForm action={editarPartido} grupoId={grupoId} className="flex flex-col gap-3 border-t border-border px-4 py-4">
+                <ActionForm action={editarPartido} soloConCambios grupoId={grupoId} className="flex flex-col gap-3 border-t border-border px-4 py-4">
                   <input type="hidden" name="partido_id" value={p.id} />
                   <div className="flex gap-3">
                     <Label className="flex-1">
@@ -314,7 +314,7 @@ async function CanchasLista({ grupoId }: { grupoId: string }) {
               </summary>
 
               <div className="flex flex-col gap-4 border-t border-border px-4 py-4">
-                <ActionForm action={renombrarCancha} grupoId={grupoId} className="flex flex-col gap-2">
+                <ActionForm action={renombrarCancha} soloConCambios grupoId={grupoId} className="flex flex-col gap-2">
                   <input type="hidden" name="cancha_id" value={c.id} />
                   <Label>
                     Nombre

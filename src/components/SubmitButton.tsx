@@ -3,7 +3,7 @@
 import { useContext } from "react";
 import { useFormStatus } from "react-dom";
 import Button, { ButtonVariant, ButtonSize } from "@/components/ui/Button";
-import { ActionFormPendingContext } from "@/components/ActionForm";
+import { ActionFormPendingContext, ActionFormSinCambiosContext } from "@/components/ActionForm";
 
 export default function SubmitButton({
   children,
@@ -23,8 +23,10 @@ export default function SubmitButton({
   const { pending: formPending } = useFormStatus();
   const actionFormPending = useContext(ActionFormPendingContext);
   const pending = formPending || actionFormPending;
+  // En un form de edición sin cambios no hay nada para guardar.
+  const sinCambios = useContext(ActionFormSinCambiosContext);
   return (
-    <Button type="submit" variant={variant} size={size} className={className} disabled={pending}>
+    <Button type="submit" variant={variant} size={size} className={className} disabled={pending || sinCambios}>
       {pending ? pendingText : children}
     </Button>
   );
