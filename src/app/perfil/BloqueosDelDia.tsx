@@ -176,7 +176,19 @@ export default function BloqueosDelDia({
                   </div>
                 )}
                 <div className="flex gap-2">
-                  <Button type="button" size="sm" onClick={() => guardarEdicion(b)} disabled={trabajando}>
+                  <Button
+                    type="button"
+                    size="sm"
+                    onClick={() => guardarEdicion(b)}
+                    // Sin cambios respecto de cómo está guardado, no hay nada para guardar.
+                    disabled={
+                      trabajando ||
+                      (edicion.todoElDia === !b.hora_desde &&
+                        (edicion.todoElDia ||
+                          (edicion.desde === (b.hora_desde?.slice(0, 5) ?? "") &&
+                            edicion.hasta === (b.hora_hasta?.slice(0, 5) ?? ""))))
+                    }
+                  >
                     {trabajando ? "Guardando..." : "Guardar"}
                   </Button>
                   <Button type="button" size="sm" variant="ghost" onClick={() => setEdicion(null)} disabled={trabajando}>
