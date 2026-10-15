@@ -115,6 +115,27 @@ export default function NuevoPartidoForm({
         Lugar
         <CanchaInput canchas={canchas} required />
       </Label>
+      {/* Arriba, antes de armar los equipos: arranca en lo que juega el grupo y se cambia para este partido. */}
+      <div className="grid grid-cols-2 gap-1 rounded-xl border border-border bg-white/5 p-1">
+        {(
+          [
+            [false, "Contra un rival"],
+            [true, "Entre nosotros"],
+          ] as const
+        ).map(([valor, texto]) => (
+          <button
+            key={texto}
+            type="button"
+            onClick={() => cambiarInterno(valor)}
+            aria-pressed={interno === valor}
+            className={`rounded-lg px-3 py-2 text-sm font-semibold transition ${
+              interno === valor ? "bg-white/10 text-white shadow" : "text-zinc-500 hover:text-zinc-300"
+            }`}
+          >
+            {texto}
+          </button>
+        ))}
+      </div>
       {interno ? (
         // Entre ellos el "rival" es el segundo equipo del grupo.
         <input type="hidden" name="rival" value={config.nombre_equipo_2} />
@@ -176,13 +197,6 @@ export default function NuevoPartidoForm({
             </div>
           ))}
         </div>
-        <button
-          type="button"
-          onClick={() => cambiarInterno(!interno)}
-          className="mt-2 text-xs font-semibold text-primary-400 hover:text-primary-300"
-        >
-          {interno ? "Este partido es contra otro equipo" : "Este partido lo jugamos entre nosotros"}
-        </button>
       </div>
 
       {jugado && (

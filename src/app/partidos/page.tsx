@@ -136,6 +136,8 @@ export default async function PartidosPage() {
             {partidos.map((partido) => {
               const fecha = new Date(partido.fecha + "T00:00:00");
               const resumen = resumenPorPartido.get(partido.id);
+              // Entre ellos (también uno programado, si ya tiene los dos equipos armados).
+              const interno = esPartidoInterno(golesPorEquipo.get(partido.id)?.jugadores2 ?? 0, partido.desafio_id);
               return (
                 <Link key={partido.id} href={`/partidos/${partido.id}`} className="block">
                   <Card className="flex items-center justify-between gap-4 px-4 py-4 transition hover:border-border-strong hover:bg-surface-2/80">
@@ -148,9 +150,13 @@ export default async function PartidosPage() {
                       </div>
                       <div className="min-w-0">
                         <p className="truncate font-semibold text-white">
-                          {resumen?.interno ? `${config.nombre_equipo_1} vs ${partido.rival}` : `vs ${partido.rival}`}
+                          {interno ? `${config.nombre_equipo_1} vs ${partido.rival}` : `vs ${partido.rival}`}
                         </p>
                         <p className="truncate text-sm text-zinc-500">
+                          {/* En un grupo que es un equipo, el partido entre ellos es la excepción: se marca. */}
+                          {interno && config.modo_juego !== "entre_nosotros" && (
+                            <span className="font-medium text-zinc-300">Entre nosotros · </span>
+                          )}
                           {partido.desafio_id && (
                             <span className="font-medium text-gold-400">
                               {etiquetaDesafio(
