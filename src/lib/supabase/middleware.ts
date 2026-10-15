@@ -55,12 +55,14 @@ export async function updateSession(request: NextRequest) {
   const { data: claimsData } = await supabase.auth.getClaims();
   const user = claimsData?.claims?.sub ? { id: claimsData.claims.sub } : null;
 
-  const noAuthRequired = NO_AUTH_REQUIRED_PATHS.some((path) =>
-    request.nextUrl.pathname.startsWith(path)
-  );
-  const redirectIfLoggedIn = REDIRECT_IF_LOGGED_IN_PATHS.some((path) =>
-    request.nextUrl.pathname.startsWith(path)
-  );
+  // La portada (goleadores.ar) es la landing para quien no tiene cuenta; con
+  // sesión se va directo a los partidos. Va aparte porque "/" con startsWith
+  // dejaría pasar cualquier ruta.
+  const esPortada = request.nextUrl.pathname === "/";
+  const noAuthRequired =
+    esPortada || NO_AUTH_REQUIRED_PATHS.some((path) => request.nextUrl.pathname.startsWith(path));
+  const redirectIfLoggedIn =
+    esPortada || REDIRECT_IF_LOGGED_IN_PATHS.some((path) => request.nextUrl.pathname.startsWith(path));
 
   if (!user && !noAuthRequired) {
     const url = request.nextUrl.clone();
