@@ -5,7 +5,7 @@ import { randomBytes } from "node:crypto";
 import { enviarPush } from "@/lib/push/send";
 import { getContexto, rolEn } from "@/lib/grupo";
 import { urlConGrupo } from "@/lib/grupo-cookie";
-import { filasConfig, parseConfig } from "@/lib/config";
+import { filasConfig, parseConfig, parseModoJuego } from "@/lib/config";
 import { revisarTrasSalida } from "@/lib/votaciones";
 
 /**
@@ -33,6 +33,21 @@ export async function guardarConfig(formData: FormData) {
   if (error) return { error: error.message };
 
   // Prender/apagar la votación cambia qué se muestra en estadísticas y plantel.
+  revalidatePath("/", "layout");
+  return { success: true };
+}
+
+/** La pregunta única "¿Cómo juegan?" (ver PreguntaModoJuego): guarda solo eso. */
+export async function elegirModoJuego(formData: FormData) {
+  const { supabase, grupo, userId } = await requireAdmin(formData);
+  if (!grupo || !userId) return { error: "Solo el admin puede elegir cómo juega el grupo." };
+
+  const modo = parseModoJuego(formData);
+  if ("error" in modo) return modo;
+
+  const { error } = await supabase.from("config").upsert(filasConfig(grupo.id, modo, userId));
+  if (error) return { error: error.message };
+
   revalidatePath("/", "layout");
   return { success: true };
 }

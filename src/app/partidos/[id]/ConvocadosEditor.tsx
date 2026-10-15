@@ -39,12 +39,15 @@ export default function ConvocadosEditor({
   ocupados = [],
   exMiembroIds = [],
   rival,
+  nombresEquipos,
   mostrarResumen = true,
 }: {
   partidoId: string;
   jugadores: Profile[];
   /** Para el título del Equipo 2. */
   rival?: string;
+  /** Cuando juegan entre ellos, los nombres de los dos equipos (títulos y botones). */
+  nombresEquipos?: [string, string];
   /** El "2 juegan · 6 sin responder": no hace falta si ya está en la tarjeta del partido. */
   mostrarResumen?: boolean;
   /** Convocados que ya no están en el grupo: solo se los puede sacar. */
@@ -92,10 +95,10 @@ export default function ConvocadosEditor({
         .filter((j): j is Profile => Boolean(j))
         .sort((a, b) => (respuestas ? orden[respuestas[a.id]] - orden[respuestas[b.id]] : 0));
     return [
-      { titulo: "Equipo 1 (Nosotros)", jugadores: perfiles(equipo1IdsInit) },
-      { titulo: `Equipo 2${rival ? ` (${rival})` : ""}`, jugadores: perfiles(equipo2IdsInit) },
+      { titulo: nombresEquipos?.[0] ?? "Equipo 1 (Nosotros)", jugadores: perfiles(equipo1IdsInit) },
+      { titulo: nombresEquipos?.[1] ?? `Equipo 2${rival ? ` (${rival})` : ""}`, jugadores: perfiles(equipo2IdsInit) },
     ].filter((e) => e.jugadores.length > 0);
-  }, [equipo1IdsInit, equipo2IdsInit, jugadorPorId, respuestas, rival]);
+  }, [equipo1IdsInit, equipo2IdsInit, jugadorPorId, respuestas, rival, nombresEquipos]);
   const hayConvocados = equiposActuales.length > 0;
 
   const bloqueoPorJugador = useMemo(() => {
@@ -269,9 +272,10 @@ export default function ConvocadosEditor({
             return (
               <div
                 key={jugador.id}
-                className="flex items-center justify-between gap-3 rounded-xl border border-border bg-white/5 px-3.5 py-2.5"
+                className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 rounded-xl border border-border bg-white/5 px-3.5 py-2.5"
               >
-                <div className="flex min-w-0 items-center gap-3">
+                {/* Al menos este ancho para el nombre: si los botones no entran al lado, bajan a otra línea. */}
+                <div className="flex min-w-[9rem] flex-1 items-center gap-3">
                   <Avatar src={jugador.foto_url} alt={jugador.apodo} size={28} />
                   <div className="min-w-0">
                     <span className="block truncate text-sm text-zinc-200">
@@ -299,7 +303,7 @@ export default function ConvocadosEditor({
                           : "border-border text-zinc-400 hover:text-white"
                       }`}
                     >
-                      {unSoloEquipo ? "Juega" : "Eq. 1"}
+                      {unSoloEquipo ? "Juega" : (nombresEquipos?.[0] ?? "Eq. 1")}
                     </button>
                   )}
                   {!unSoloEquipo && !exMiembro && (
@@ -312,7 +316,7 @@ export default function ConvocadosEditor({
                           : "border-border text-zinc-400 hover:text-white"
                       }`}
                     >
-                      Eq. 2
+                      {nombresEquipos?.[1] ?? "Eq. 2"}
                     </button>
                   )}
                   <button

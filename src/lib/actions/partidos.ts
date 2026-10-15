@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { enviarPush } from "@/lib/push/send";
-import { getConfig, votacionDelPartido } from "@/lib/config";
+import { esPartidoInterno, getConfig, nombresDelPartido, votacionDelPartido } from "@/lib/config";
 import { categoriasTexto, VOTACION_HORAS } from "@/lib/votacion";
 import { getContexto, rolEn } from "@/lib/grupo";
 import { urlConGrupo } from "@/lib/grupo-cookie";
@@ -93,8 +93,15 @@ export async function createPartido(formData: FormData) {
     participantes.push({ jugador_id: key.slice("equipo-".length), equipo });
   }
 
+  // Entre ellos (dos equipos del grupo) o contra otro equipo (ver NuevoPartidoForm).
+  const interno = formData.get("interno") === "1";
   if (!fecha || !lugar || !rival || participantes.length === 0) {
-    return { error: "Completá fecha, lugar, rival y al menos un jugador en el Equipo 1." };
+    return {
+      error: interno ? "Completá fecha, lugar y quién juega en cada equipo." : "Completá fecha, lugar, rival y quién juega.",
+    };
+  }
+  if (interno && !(participantes.some((p) => p.equipo === 1) && participantes.some((p) => p.equipo === 2))) {
+    return { error: "Armá los dos equipos: tiene que haber al menos uno en cada uno." };
   }
   if (!participantes.some((p) => p.equipo === 1)) {
     return { error: "Tiene que haber al menos un jugador en el Equipo 1 (nuestro equipo)." };
@@ -449,7 +456,10 @@ export async function guardarGolesPartido({ partidoId, goles, golesOtros, golesR
     const participantes = participantesRaw ?? [];
     const golesDe = (equipo: number) =>
       participantes.filter((p) => p.equipo === equipo).reduce((total, p) => total + p.goles, 0);
-    const resultado = `Nosotros ${golesDe(1) + golesOtros} – ${golesDe(2) + golesRival} ${partido.rival}`;
+    // Entre ellos, con el nombre del primer equipo del grupo; contra otro equipo, "Nosotros".
+    const interno = esPartidoInterno(participantes.filter((p) => p.equipo === 2).length, partido.desafio_id);
+    const { nosotros } = nombresDelPartido(partido, interno, await getConfig(supabase, grupoId));
+    const resultado = `${nosotros} ${golesDe(1) + golesOtros} – ${golesDe(2) + golesRival} ${partido.rival}`;
 
     await enviarPush(
       participantes.map((p) => p.jugador_id),

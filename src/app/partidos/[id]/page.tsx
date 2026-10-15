@@ -1,6 +1,6 @@
 import { notFound, redirect } from "next/navigation";
 import { getContexto, getMiembros, rolEn } from "@/lib/grupo";
-import { getConfig, grupoVota as votaAlgo } from "@/lib/config";
+import { esPartidoInterno, getConfig, grupoVota as votaAlgo, nombresDelPartido } from "@/lib/config";
 import Link from "next/link";
 import { deletePartido } from "@/lib/actions/partidos";
 import { urlConGrupo } from "@/lib/grupo-cookie";
@@ -82,6 +82,9 @@ export default async function PartidoDetailPage({
   const participantes = (participantesRaw ?? []) as unknown as ParticipanteRow[];
   const equipo1 = participantes.filter((p) => p.equipo === 1);
   const equipo2 = participantes.filter((p) => p.equipo === 2);
+  // Entre ellos (dos equipos del grupo) o contra otro equipo, y cómo se llama cada lado.
+  const interno = esPartidoInterno(equipo2.length, partido.desafio_id);
+  const { nosotros } = nombresDelPartido(partido, interno, config);
 
   // Confirmación de los convocados (ver 0020_confirmacion.sql). Solo antes de
   // cargar el resultado: después quedan nada más los que jugaron. Si hay
@@ -286,7 +289,10 @@ export default async function PartidoDetailPage({
               ? Object.fromEntries(participantes.map((p) => [p.jugador_id, p.respuesta]))
               : undefined
           }
-          unSoloEquipo={!!partido.desafio_id}
+          // Contra otro equipo se elige solo quién juega (en un grupo que todavía no eligió cómo
+          // juega, como siempre: los dos equipos).
+          unSoloEquipo={!!partido.desafio_id || (config.modo_juego !== null && !interno)}
+          nombresEquipos={interno ? [nosotros, partido.rival] : undefined}
           ocupados={ocupados}
           rival={partido.rival}
           // El resumen ya está en la tarjeta del partido, justo arriba.
@@ -328,10 +334,13 @@ export default async function PartidoDetailPage({
               : undefined
           }
           votacion={isAdmin && !partido.jugado ? { config, reglasHref } : undefined}
+          nosotros={nosotros}
+          interno={interno}
         />
       ) : (
         !isAdmin && (
           <ConvocadosProgramados
+            nosotros={nosotros}
             rival={partido.rival}
             equipo1={equipo1}
             equipo2={equipo2}
@@ -457,11 +466,14 @@ function PartidoProgramadoCard({
 
 /** Los convocados de un partido que todavía no se jugó, para quien no es admin (el admin usa ConvocadosEditor). */
 function ConvocadosProgramados({
+  nosotros,
   rival,
   equipo1,
   equipo2,
   conConfirmacion,
 }: {
+  /** "Nosotros", o el nombre del primer equipo cuando juegan entre ellos. */
+  nosotros: string;
   rival: string;
   equipo1: ParticipanteRow[];
   equipo2: ParticipanteRow[];
@@ -475,13 +487,13 @@ function ConvocadosProgramados({
   return (
     <div className="flex flex-col gap-6">
       <ConvocadosList
-        titulo="Convocados · Equipo 1 (Nosotros)"
+        titulo={enEquipo(equipo2).length > 0 ? `Convocados · ${nosotros}` : "Convocados"}
         jugadores={enEquipo(equipo1)}
         conRespuesta={conConfirmacion}
       />
       {enEquipo(equipo2).length > 0 && (
         <ConvocadosList
-          titulo={`Convocados · Equipo 2 (${rival})`}
+          titulo={`Convocados · ${rival}`}
           jugadores={enEquipo(equipo2)}
           conRespuesta={conConfirmacion}
         />
