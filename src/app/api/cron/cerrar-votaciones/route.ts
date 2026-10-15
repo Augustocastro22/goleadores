@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { cerrarDesempatesVencidos, cerrarVotacionSiCorresponde } from "@/lib/votaciones";
 import { avisarDesafio } from "@/lib/desafios-avisos";
+import { recordarConfirmaciones } from "@/lib/recordatorios";
 
 /**
  * Corre una vez por día (ver vercel.json). Cierra por vencimiento las
@@ -41,5 +42,12 @@ export async function GET(request: NextRequest) {
     await avisarDesafio(v.desafio_id, v.tipo === "resultado" ? "resultado_auto" : "fecha_auto");
   }
 
-  return NextResponse.json({ cerrados: (partidos ?? []).length, desafios: (desafiosVencidos ?? []).length });
+  // Convocados que no dijeron si juegan: recordatorio el día anterior y la mañana del partido.
+  const recordados = await recordarConfirmaciones();
+
+  return NextResponse.json({
+    cerrados: (partidos ?? []).length,
+    desafios: (desafiosVencidos ?? []).length,
+    recordados,
+  });
 }
