@@ -16,7 +16,7 @@ const geistMono = Geist_Mono({
 });
 
 const DESCRIPCION =
-  "Armá los partidos con tus amigos, cargá los goles, votá al mejor y al peor, y seguí las estadísticas del grupo.";
+  "Armá los partidos con tus amigos, cargá los goles, votá al mejor jugador y seguí las estadísticas del grupo.";
 
 export const metadata: Metadata = {
   // Base para las URLs absolutas de la vista previa (la imagen de opengraph-image.tsx).
