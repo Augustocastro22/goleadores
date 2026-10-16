@@ -171,7 +171,7 @@ export default function NuevoPartidoForm({
               className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 rounded-xl border border-border bg-white/5 px-3.5 py-2.5"
             >
               {/* Al menos este ancho para el nombre: si los botones no entran al lado, bajan a otra línea. */}
-              <div className="flex min-w-[9rem] flex-1 items-center gap-3">
+              <div className="flex min-w-[7.5rem] flex-1 items-center gap-3">
                 <Avatar src={jugador.foto_url} alt={jugador.apodo} size={28} />
                 <span className="block truncate text-sm text-zinc-200">
                   {jugador.nombre} {jugador.apellido}{" "}
@@ -183,6 +183,7 @@ export default function NuevoPartidoForm({
                 apodo={jugador.apodo}
                 equipo={equipos[jugador.id] ?? ""}
                 soloUno={!interno}
+                etiquetaSolo={jugado ? "Jugó" : pideConfirmacion ? "Convocado" : "Juega"}
                 nombres={nombres}
                 onChange={(equipo) =>
                   setEquipos((prev) => ({ ...prev, [jugador.id]: equipo }))

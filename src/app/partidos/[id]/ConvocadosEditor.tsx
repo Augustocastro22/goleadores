@@ -89,6 +89,8 @@ export default function ConvocadosEditor({
   const [nombresEditados, setNombresEditados] = useState<[string, string]>(cambioDeModo?.nombres ?? ["", ""]);
   // Botones al editar: con cambio de modo, según el modo elegido; si no, como venía.
   const soloUno = cambioDeModo ? !interno : unSoloEquipo;
+  // Con confirmación todavía tienen que decir si van: "Convocado"; sin, ya juegan.
+  const botonSolo = respuestas ? "Convocado" : "Juega";
   const etiquetas: [string, string] | undefined = cambioDeModo
     ? interno
       ? [nombresEditados[0] || "Equipo 1", nombresEditados[1] || "Equipo 2"]
@@ -321,7 +323,7 @@ export default function ConvocadosEditor({
         )}
         <p className="mb-3 text-xs text-zinc-500">
           {soloUno
-            ? "Marcá quién juega. Para sacar a alguien tocá la ✕ (o de nuevo Juega)."
+            ? `Marcá a quién convocás. Para sacar a alguien tocá la ✕ (o de nuevo ${botonSolo}).`
             : "Marcá quién juega y en qué equipo. Para sacar a alguien tocá la ✕ (o de nuevo su equipo)."}{" "}
           Podés sumar o sacar gente hasta antes de cargar el resultado.
         </p>
@@ -339,7 +341,7 @@ export default function ConvocadosEditor({
                 className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 rounded-xl border border-border bg-white/5 px-3.5 py-2.5"
               >
                 {/* Al menos este ancho para el nombre: si los botones no entran al lado, bajan a otra línea. */}
-                <div className="flex min-w-[9rem] flex-1 items-center gap-3">
+                <div className="flex min-w-[7.5rem] flex-1 items-center gap-3">
                   <Avatar src={jugador.foto_url} alt={jugador.apodo} size={28} />
                   <div className="min-w-0">
                     <span className="block truncate text-sm text-zinc-200">
@@ -367,7 +369,7 @@ export default function ConvocadosEditor({
                           : "border-border text-zinc-400 hover:text-white"
                       }`}
                     >
-                      {soloUno ? "Juega" : (etiquetas?.[0] ?? "Eq. 1")}
+                      {soloUno ? botonSolo : (etiquetas?.[0] ?? "Eq. 1")}
                     </button>
                   )}
                   {!soloUno && !exMiembro && (

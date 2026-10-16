@@ -7,7 +7,7 @@ export type EquipoElegido = "" | "1" | "2";
 /**
  * Equipo de un jugador al crear el partido (campo "equipo-<id>": "1", "2" o
  * vacío = no juega). Tocar el equipo marcado, o la ✕, lo saca. Contra otro
- * equipo (`soloUno`) hay un solo botón, "Juega"; entre ellos, uno por equipo
+ * equipo (`soloUno`) hay un solo botón ("Convocado" o, si ya se jugó, "Jugó"); entre ellos, uno por equipo
  * con su nombre.
  */
 export default function EquipoPicker({
@@ -17,6 +17,7 @@ export default function EquipoPicker({
   onChange,
   soloUno = false,
   nombres = ["Eq. 1", "Eq. 2"],
+  etiquetaSolo = "Convocado",
 }: {
   jugadorId: string;
   apodo: string;
@@ -25,6 +26,8 @@ export default function EquipoPicker({
   soloUno?: boolean;
   /** Los nombres de los dos equipos, para los botones. */
   nombres?: [string, string];
+  /** El texto del botón único: "Convocado" al programar, "Jugó" si ya se jugó. */
+  etiquetaSolo?: string;
 }) {
   const alternar = (e: "1" | "2") => onChange(equipo === e ? "" : e);
   const boton = (e: "1" | "2", texto: string, colores: string) => (
@@ -43,7 +46,7 @@ export default function EquipoPicker({
   return (
     <div className="flex shrink-0 gap-1.5">
       <input type="hidden" name={`equipo-${jugadorId}`} value={equipo} />
-      {boton("1", soloUno ? "Juega" : nombres[0], "border-primary-500/40 bg-primary-500/10 text-primary-400")}
+      {boton("1", soloUno ? etiquetaSolo : nombres[0], "border-primary-500/40 bg-primary-500/10 text-primary-400")}
       {!soloUno && boton("2", nombres[1], "border-gold-500/40 bg-gold-500/10 text-gold-400")}
       <button
         type="button"
