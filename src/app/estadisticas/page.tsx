@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { requireGrupo } from "@/lib/grupo";
 import { getConfig, grupoVota } from "@/lib/config";
 import { votacionCerrada } from "@/lib/votacion";
@@ -8,16 +9,25 @@ import { IconGoal, IconThumbsDown, IconTrophy } from "@/components/icons";
 import { ComponentType, SVGProps } from "react";
 import GrupoLogo from "@/components/ui/GrupoLogo";
 import { BotonCompartir } from "@/components/Compartir";
+import { jugoDeLosDosTipos, leerFiltroPartidos, type FiltroPartidos } from "@/lib/tipos-partido";
 import { historialDesafios, type DesafioVista, type HistorialRival } from "@/lib/desafios";
 import { RESULTADO_CLASS, RESULTADO_PLURAL } from "@/lib/resultado";
 
-export default async function EstadisticasPage() {
+export default async function EstadisticasPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ goles?: string }>;
+}) {
   const { supabase, grupo } = await requireGrupo();
+  // La tabla de goleadores: de todos los partidos, solo contra otros equipos o solo entre ellos.
+  const filtro = leerFiltroPartidos((await searchParams).goles);
   // Cada ranking de votos se muestra solo si el grupo vota esa categoría (los
   // votos de cuando sí votaba quedan guardados y vuelven si se reactiva).
-  const [config, goleadores, mvp, peor, partidosRes, desafiosRes] = await Promise.all([
+  const [config, goleadores, mvp, peor, partidosRes, desafiosRes, dosTipos] = await Promise.all([
     getConfig(supabase, grupo.id),
-    supabase.rpc("get_goleadores", { p_grupo_id: grupo.id }),
+    filtro === "todos"
+      ? supabase.rpc("get_goleadores", { p_grupo_id: grupo.id })
+      : supabase.rpc("get_goleadores", { p_grupo_id: grupo.id, p_filtro: filtro }),
     supabase.rpc("get_ranking_votos", { p_grupo_id: grupo.id, p_tipo: "MVP" }),
     supabase.rpc("get_ranking_votos", { p_grupo_id: grupo.id, p_tipo: "PEOR" }),
     supabase
@@ -30,6 +40,7 @@ export default async function EstadisticasPage() {
       .order("created_at", { ascending: false })
       .limit(10),
     supabase.rpc("get_desafios", { p_grupo_id: grupo.id }),
+    jugoDeLosDosTipos(supabase, grupo.id),
   ]);
   const historial = historialDesafios((desafiosRes.data ?? []) as DesafioVista[]);
   const votacionActiva = grupoVota(config);
@@ -83,8 +94,13 @@ export default async function EstadisticasPage() {
         iconClassName="bg-primary-500/15 text-primary-400"
         rows={(goleadores.data ?? []) as RankingRow[]}
         valueKey="goles"
-        compartir={{ ruta: `/api/compartir?que=goleadores&grupo=${grupo.id}`, titulo: "Tabla de goleadores", archivo: "goleadores" }}
+        compartir={{
+          ruta: `/api/compartir?que=goleadores&grupo=${grupo.id}&filtro=${filtro}`,
+          titulo: "Tabla de goleadores",
+          archivo: "goleadores",
+        }}
         valueLabel="Goles"
+        debajoDelTitulo={dosTipos ? <FiltroGoleadores actual={filtro} /> : undefined}
       />
       {config.vota_mvp && (
         <RankingList
@@ -170,7 +186,10 @@ function RankingList({
   ultimoPartidoGanadores,
   ultimoPartidoPendiente,
   compartir,
+  debajoDelTitulo,
 }: {
+  /** Algo entre el título y la tabla (el filtro de partidos de Goleadores). */
+  debajoDelTitulo?: React.ReactNode;
   /** La imagen para compartir esta tabla (ver src/components/Compartir.tsx). */
   compartir?: { ruta: string; titulo: string; archivo: string };
   titulo: string;
@@ -208,6 +227,7 @@ function RankingList({
         </div>
         {compartir && filas.length > 0 && <BotonCompartir {...compartir} />}
       </div>
+      {debajoDelTitulo}
       {ultimoPartidoPendiente ? (
         <p className="mb-3 pl-10 text-xs text-zinc-500">
           Último partido: empataron{" "}
@@ -261,5 +281,33 @@ function RankingList({
         </Card>
       )}
     </section>
+  );
+}
+
+const FILTROS: { valor: FiltroPartidos; texto: string }[] = [
+  { valor: "todos", texto: "Todos" },
+  { valor: "rivales", texto: "Contra rivales" },
+  { valor: "entre_nosotros", texto: "Entre nosotros" },
+];
+
+/** De qué partidos son los goles: solo aparece si el grupo jugó de los dos tipos. */
+function FiltroGoleadores({ actual }: { actual: FiltroPartidos }) {
+  return (
+    <div className="mt-2 mb-3 flex gap-1.5">
+      {FILTROS.map((f) => (
+        <Link
+          key={f.valor}
+          href={f.valor === "todos" ? "/estadisticas" : `/estadisticas?goles=${f.valor}`}
+          scroll={false}
+          className={`rounded-full border px-3 py-1 text-xs font-semibold transition ${
+            actual === f.valor
+              ? "border-primary-500/40 bg-primary-500/10 text-primary-400"
+              : "border-border text-zinc-400 hover:text-white"
+          }`}
+        >
+          {f.texto}
+        </Link>
+      ))}
+    </div>
   );
 }

@@ -100,14 +100,28 @@ export function esPartidoInterno(jugadoresEquipo2: number, desafioId: string | n
 
 /** Los nombres a mostrar de los dos lados de un partido. */
 export function nombresDelPartido(
-  partido: { rival: string },
+  partido: { rival: string; nombre_equipo?: string | null },
   interno: boolean,
   config: Pick<AppConfig, "nombre_equipo_1">
 ): { nosotros: string; rival: string } {
-  return { nosotros: interno ? config.nombre_equipo_1 : "Nosotros", rival: partido.rival };
+  // El nombre de ese día; los partidos de antes de guardarlo usan el del grupo.
+  const nosotros = interno ? partido.nombre_equipo?.trim() || config.nombre_equipo_1 : "Nosotros";
+  return { nosotros, rival: partido.rival };
 }
 
-const MAX_NOMBRE_EQUIPO = 30;
+export const MAX_NOMBRE_EQUIPO = 30;
+
+/** Los nombres de los dos equipos de un partido entre ellos: limpios, con largo máximo y distintos. */
+export function validarNombresEquipos(nombre1: string, nombre2: string): string | null {
+  if (!nombre1.trim() || !nombre2.trim()) return "Poné el nombre de los dos equipos.";
+  if (nombre1.trim().length > MAX_NOMBRE_EQUIPO || nombre2.trim().length > MAX_NOMBRE_EQUIPO) {
+    return `Los nombres de los equipos pueden tener hasta ${MAX_NOMBRE_EQUIPO} letras.`;
+  }
+  if (nombre1.trim().toLowerCase() === nombre2.trim().toLowerCase()) {
+    return "Los dos equipos tienen que tener nombres distintos.";
+  }
+  return null;
+}
 
 /** Lee "cómo juegan" y los nombres de los equipos de un form (ver ModoJuegoFields). */
 export function parseModoJuego(

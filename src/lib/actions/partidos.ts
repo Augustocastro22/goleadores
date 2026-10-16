@@ -3,7 +3,14 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { enviarPush } from "@/lib/push/send";
-import { esPartidoInterno, getConfig, nombresDelPartido, votacionDelPartido } from "@/lib/config";
+import {
+  esPartidoInterno,
+  filasConfig,
+  getConfig,
+  nombresDelPartido,
+  validarNombresEquipos,
+  votacionDelPartido,
+} from "@/lib/config";
 import { categoriasTexto, VOTACION_HORAS } from "@/lib/votacion";
 import { getContexto, rolEn } from "@/lib/grupo";
 import { urlConGrupo } from "@/lib/grupo-cookie";
@@ -53,7 +60,9 @@ function respuestaInicial(jugadorId: string, pedir: boolean, quienConvoca: strin
 /** Aviso de convocatoria: si el grupo pide confirmación, se lo pide. */
 function avisoConvocatoria(
   partido: { fecha: string; hora: string | null; rival: string; lugar: string },
-  pedirConfirmacion: boolean
+  pedirConfirmacion: boolean,
+  /** Entre ellos: los dos equipos y en cuál juega quien recibe el aviso. */
+  equipo?: { nombres: [string, string]; mio: 1 | 2 }
 ) {
   const fecha = new Date(partido.fecha + "T00:00:00").toLocaleDateString("es-AR", {
     day: "numeric",
@@ -61,10 +70,38 @@ function avisoConvocatoria(
   });
   const hora = partido.hora ? ` a las ${partido.hora.slice(0, 5)}` : "";
   const cierre = pedirConfirmacion ? "Estás convocado: confirmá si jugás." : "¡Ya estás convocado!";
+  const cruce = equipo ? `${equipo.nombres[0]} vs ${equipo.nombres[1]}` : `vs ${partido.rival}`;
+  const tuEquipo = equipo ? ` Jugás en ${equipo.nombres[equipo.mio - 1]}.` : "";
   return {
     title: "Nuevo partido",
-    body: `${fecha}${hora} vs ${partido.rival} en ${partido.lugar}. ${cierre}`,
+    body: `${fecha}${hora} ${cruce} en ${partido.lugar}.${tuEquipo} ${cierre}`,
   };
+}
+
+/**
+ * Avisa a los convocados. Entre ellos (`nombresInterno`), cada uno recibe el
+ * aviso con su equipo ("Jugás en Blancos").
+ */
+async function avisarConvocatoria(
+  convocados: { jugadorId: string; equipo: 1 | 2 }[],
+  partido: { fecha: string; hora: string | null; rival: string; lugar: string },
+  pedirConfirmacion: boolean,
+  url: string,
+  nombresInterno: [string, string] | null
+) {
+  if (!nombresInterno) {
+    await enviarPush(
+      convocados.map((c) => c.jugadorId),
+      { ...avisoConvocatoria(partido, pedirConfirmacion), url }
+    );
+    return;
+  }
+  for (const mio of [1, 2] as const) {
+    await enviarPush(
+      convocados.filter((c) => c.equipo === mio).map((c) => c.jugadorId),
+      { ...avisoConvocatoria(partido, pedirConfirmacion, { nombres: nombresInterno, mio }), url }
+    );
+  }
 }
 
 /**
@@ -106,6 +143,12 @@ export async function createPartido(formData: FormData) {
   if (!participantes.some((p) => p.equipo === 1)) {
     return { error: "Tiene que haber al menos un jugador en el Equipo 1 (nuestro equipo)." };
   }
+  // Entre ellos: el primer equipo se llama nombre_equipo y el segundo es el "rival".
+  const nombreEquipo = interno ? String(formData.get("nombre_equipo") ?? "").trim() : null;
+  if (nombreEquipo !== null) {
+    const errorNombres = validarNombresEquipos(nombreEquipo, rival);
+    if (errorNombres) return { error: errorNombres };
+  }
   const hoy = hoyArgentina();
   if (jugado && fecha > hoy) {
     return { error: "Ese partido todavía no se jugó: cargalo con \"Programar\"." };
@@ -132,11 +175,18 @@ export async function createPartido(formData: FormData) {
 
   const { data: partido, error } = await supabase
     .from("partidos")
-    .insert({ grupo_id: grupo.id, fecha, hora, lugar, rival, created_by: user.id })
+    .insert({ grupo_id: grupo.id, fecha, hora, lugar, rival, nombre_equipo: nombreEquipo, created_by: user.id })
     .select()
     .single();
 
   if (error) return { error: error.message };
+
+  // Los nombres que usaron quedan como los del grupo para el próximo partido entre ellos.
+  if (nombreEquipo !== null) {
+    await supabase
+      .from("config")
+      .upsert(filasConfig(grupo.id, { nombre_equipo_1: nombreEquipo, nombre_equipo_2: rival }, user.id));
+  }
 
   // Un partido que ya pasó no es una convocatoria: entran todos como que
   // jugaron y no se avisa a nadie (los avisa guardarGolesPartido, más abajo).
@@ -157,12 +207,12 @@ export async function createPartido(formData: FormData) {
 
   // Al que lo cargó no le avisa: ya sabe que se convocó.
   if (!yaPaso) {
-    await enviarPush(
-      participantes.map((p) => p.jugador_id).filter((id) => id !== user.id),
-      {
-        ...avisoConvocatoria({ fecha, hora, rival, lugar }, pedir),
-        url: urlConGrupo(`/partidos/${partido.id}`, grupo.id),
-      }
+    await avisarConvocatoria(
+      participantes.filter((p) => p.jugador_id !== user.id).map((p) => ({ jugadorId: p.jugador_id, equipo: p.equipo })),
+      { fecha, hora, rival, lugar },
+      pedir,
+      urlConGrupo(`/partidos/${partido.id}`, grupo.id),
+      nombreEquipo !== null ? [nombreEquipo, rival] : null
     );
   }
 
@@ -209,9 +259,15 @@ export async function deletePartido(formData: FormData) {
 export interface ConvocadosInput {
   partidoId: string;
   participantes: { jugadorId: string; equipo: 1 | 2 }[];
+  /**
+   * Si es entre ellos o contra otro equipo, y los nombres (el primer equipo
+   * en nombreEquipo, el segundo o el rival en rival). Sin esto quedan como
+   * estaban (un desafío no lo manda: no se cambia).
+   */
+  equipos?: { interno: boolean; rival: string; nombreEquipo: string | null };
 }
 
-export async function actualizarConvocados({ partidoId, participantes }: ConvocadosInput) {
+export async function actualizarConvocados({ partidoId, participantes, equipos }: ConvocadosInput) {
   if (!partidoId) return { error: "Partido inválido." };
   const { supabase, userId, isAdmin, grupoId } = await requireAdminDePartido(partidoId);
   if (!isAdmin || !grupoId) return { error: "Solo el admin puede editar la convocatoria." };
@@ -221,13 +277,49 @@ export async function actualizarConvocados({ partidoId, participantes }: Convoca
 
   const { data: partido } = await supabase
     .from("partidos")
-    .select("rival, fecha, hora, lugar, jugado, desafio_id")
+    .select("rival, nombre_equipo, fecha, hora, lugar, jugado, desafio_id")
     .eq("id", partidoId)
     .single();
   if (!partido) return { error: "Partido no encontrado." };
   if (partido.jugado) {
     return { error: "El partido ya se jugó, no se puede editar la convocatoria." };
   }
+
+  // Cambio de modo o de nombres (entre ellos / contra otro equipo).
+  if (equipos && !partido.desafio_id) {
+    const rival = equipos.rival.trim();
+    if (equipos.interno) {
+      const nombreEquipo = (equipos.nombreEquipo ?? "").trim();
+      const errorNombres = validarNombresEquipos(nombreEquipo, rival);
+      if (errorNombres) return { error: errorNombres };
+      if (!participantes.some((p) => p.equipo === 2)) {
+        return { error: "Armá los dos equipos: tiene que haber al menos uno en cada uno." };
+      }
+    } else {
+      if (!rival) return { error: "Poné contra quién juegan." };
+      if (participantes.some((p) => p.equipo === 2)) {
+        return { error: "Contra otro equipo, todos los convocados juegan juntos." };
+      }
+    }
+    const nombreEquipo = equipos.interno ? (equipos.nombreEquipo ?? "").trim() : null;
+    if (rival !== partido.rival || nombreEquipo !== partido.nombre_equipo) {
+      const { error } = await supabase
+        .from("partidos")
+        .update({ rival, nombre_equipo: nombreEquipo })
+        .eq("id", partidoId);
+      if (error) return { error: error.message };
+      partido.rival = rival;
+      partido.nombre_equipo = nombreEquipo;
+      // Los nombres que usaron quedan como los del grupo para la próxima.
+      if (nombreEquipo !== null) {
+        await supabase
+          .from("config")
+          .upsert(filasConfig(grupoId, { nombre_equipo_1: nombreEquipo, nombre_equipo_2: rival }, userId!));
+      }
+    }
+  }
+  const nombresInterno: [string, string] | null =
+    partido.nombre_equipo && participantes.some((p) => p.equipo === 2) ? [partido.nombre_equipo, partido.rival] : null;
   // En un desafío el Equipo 2 es el otro grupo.
   if (partido.desafio_id && participantes.some((p) => p.equipo === 2)) {
     return { error: "En un desafío todos los convocados juegan en el mismo equipo." };
@@ -289,19 +381,19 @@ export async function actualizarConvocados({ partidoId, participantes }: Convoca
     const horaFormateada = partido.hora ? ` a las ${partido.hora.slice(0, 5)}` : "";
 
     if (aAgregar.length > 0) {
-      await enviarPush(
-        aAgregar.map((p) => p.jugadorId).filter((id) => id !== userId),
-        {
-          ...avisoConvocatoria(partido, pedir),
-          url: urlConGrupo(`/partidos/${partidoId}`, grupoId),
-        }
+      await avisarConvocatoria(
+        aAgregar.filter((p) => p.jugadorId !== userId),
+        partido,
+        pedir,
+        urlConGrupo(`/partidos/${partidoId}`, grupoId),
+        nombresInterno
       );
     }
 
     if (aBorrar.length > 0) {
       await enviarPush(aBorrar.filter((id) => id !== userId), {
         title: "Ya no estás convocado",
-        body: `Te bajaron del partido vs ${partido.rival} del ${fechaFormateada}${horaFormateada}.`,
+        body: `Te bajaron del partido ${nombresInterno ? `${nombresInterno[0]} vs ${nombresInterno[1]}` : `vs ${partido.rival}`} del ${fechaFormateada}${horaFormateada}.`,
         url: urlConGrupo(`/partidos/${partidoId}`, grupoId),
       });
     }

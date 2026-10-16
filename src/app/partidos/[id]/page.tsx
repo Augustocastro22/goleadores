@@ -293,6 +293,15 @@ export default async function PartidoDetailPage({
           // juega, como siempre: los dos equipos).
           unSoloEquipo={!!partido.desafio_id || (config.modo_juego !== null && !interno)}
           nombresEquipos={interno ? [nosotros, partido.rival] : undefined}
+          cambioDeModo={
+            !partido.desafio_id && config.modo_juego !== null
+              ? {
+                  interno,
+                  rival: partido.rival,
+                  nombres: interno ? [nosotros, partido.rival] : [config.nombre_equipo_1, config.nombre_equipo_2],
+                }
+              : undefined
+          }
           ocupados={ocupados}
           rival={partido.rival}
           // El resumen ya está en la tarjeta del partido, justo arriba.

@@ -15,6 +15,7 @@ import GolesInput from "@/components/GolesInput";
 import VotacionPartidoFields, { type VotarEnPartido } from "@/components/VotacionPartidoFields";
 import type { AppConfig } from "@/lib/config";
 import EquipoPicker, { type EquipoElegido } from "./EquipoPicker";
+import NombresEquipos from "@/components/NombresEquipos";
 
 type Modo = "programar" | "jugado";
 
@@ -48,10 +49,15 @@ export default function NuevoPartidoForm({
   const [interno, setInterno] = useState(config.modo_juego === "entre_nosotros");
   const [equipos, setEquipos] = useState<Record<string, EquipoElegido>>({});
   const [rival, setRival] = useState("");
+  // Entre ellos: los últimos nombres que usó el grupo, editables para este partido.
+  const [nombresEquipos, setNombresEquipos] = useState<[string, string]>([
+    config.nombre_equipo_1,
+    config.nombre_equipo_2,
+  ]);
   const [votar, setVotar] = useState<VotarEnPartido>({ mvp: true, peor: true });
   const jugado = modo === "jugado";
   const nombres: [string, string] = interno
-    ? [config.nombre_equipo_1, config.nombre_equipo_2]
+    ? [nombresEquipos[0].trim() || "Equipo 1", nombresEquipos[1].trim() || "Equipo 2"]
     : ["Nosotros", rival.trim() || "Rival"];
 
   function cambiarInterno(valor: boolean) {
@@ -115,10 +121,7 @@ export default function NuevoPartidoForm({
         Lugar
         <CanchaInput canchas={canchas} required />
       </Label>
-      {interno ? (
-        // Entre ellos el "rival" es el segundo equipo del grupo.
-        <input type="hidden" name="rival" value={config.nombre_equipo_2} />
-      ) : (
+      {interno ? null : (
         <div className="flex flex-col gap-1.5">
           {/* El cambio de modo, discreto y en la misma línea: se ve antes de armar nada. */}
           <div className="flex items-center justify-between gap-2">
@@ -140,16 +143,18 @@ export default function NuevoPartidoForm({
       )}
 
       <div>
-        <div className="mb-1 flex items-center justify-between gap-2">
-          <p className="text-sm font-medium text-zinc-300">
-            {interno
-              ? `${config.nombre_equipo_1} vs ${config.nombre_equipo_2}`
-              : jugado
-                ? "Quiénes jugaron"
-                : "Convocados"}
-          </p>
-          {interno && <CambiarModo interno={interno} onCambiar={cambiarInterno} />}
-        </div>
+        {interno ? (
+          // Entre ellos el "rival" es el segundo equipo (campo rival) y el primero va en nombre_equipo.
+          <div className="mb-1">
+            <NombresEquipos
+              nombres={nombresEquipos}
+              onChange={setNombresEquipos}
+              accion={<CambiarModo interno={interno} onCambiar={cambiarInterno} />}
+            />
+          </div>
+        ) : (
+          <p className="mb-1 text-sm font-medium text-zinc-300">{jugado ? "Quiénes jugaron" : "Convocados"}</p>
+        )}
         <p className="mb-2 text-xs text-zinc-500">
           {interno
             ? jugado

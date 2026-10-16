@@ -9,7 +9,7 @@ import { IconChevronRight, IconPlus } from "@/components/icons";
 import PushBanner from "@/components/PushBanner";
 import { hoyArgentina } from "@/lib/confirmacion";
 import { desafiosConGolesDeMas, esperaMiRespuesta, type DesafioVista } from "@/lib/desafios";
-import { esPartidoInterno, getConfig } from "@/lib/config";
+import { esPartidoInterno, getConfig, nombresDelPartido } from "@/lib/config";
 import { sugerirModoJuego } from "@/lib/modo-juego";
 import PreguntaModoJuego from "@/components/PreguntaModoJuego";
 
@@ -150,7 +150,7 @@ export default async function PartidosPage() {
                       </div>
                       <div className="min-w-0">
                         <p className="truncate font-semibold text-white">
-                          {interno ? `${config.nombre_equipo_1} vs ${partido.rival}` : `vs ${partido.rival}`}
+                          {interno ? `${nombresDelPartido(partido, true, config).nosotros} vs ${partido.rival}` : `vs ${partido.rival}`}
                         </p>
                         <p className="truncate text-sm text-zinc-500">
                           {/* En un grupo que es un equipo, el partido entre ellos es la excepción: se marca. */}
