@@ -115,34 +115,20 @@ export default function NuevoPartidoForm({
         Lugar
         <CanchaInput canchas={canchas} required />
       </Label>
-      {/* Arriba, antes de armar los equipos: arranca en lo que juega el grupo y se cambia para este partido. */}
-      <div className="grid grid-cols-2 gap-1 rounded-xl border border-border bg-white/5 p-1">
-        {(
-          [
-            [false, "Contra un rival"],
-            [true, "Entre nosotros"],
-          ] as const
-        ).map(([valor, texto]) => (
-          <button
-            key={texto}
-            type="button"
-            onClick={() => cambiarInterno(valor)}
-            aria-pressed={interno === valor}
-            className={`rounded-lg px-3 py-2 text-sm font-semibold transition ${
-              interno === valor ? "bg-white/10 text-white shadow" : "text-zinc-500 hover:text-zinc-300"
-            }`}
-          >
-            {texto}
-          </button>
-        ))}
-      </div>
       {interno ? (
         // Entre ellos el "rival" es el segundo equipo del grupo.
         <input type="hidden" name="rival" value={config.nombre_equipo_2} />
       ) : (
-        <Label>
-          Rival
+        <div className="flex flex-col gap-1.5">
+          {/* El cambio de modo, discreto y en la misma línea: se ve antes de armar nada. */}
+          <div className="flex items-center justify-between gap-2">
+            <label htmlFor="rival" className="text-sm font-medium text-zinc-300">
+              Rival
+            </label>
+            <CambiarModo interno={interno} onCambiar={cambiarInterno} />
+          </div>
           <Input
+            id="rival"
             type="text"
             name="rival"
             required
@@ -150,17 +136,20 @@ export default function NuevoPartidoForm({
             value={rival}
             onChange={(e) => setRival(e.target.value)}
           />
-        </Label>
+        </div>
       )}
 
       <div>
-        <p className="mb-1 text-sm font-medium text-zinc-300">
-          {interno
-            ? `${config.nombre_equipo_1} vs ${config.nombre_equipo_2}`
-            : jugado
-              ? "Quiénes jugaron"
-              : "Convocados"}
-        </p>
+        <div className="mb-1 flex items-center justify-between gap-2">
+          <p className="text-sm font-medium text-zinc-300">
+            {interno
+              ? `${config.nombre_equipo_1} vs ${config.nombre_equipo_2}`
+              : jugado
+                ? "Quiénes jugaron"
+                : "Convocados"}
+          </p>
+          {interno && <CambiarModo interno={interno} onCambiar={cambiarInterno} />}
+        </div>
         <p className="mb-2 text-xs text-zinc-500">
           {interno
             ? jugado
@@ -326,5 +315,18 @@ function GolesRow({
       </span>
       <GolesInput name={name} value={value} onChange={onChange} />
     </label>
+  );
+}
+
+/** El link para que este partido sea la excepción: entre ellos en un grupo que juega contra otros, o al revés. */
+function CambiarModo({ interno, onCambiar }: { interno: boolean; onCambiar: (interno: boolean) => void }) {
+  return (
+    <button
+      type="button"
+      onClick={() => onCambiar(!interno)}
+      className="shrink-0 text-xs font-semibold text-primary-400 hover:text-primary-300"
+    >
+      {interno ? "¿Contra otro equipo?" : "¿Juegan entre ustedes?"}
+    </button>
   );
 }
