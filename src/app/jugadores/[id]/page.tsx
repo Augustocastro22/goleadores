@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ComponentType, SVGProps } from "react";
 import { requireGrupo } from "@/lib/grupo";
-import { getConfig } from "@/lib/config";
+import { getConfig, nombresDelPartido } from "@/lib/config";
 import { votacionCerrada } from "@/lib/votacion";
 import type { EstadoVotacion, Profile, RankingRow, Rol } from "@/lib/types";
 import { calcularResultado, RESULTADO_CLASS, RESULTADO_PLURAL, type Resultado } from "@/lib/resultado";
@@ -25,6 +25,8 @@ interface PartidoJugadoRow {
     con_mvp: boolean;
     con_peor: boolean;
     votacion_cierra_en: string | null;
+    desafio_id: string | null;
+    nombre_equipo: string | null;
   };
 }
 
@@ -66,7 +68,7 @@ export default async function JugadorDetallePage({
     supabase.rpc("get_ranking_votos", { p_grupo_id: grupo.id, p_tipo: "PEOR" }),
     supabase
       .from("partido_jugadores")
-      .select("partido_id, goles, equipo, partidos!inner(fecha, rival, lugar, goles_rival, goles_otros, jugado, grupo_id, con_votacion, con_mvp, con_peor, votacion_cierra_en)")
+      .select("partido_id, goles, equipo, partidos!inner(fecha, rival, lugar, goles_rival, goles_otros, jugado, grupo_id, con_votacion, con_mvp, con_peor, votacion_cierra_en, desafio_id, nombre_equipo)")
       .eq("jugador_id", id)
       .eq("partidos.jugado", true)
       .eq("partidos.grupo_id", grupo.id),
@@ -92,6 +94,8 @@ export default async function JugadorDetallePage({
   misPartidos.sort((a, b) => b.partidos.fecha.localeCompare(a.partidos.fecha));
 
   const resultadosPorPartido = new Map<string, Resultado>();
+  // Los partidos que jugaron entre ellos (alguien del grupo en el segundo equipo).
+  const internos = new Set<string>();
   if (misPartidos.length > 0) {
     const { data: pj } = await supabase
       .from("partido_jugadores")
@@ -105,9 +109,13 @@ export default async function JugadorDetallePage({
     for (const row of pj ?? []) {
       const acc = acumulado.get(row.partido_id) ?? { e1: 0, e2: 0 };
       if (row.equipo === 1) acc.e1 += row.goles;
-      else acc.e2 += row.goles;
+      else {
+        acc.e2 += row.goles;
+        internos.add(row.partido_id);
+      }
       acumulado.set(row.partido_id, acc);
     }
+    for (const mp of misPartidos) if (mp.partidos.desafio_id) internos.delete(mp.partido_id);
 
     for (const mp of misPartidos) {
       const acc = acumulado.get(mp.partido_id) ?? { e1: 0, e2: 0 };
@@ -294,6 +302,9 @@ export default async function JugadorDetallePage({
             {misPartidos.map((mp) => {
               const fecha = new Date(mp.partidos.fecha + "T00:00:00");
               const resultado = resultadosPorPartido.get(mp.partido_id);
+              // Entre ellos: "Blancos vs Negros" y en cuál jugó (si no, "vs Negros" confundía al que jugó en Negros).
+              const interno = internos.has(mp.partido_id);
+              const { nosotros } = nombresDelPartido(mp.partidos, interno, config);
               return (
                 <Link
                   key={mp.partido_id}
@@ -301,8 +312,11 @@ export default async function JugadorDetallePage({
                   className="flex items-center justify-between gap-3 px-4 py-3 transition hover:bg-white/5"
                 >
                   <div className="min-w-0">
-                    <p className="truncate text-sm font-medium text-white">vs {mp.partidos.rival}</p>
+                    <p className="truncate text-sm font-medium text-white">
+                      {interno ? `${nosotros} vs ${mp.partidos.rival}` : `vs ${mp.partidos.rival}`}
+                    </p>
                     <p className="truncate text-xs text-zinc-500">
+                      {interno && <span className="text-zinc-300">Jugó en {mp.equipo === 1 ? nosotros : mp.partidos.rival} · </span>}
                       {fecha.toLocaleDateString("es-AR", { day: "numeric", month: "short" })} ·{" "}
                       {mp.partidos.lugar}
                     </p>
