@@ -256,6 +256,7 @@ export default async function PartidoDetailPage({
       {programado && (
         <PartidoProgramadoCard
           rival={partido.rival}
+          nosotros={interno ? nosotros : undefined}
           fecha={fecha}
           lugar={partido.lugar}
           respuestas={conConfirmacion ? participantes.map((p) => p.respuesta) : null}
@@ -444,12 +445,15 @@ export default async function PartidoDetailPage({
 /** Arriba de todo en un partido que todavía no se jugó: cuándo, dónde, contra quién y cuántos van. */
 function PartidoProgramadoCard({
   rival,
+  nosotros,
   fecha,
   lugar,
   respuestas,
   aviso,
 }: {
   rival: string;
+  /** Entre ellos, el nombre del primer equipo ("Titulares vs Suplentes"); si no, "vs Rival". */
+  nosotros?: string;
   fecha: string;
   lugar: string;
   /** Si el grupo pide confirmación, las respuestas de los convocados. */
@@ -465,7 +469,7 @@ function PartidoProgramadoCard({
       </div>
       <div className="mt-4 flex flex-col items-center gap-2">
         <Badge>Partido programado</Badge>
-        <p className="text-lg font-bold text-white">vs {rival}</p>
+        <p className="text-lg font-bold text-white">{nosotros ? `${nosotros} vs ${rival}` : `vs ${rival}`}</p>
         {respuestas && <ResumenRespuestas respuestas={respuestas} />}
         {aviso && <p className="mt-1 text-center text-xs text-zinc-500">{aviso}</p>}
       </div>
