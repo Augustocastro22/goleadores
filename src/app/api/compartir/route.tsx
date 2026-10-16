@@ -2,10 +2,17 @@ import { NextRequest, NextResponse } from "next/server";
 import { getContexto } from "@/lib/grupo";
 import { imagenRanking, type FilaRanking, type Formato } from "@/lib/compartir/imagenes";
 import type { RankingRow } from "@/lib/types";
+import { leerFiltroPartidos } from "@/lib/tipos-partido";
+
+const TITULOS = {
+  todos: "Tabla de goleadores",
+  rivales: "Goleadores · contra rivales",
+  entre_nosotros: "Goleadores · entre nosotros",
+} as const;
 
 /*
  * Imagen para compartir (ver src/components/Compartir.tsx):
- *   ?que=goleadores&grupo=<id>&formato=historia|cuadrado
+ *   ?que=goleadores&grupo=<id>&formato=historia|cuadrado[&filtro=rivales|entre_nosotros]
  * Solo para miembros del grupo: los datos salen con la sesión de quien la
  * pide, así que las RPC deciden qué puede ver.
  */
@@ -32,10 +39,14 @@ export async function GET(request: NextRequest) {
   const grupo = ctx.grupos.find((g) => g.id === params.get("grupo"));
   if (!grupo) return NextResponse.json({ error: "No encontrado." }, { status: 404 });
 
-  const { data } = await ctx.supabase.rpc("get_goleadores", { p_grupo_id: grupo.id });
+  const filtro = leerFiltroPartidos(params.get("filtro"));
+  const { data } =
+    filtro === "todos"
+      ? await ctx.supabase.rpc("get_goleadores", { p_grupo_id: grupo.id })
+      : await ctx.supabase.rpc("get_goleadores", { p_grupo_id: grupo.id, p_filtro: filtro });
   const imagen = await imagenRanking({
     formato,
-    encabezado: { grupoNombre: grupo.nombre, grupoLogoUrl: grupo.logo_url, titulo: "Tabla de goleadores", color: "#34d399" },
+    encabezado: { grupoNombre: grupo.nombre, grupoLogoUrl: grupo.logo_url, titulo: TITULOS[filtro], color: "#34d399" },
     filas: ranking((data ?? []) as RankingRow[]),
     unidad: "goles",
     vacio: "Todavía nadie hizo goles.",

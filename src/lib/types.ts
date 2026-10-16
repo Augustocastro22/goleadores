@@ -47,6 +47,8 @@ export interface Partido {
   cancha_id: string | null;
   /** Si es el partido de este grupo en un desafío contra otro grupo (ver 0022_desafios.sql). */
   desafio_id: string | null;
+  /** Cuando juegan entre ellos, el nombre del primer equipo ese día (el segundo es `rival`, ver 0032_modo_juego.sql). */
+  nombre_equipo: string | null;
 }
 
 export type Equipo = 1 | 2;

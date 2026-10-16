@@ -9,11 +9,14 @@ import { IconChevronRight, IconPlus } from "@/components/icons";
 import PushBanner from "@/components/PushBanner";
 import { hoyArgentina } from "@/lib/confirmacion";
 import { desafiosConGolesDeMas, esperaMiRespuesta, type DesafioVista } from "@/lib/desafios";
+import { esPartidoInterno, getConfig, nombresDelPartido } from "@/lib/config";
+import { sugerirModoJuego } from "@/lib/modo-juego";
+import PreguntaModoJuego from "@/components/PreguntaModoJuego";
 
 export default async function PartidosPage() {
   const { supabase, grupo } = await requireGrupo();
 
-  const [{ data: partidos }, { data: desafiosRaw }] = await Promise.all([
+  const [{ data: partidos }, { data: desafiosRaw }, config] = await Promise.all([
     supabase
       .from("partidos")
       .select("*")
@@ -21,7 +24,11 @@ export default async function PartidosPage() {
       .order("fecha", { ascending: false })
       .returns<Partido[]>(),
     supabase.rpc("get_desafios", { p_grupo_id: grupo.id }),
+    getConfig(supabase, grupo.id),
   ]);
+  // La pregunta única "¿Cómo juegan?" a los admins de un grupo que todavía no eligió.
+  const preguntarModo = grupo.rol === "admin" && config.modo_juego === null;
+  const sugerido = preguntarModo ? await sugerirModoJuego(supabase, grupo.id) : null;
   const hoy = hoyArgentina();
   const desafios = (desafiosRaw ?? []) as DesafioVista[];
   const desafiosParaResponder =
@@ -30,9 +37,9 @@ export default async function PartidosPage() {
 
   const resumenPorPartido = new Map<
     string,
-    { golesEquipo1: number; golesEquipo2: number; resultado: Resultado }
+    { golesEquipo1: number; golesEquipo2: number; resultado: Resultado; interno: boolean }
   >();
-  const golesPorEquipo = new Map<string, { e1: number; e2: number }>();
+  const golesPorEquipo = new Map<string, { e1: number; e2: number; jugadores2: number }>();
   if (partidos && partidos.length > 0) {
     const { data: pj } = await supabase
       .from("partido_jugadores")
@@ -43,21 +50,25 @@ export default async function PartidosPage() {
       );
 
     for (const row of pj ?? []) {
-      const acc = golesPorEquipo.get(row.partido_id) ?? { e1: 0, e2: 0 };
+      const acc = golesPorEquipo.get(row.partido_id) ?? { e1: 0, e2: 0, jugadores2: 0 };
       if (row.equipo === 1) acc.e1 += row.goles;
-      else acc.e2 += row.goles;
+      else {
+        acc.e2 += row.goles;
+        acc.jugadores2 += 1;
+      }
       golesPorEquipo.set(row.partido_id, acc);
     }
 
     for (const partido of partidos) {
       if (!partido.jugado) continue;
-      const acc = golesPorEquipo.get(partido.id) ?? { e1: 0, e2: 0 };
+      const acc = golesPorEquipo.get(partido.id) ?? { e1: 0, e2: 0, jugadores2: 0 };
       const golesEquipo1 = acc.e1 + partido.goles_otros;
       const golesEquipo2 = acc.e2 + partido.goles_rival;
       resumenPorPartido.set(partido.id, {
         golesEquipo1,
         golesEquipo2,
         resultado: calcularResultado(golesEquipo1, golesEquipo2),
+        interno: esPartidoInterno(acc.jugadores2, partido.desafio_id),
       });
     }
   }
@@ -69,7 +80,10 @@ export default async function PartidosPage() {
     ).map((d) => d.partido_id)
   );
 
-  const resultados = [...resumenPorPartido.values()].map((r) => r.resultado);
+  // Ganados/empatados/perdidos solo contra otros equipos: entre ellos siempre gana uno del grupo.
+  const contraOtros = [...resumenPorPartido.values()].filter((r) => !r.interno);
+  const resultados = contraOtros.map((r) => r.resultado);
+  const mostrarResumen = config.modo_juego !== "entre_nosotros" && contraOtros.length > 0;
   const ganados = resultados.filter((r) => r === "G").length;
   const empatados = resultados.filter((r) => r === "E").length;
   const perdidos = resultados.filter((r) => r === "P").length;
@@ -77,6 +91,7 @@ export default async function PartidosPage() {
   return (
     <div>
       <PushBanner />
+      {preguntarModo && <PreguntaModoJuego grupoId={grupo.id} sugerido={sugerido} />}
 
       <div className="mb-6 flex items-center justify-between">
         <h1 className="text-2xl font-extrabold tracking-tight text-white">Partidos</h1>
@@ -109,16 +124,20 @@ export default async function PartidosPage() {
         </Card>
       ) : (
         <>
-          <Card className="mb-4 grid grid-cols-3 divide-x divide-border p-4 text-center">
-            <ResumenStat value={ganados} label="Ganados" className="text-primary-400" />
-            <ResumenStat value={empatados} label="Empatados" className="text-zinc-300" />
-            <ResumenStat value={perdidos} label="Perdidos" className="text-danger-400" />
-          </Card>
+          {mostrarResumen && (
+            <Card className="mb-4 grid grid-cols-3 divide-x divide-border p-4 text-center">
+              <ResumenStat value={ganados} label="Ganados" className="text-primary-400" />
+              <ResumenStat value={empatados} label="Empatados" className="text-zinc-300" />
+              <ResumenStat value={perdidos} label="Perdidos" className="text-danger-400" />
+            </Card>
+          )}
 
           <div className="flex flex-col gap-3">
             {partidos.map((partido) => {
               const fecha = new Date(partido.fecha + "T00:00:00");
               const resumen = resumenPorPartido.get(partido.id);
+              // Entre ellos (también uno programado, si ya tiene los dos equipos armados).
+              const interno = esPartidoInterno(golesPorEquipo.get(partido.id)?.jugadores2 ?? 0, partido.desafio_id);
               return (
                 <Link key={partido.id} href={`/partidos/${partido.id}`} className="block">
                   <Card className="flex items-center justify-between gap-4 px-4 py-4 transition hover:border-border-strong hover:bg-surface-2/80">
@@ -130,8 +149,14 @@ export default async function PartidosPage() {
                         <span className="text-lg font-bold text-white">{fecha.getDate()}</span>
                       </div>
                       <div className="min-w-0">
-                        <p className="truncate font-semibold text-white">vs {partido.rival}</p>
+                        <p className="truncate font-semibold text-white">
+                          {interno ? `${nombresDelPartido(partido, true, config).nosotros} vs ${partido.rival}` : `vs ${partido.rival}`}
+                        </p>
                         <p className="truncate text-sm text-zinc-500">
+                          {/* En un grupo que es un equipo, el partido entre ellos es la excepción: se marca. */}
+                          {interno && config.modo_juego !== "entre_nosotros" && (
+                            <span className="font-medium text-zinc-300">Entre nosotros · </span>
+                          )}
                           {partido.desafio_id && (
                             <span className="font-medium text-gold-400">
                               {etiquetaDesafio(
@@ -153,11 +178,14 @@ export default async function PartidosPage() {
                           <span className="text-sm font-bold tabular-nums text-white">
                             {resumen.golesEquipo1}-{resumen.golesEquipo2}
                           </span>
-                          <span
-                            className={`flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold ${RESULTADO_CLASS[resumen.resultado]}`}
-                          >
-                            {resumen.resultado}
-                          </span>
+                          {/* Entre ellos no hay G/E/P: ganó uno de los dos equipos del grupo. */}
+                          {!resumen.interno && (
+                            <span
+                              className={`flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold ${RESULTADO_CLASS[resumen.resultado]}`}
+                            >
+                              {resumen.resultado}
+                            </span>
+                          )}
                         </>
                       ) : desafioPorPartido.get(partido.id)?.marcador_mios != null ? (
                         // Desafío con resultado pero sin los goles de los jugadores todavía

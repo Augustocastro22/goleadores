@@ -4,9 +4,10 @@ import { useState } from "react";
 import { Input } from "@/components/ui/Input";
 import Switch from "@/components/ui/Switch";
 import { MAX_MIN_JUGADORES, type AppConfig } from "@/lib/config";
+import ModoJuegoFields from "@/components/ModoJuegoFields";
 
 /**
- * Campos de las reglas de un grupo: votación y confirmación de los convocados
+ * Campos de las reglas de un grupo: cómo juegan, votación y confirmación de los convocados
  * (los lee parseConfig). Se usan
  * al crear el grupo y en Admin → Reglas.
  */
@@ -17,6 +18,9 @@ export default function ReglasFields({ inicial }: { inicial: AppConfig }) {
 
   return (
     <div className="flex flex-col gap-3">
+      <div className="mb-1 border-b border-border pb-4">
+        <ModoJuegoFields inicial={inicial} />
+      </div>
       <CategoriaCheckbox
         name="vota_mvp"
         checked={votaMvp}

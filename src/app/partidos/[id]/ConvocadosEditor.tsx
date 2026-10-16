@@ -10,6 +10,8 @@ import Avatar from "@/components/ui/Avatar";
 import { actualizarConvocados } from "@/lib/actions/partidos";
 import { IconClose } from "@/components/icons";
 import { RespuestaSelect, ResumenRespuestas } from "./Confirmacion";
+import NombresEquipos from "@/components/NombresEquipos";
+import { Input } from "@/components/ui/Input";
 
 type Equipo = 1 | 2;
 
@@ -39,12 +41,22 @@ export default function ConvocadosEditor({
   ocupados = [],
   exMiembroIds = [],
   rival,
+  nombresEquipos,
   mostrarResumen = true,
+  cambioDeModo,
 }: {
+  /**
+   * Para pasar el partido de "contra otro equipo" a "entre nosotros" (o al
+   * revés) al editar, y cambiar los nombres. No va en un desafío ni en un
+   * grupo que todavía no eligió cómo juega (ahí, los dos equipos como siempre).
+   */
+  cambioDeModo?: { interno: boolean; rival: string; nombres: [string, string] };
   partidoId: string;
   jugadores: Profile[];
   /** Para el título del Equipo 2. */
   rival?: string;
+  /** Cuando juegan entre ellos, los nombres de los dos equipos (títulos y botones). */
+  nombresEquipos?: [string, string];
   /** El "2 juegan · 6 sin responder": no hace falta si ya está en la tarjeta del partido. */
   mostrarResumen?: boolean;
   /** Convocados que ya no están en el grupo: solo se los puede sacar. */
@@ -72,6 +84,16 @@ export default function ConvocadosEditor({
   const [editando, setEditando] = useState(false);
   const [asignaciones, setAsignaciones] = useState(asignacionesIniciales);
   const [saving, setSaving] = useState(false);
+  const [interno, setInterno] = useState(cambioDeModo?.interno ?? false);
+  const [rivalEditado, setRivalEditado] = useState(cambioDeModo && !cambioDeModo.interno ? cambioDeModo.rival : "");
+  const [nombresEditados, setNombresEditados] = useState<[string, string]>(cambioDeModo?.nombres ?? ["", ""]);
+  // Botones al editar: con cambio de modo, según el modo elegido; si no, como venía.
+  const soloUno = cambioDeModo ? !interno : unSoloEquipo;
+  const etiquetas: [string, string] | undefined = cambioDeModo
+    ? interno
+      ? [nombresEditados[0] || "Equipo 1", nombresEditados[1] || "Equipo 2"]
+      : undefined
+    : nombresEquipos;
   const [message, setMessage] = useState<{ type: "ok" | "error"; text: string } | null>(null);
 
   const cantidad = useMemo(() => Object.keys(asignaciones).length, [asignaciones]);
@@ -92,10 +114,10 @@ export default function ConvocadosEditor({
         .filter((j): j is Profile => Boolean(j))
         .sort((a, b) => (respuestas ? orden[respuestas[a.id]] - orden[respuestas[b.id]] : 0));
     return [
-      { titulo: "Equipo 1 (Nosotros)", jugadores: perfiles(equipo1IdsInit) },
-      { titulo: `Equipo 2${rival ? ` (${rival})` : ""}`, jugadores: perfiles(equipo2IdsInit) },
+      { titulo: nombresEquipos?.[0] ?? "Equipo 1 (Nosotros)", jugadores: perfiles(equipo1IdsInit) },
+      { titulo: nombresEquipos?.[1] ?? `Equipo 2${rival ? ` (${rival})` : ""}`, jugadores: perfiles(equipo2IdsInit) },
     ].filter((e) => e.jugadores.length > 0);
-  }, [equipo1IdsInit, equipo2IdsInit, jugadorPorId, respuestas, rival]);
+  }, [equipo1IdsInit, equipo2IdsInit, jugadorPorId, respuestas, rival, nombresEquipos]);
   const hayConvocados = equiposActuales.length > 0;
 
   const bloqueoPorJugador = useMemo(() => {
@@ -114,7 +136,21 @@ export default function ConvocadosEditor({
   function empezarEdicion() {
     setMessage(null);
     setAsignaciones(asignacionesIniciales);
+    if (cambioDeModo) {
+      setInterno(cambioDeModo.interno);
+      setRivalEditado(cambioDeModo.interno ? "" : cambioDeModo.rival);
+      setNombresEditados(cambioDeModo.nombres);
+    }
     setEditando(true);
+  }
+
+  function cambiarInterno(valor: boolean) {
+    setMessage(null);
+    setInterno(valor);
+    // Contra otro equipo nadie del grupo va al segundo: los que estaban ahí pasan al primero.
+    if (!valor) {
+      setAsignaciones((prev) => Object.fromEntries(Object.entries(prev).map(([id]) => [id, 1 as Equipo])));
+    }
   }
 
   function cancelarEdicion() {
@@ -154,6 +190,11 @@ export default function ConvocadosEditor({
         jugadorId,
         equipo,
       })),
+      equipos: cambioDeModo
+        ? interno
+          ? { interno: true, rival: nombresEditados[1], nombreEquipo: nombresEditados[0] }
+          : { interno: false, rival: rivalEditado, nombreEquipo: null }
+        : undefined,
     });
     setSaving(false);
     if (result.error) {
@@ -252,8 +293,34 @@ export default function ConvocadosEditor({
     <div>
       <h2 className="mb-3 text-lg font-bold text-white">Convocatoria</h2>
       <Card className="p-4">
+        {cambioDeModo && (
+          <div className="mb-3">
+            {interno ? (
+              <NombresEquipos
+                nombres={nombresEditados}
+                onChange={setNombresEditados}
+                accion={<LinkModo interno onCambiar={cambiarInterno} />}
+              />
+            ) : (
+              <div className="flex flex-col gap-1.5">
+                <div className="flex items-center justify-between gap-2">
+                  <label htmlFor="rival-convocatoria" className="text-sm font-medium text-zinc-300">
+                    Rival
+                  </label>
+                  <LinkModo interno={false} onCambiar={cambiarInterno} />
+                </div>
+                <Input
+                  id="rival-convocatoria"
+                  value={rivalEditado}
+                  onChange={(e) => setRivalEditado(e.target.value)}
+                  placeholder="Contra quién juegan"
+                />
+              </div>
+            )}
+          </div>
+        )}
         <p className="mb-3 text-xs text-zinc-500">
-          {unSoloEquipo
+          {soloUno
             ? "Marcá quién juega. Para sacar a alguien tocá la ✕ (o de nuevo Juega)."
             : "Marcá quién juega y en qué equipo. Para sacar a alguien tocá la ✕ (o de nuevo su equipo)."}{" "}
           Podés sumar o sacar gente hasta antes de cargar el resultado.
@@ -269,9 +336,10 @@ export default function ConvocadosEditor({
             return (
               <div
                 key={jugador.id}
-                className="flex items-center justify-between gap-3 rounded-xl border border-border bg-white/5 px-3.5 py-2.5"
+                className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 rounded-xl border border-border bg-white/5 px-3.5 py-2.5"
               >
-                <div className="flex min-w-0 items-center gap-3">
+                {/* Al menos este ancho para el nombre: si los botones no entran al lado, bajan a otra línea. */}
+                <div className="flex min-w-[9rem] flex-1 items-center gap-3">
                   <Avatar src={jugador.foto_url} alt={jugador.apodo} size={28} />
                   <div className="min-w-0">
                     <span className="block truncate text-sm text-zinc-200">
@@ -299,10 +367,10 @@ export default function ConvocadosEditor({
                           : "border-border text-zinc-400 hover:text-white"
                       }`}
                     >
-                      {unSoloEquipo ? "Juega" : "Eq. 1"}
+                      {soloUno ? "Juega" : (etiquetas?.[0] ?? "Eq. 1")}
                     </button>
                   )}
-                  {!unSoloEquipo && !exMiembro && (
+                  {!soloUno && !exMiembro && (
                     <button
                       type="button"
                       onClick={() => elegir(jugador.id, 2)}
@@ -312,7 +380,7 @@ export default function ConvocadosEditor({
                           : "border-border text-zinc-400 hover:text-white"
                       }`}
                     >
-                      Eq. 2
+                      {etiquetas?.[1] ?? "Eq. 2"}
                     </button>
                   )}
                   <button
@@ -359,5 +427,18 @@ export default function ConvocadosEditor({
         </div>
       </Card>
     </div>
+  );
+}
+
+/** El link para pasar el partido a "entre nosotros" o a "contra otro equipo". */
+function LinkModo({ interno, onCambiar }: { interno: boolean; onCambiar: (interno: boolean) => void }) {
+  return (
+    <button
+      type="button"
+      onClick={() => onCambiar(!interno)}
+      className="shrink-0 text-xs font-semibold text-primary-400 hover:text-primary-300"
+    >
+      {interno ? "¿Contra otro equipo?" : "¿Juegan entre ustedes?"}
+    </button>
   );
 }

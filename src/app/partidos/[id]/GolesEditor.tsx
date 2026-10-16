@@ -34,7 +34,13 @@ export default function GolesEditor({
   jugado,
   marcadorDesafio,
   votacion,
+  nosotros = "Nosotros",
+  interno = false,
 }: {
+  /** El nombre del primer equipo: "Nosotros", o el del grupo cuando juegan entre ellos. */
+  nosotros?: string;
+  /** Entre ellos: los dos equipos son del grupo (si no, el segundo es un rival de afuera). */
+  interno?: boolean;
   partidoId: string;
   rival: string;
   fecha: string;
@@ -127,7 +133,7 @@ export default function GolesEditor({
           <span className="truncate">{lugar}</span>
         </div>
         {!esDesafio ? (
-          <Marcador golesNosotros={golesEquipo1} golesRival={golesEquipo2} rival={rival} className="mt-4" />
+          <Marcador golesNosotros={golesEquipo1} golesRival={golesEquipo2} nosotros={nosotros} rival={rival} className="mt-4" />
         ) : marcadorDesafio.mios != null && marcadorDesafio.rival != null ? (
           <Marcador golesNosotros={marcadorDesafio.mios} golesRival={marcadorDesafio.rival} rival={rival} className="mt-4" />
         ) : (
@@ -139,7 +145,7 @@ export default function GolesEditor({
 
       <div>
         <h2 className="mb-3 flex items-center gap-2 text-lg font-bold text-white">
-          <IconGoal className="h-5 w-5 text-primary-400" /> Goles · Equipo 1 (Nosotros)
+          <IconGoal className="h-5 w-5 text-primary-400" /> Goles · {nosotros}
         </h2>
         <Card className="divide-y divide-border overflow-hidden py-1">
           {ordenar(equipo1).map((j) => (
@@ -181,10 +187,10 @@ export default function GolesEditor({
       {!esDesafio && (editando || equipo2.length > 0) && (
         <div>
           <h2 className="mb-3 flex items-center gap-2 text-lg font-bold text-white">
-            <IconGoal className="h-5 w-5 text-gold-400" /> Goles · Equipo 2 ({rival})
+            <IconGoal className="h-5 w-5 text-gold-400" /> {interno ? `Goles · ${rival}` : `Goles de ${rival}`}
           </h2>
           <Card className="divide-y divide-border overflow-hidden py-1">
-            {equipo2.length === 0 && (
+            {equipo2.length === 0 && interno && (
               <p className="px-4 py-3 text-sm text-zinc-500">Ningún jugador del grupo jugó acá.</p>
             )}
             {ordenar(equipo2).map((j) => (
@@ -196,7 +202,12 @@ export default function GolesEditor({
                 onChange={(v) => setGoles((prev) => ({ ...prev, [j.jugadorId]: v }))}
               />
             ))}
-            <InvitadosRow editable={editando} value={golesRival} onChange={setGolesRival} />
+            <InvitadosRow
+              editable={editando}
+              value={golesRival}
+              onChange={setGolesRival}
+              label={interno || equipo2.length > 0 ? undefined : "Goles"}
+            />
           </Card>
         </div>
       )}
@@ -296,18 +307,25 @@ function InvitadosRow({
   editable,
   value,
   onChange,
+  label,
 }: {
   editable: boolean;
   value: number;
   onChange: (v: number) => void;
+  /** Contra un rival de afuera son todos sus goles: "Goles" en vez de "Invitados". */
+  label?: string;
 }) {
   // Leyendo, sin goles de invitados no hace falta la fila.
   if (!editable && value === 0) return null;
   return (
     <div className="flex items-center justify-between gap-3 px-4 py-3">
-      <span className="text-sm text-zinc-500">
-        Invitados no registrados <span className="text-zinc-600">(no cuentan para la tabla)</span>
-      </span>
+      {label ? (
+        <span className="text-sm text-zinc-300">{label}</span>
+      ) : (
+        <span className="text-sm text-zinc-500">
+          Invitados no registrados <span className="text-zinc-600">(no cuentan para la tabla)</span>
+        </span>
+      )}
       {editable ? (
         <GolesInput value={value} onChange={onChange} />
       ) : (

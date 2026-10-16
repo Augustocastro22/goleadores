@@ -8,16 +8,19 @@ import { getCanchas } from "@/lib/canchas";
 import Card from "@/components/ui/Card";
 import { buttonClass } from "@/components/ui/Button";
 import NuevoPartidoForm from "./NuevoPartidoForm";
+import PreguntaModoJuego from "@/components/PreguntaModoJuego";
+import { sugerirModoJuego } from "@/lib/modo-juego";
 
 export default async function NuevoPartidoPage() {
   const { supabase, grupo } = await requireGrupo();
   if (grupo.rol !== "admin") redirect("/partidos");
 
-  const [jugadores, config, pendientes, canchas] = await Promise.all([
+  const [jugadores, config, pendientes, canchas, sugerido] = await Promise.all([
     getMiembros(supabase, grupo.id),
     getConfig(supabase, grupo.id),
     golesPorCorregir(supabase, grupo.id),
     getCanchas(supabase, grupo.id),
+    sugerirModoJuego(supabase, grupo.id),
   ]);
 
   return (
@@ -25,6 +28,7 @@ export default async function NuevoPartidoPage() {
       <h1 className="mb-6 text-2xl font-extrabold tracking-tight text-white">
         Nuevo partido
       </h1>
+      {config.modo_juego === null && <PreguntaModoJuego grupoId={grupo.id} sugerido={sugerido} />}
       <Card className="p-6">
         {pendientes.length > 0 ? (
           <div className="flex flex-col gap-4">

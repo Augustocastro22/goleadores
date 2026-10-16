@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { CONFIG_DEFAULTS, parseConfig, REGLAS_GRUPO_NUEVO, votacionDelPartido } from "./config";
+import {
+  CONFIG_DEFAULTS,
+  esPartidoInterno,
+  parseConfig,
+  parseModoJuego,
+  REGLAS_GRUPO_NUEVO,
+  votacionDelPartido,
+} from "./config";
 
 const ambas = (min: number) => ({ vota_mvp: true, vota_peor: true, min_jugadores_votacion: min });
 
@@ -39,7 +46,8 @@ describe("votacionDelPartido", () => {
 describe("parseConfig", () => {
   function form(campos: Record<string, string>) {
     const fd = new FormData();
-    for (const [k, v] of Object.entries(campos)) fd.set(k, v);
+    // Cómo juegan es obligatorio: por defecto, un equipo.
+    for (const [k, v] of Object.entries({ modo_juego: "equipo", ...campos })) fd.set(k, v);
     return fd;
   }
 
@@ -49,12 +57,18 @@ describe("parseConfig", () => {
       vota_peor: true,
       min_jugadores_votacion: 8,
       pedir_confirmacion: false,
+      modo_juego: "equipo",
+      nombre_equipo_1: "Equipo A",
+      nombre_equipo_2: "Equipo B",
     });
     expect(parseConfig(form({ vota_mvp: "on", min_jugadores_votacion: "8" }))).toEqual({
       vota_mvp: true,
       vota_peor: false,
       min_jugadores_votacion: 8,
       pedir_confirmacion: false,
+      modo_juego: "equipo",
+      nombre_equipo_1: "Equipo A",
+      nombre_equipo_2: "Equipo B",
     });
   });
 
@@ -64,6 +78,9 @@ describe("parseConfig", () => {
       vota_peor: false,
       min_jugadores_votacion: 8,
       pedir_confirmacion: false,
+      modo_juego: "equipo",
+      nombre_equipo_1: "Equipo A",
+      nombre_equipo_2: "Equipo B",
     });
   });
 
@@ -84,5 +101,44 @@ describe("REGLAS_GRUPO_NUEVO", () => {
     expect(REGLAS_GRUPO_NUEVO.vota_peor).toBe(false);
     expect(REGLAS_GRUPO_NUEVO.vota_mvp).toBe(true);
     expect(CONFIG_DEFAULTS.vota_peor).toBe(true);
+  });
+});
+
+describe("parseModoJuego", () => {
+  const form = (campos: Record<string, string>) => {
+    const fd = new FormData();
+    for (const [k, v] of Object.entries(campos)) fd.set(k, v);
+    return fd;
+  };
+
+  it("hay que elegir cómo juegan", () => {
+    expect(parseModoJuego(form({}))).toEqual({ error: "Elegí cómo juega el grupo." });
+  });
+
+  it("entre nosotros con nombres propios", () => {
+    expect(
+      parseModoJuego(form({ modo_juego: "entre_nosotros", nombre_equipo_1: " Blancos ", nombre_equipo_2: "Negros" }))
+    ).toEqual({ modo_juego: "entre_nosotros", nombre_equipo_1: "Blancos", nombre_equipo_2: "Negros" });
+  });
+
+  it("sin nombres, Equipo A y Equipo B; iguales, error", () => {
+    expect(parseModoJuego(form({ modo_juego: "entre_nosotros" }))).toMatchObject({
+      nombre_equipo_1: "Equipo A",
+      nombre_equipo_2: "Equipo B",
+    });
+    expect(parseModoJuego(form({ modo_juego: "entre_nosotros", nombre_equipo_1: "Rojo", nombre_equipo_2: "rojo" }))).toEqual({
+      error: "Los dos equipos tienen que tener nombres distintos.",
+    });
+  });
+});
+
+describe("esPartidoInterno", () => {
+  it("entre ellos si alguien del grupo jugó en el segundo equipo", () => {
+    expect(esPartidoInterno(3)).toBe(true);
+    expect(esPartidoInterno(0)).toBe(false);
+  });
+
+  it("un desafío nunca es entre ellos", () => {
+    expect(esPartidoInterno(3, "desafio-1")).toBe(false);
   });
 });
