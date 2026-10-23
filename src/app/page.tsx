@@ -71,7 +71,7 @@ function BotonesEntrar() {
   return (
     <div className="flex w-full max-w-sm flex-col gap-2">
       <Link href="/signup" className={buttonClass("primary", "md", "w-full py-3 text-base")}>
-        Armá tu grupo
+        Armá tu grupo o sumate a uno
       </Link>
       <Link href="/login" className={buttonClass("ghost", "md", "w-full")}>
         Ya tengo cuenta
