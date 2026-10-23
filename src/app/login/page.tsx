@@ -31,8 +31,8 @@ export default async function LoginPage({
 
       <Card className="w-full max-w-sm p-6">
         {aviso && (
-          <p className="mb-4 rounded-xl border border-primary-500/20 bg-primary-500/10 px-3.5 py-2.5 text-sm text-primary-400">
-            {aviso}
+          <p className="mb-4 rounded-xl border border-primary-500/30 bg-primary-500/15 px-3.5 py-3 text-sm font-medium text-primary-300">
+            ✉️ {aviso}
           </p>
         )}
         {error && (

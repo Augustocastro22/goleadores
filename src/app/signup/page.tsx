@@ -24,7 +24,7 @@ export default async function SignupPage({
             ? "Creá tu cuenta y te sumamos al grupo"
             : vieneDeDesafio
               ? "Creá tu cuenta para mandar el desafío"
-              : "Sumate para votar y ver tus estadísticas"}
+              : "Creá tu cuenta y armá el grupo de tu equipo"}
         </p>
       </div>
 

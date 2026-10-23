@@ -11,16 +11,25 @@ import ModoJuegoFields from "@/components/ModoJuegoFields";
  * (los lee parseConfig). Se usan
  * al crear el grupo y en Admin → Reglas.
  */
-export default function ReglasFields({ inicial }: { inicial: AppConfig }) {
+export default function ReglasFields({
+  inicial,
+  sinModoJuego = false,
+}: {
+  inicial: AppConfig;
+  /** Cuando "¿Cómo juegan?" se muestra aparte (al crear el grupo). */
+  sinModoJuego?: boolean;
+}) {
   const [votaMvp, setVotaMvp] = useState(inicial.vota_mvp);
   const [votaPeor, setVotaPeor] = useState(inicial.vota_peor);
   const [pedirConfirmacion, setPedirConfirmacion] = useState(inicial.pedir_confirmacion);
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="mb-1 border-b border-border pb-4">
-        <ModoJuegoFields inicial={inicial} />
-      </div>
+      {!sinModoJuego && (
+        <div className="mb-1 border-b border-border pb-4">
+          <ModoJuegoFields inicial={inicial} />
+        </div>
+      )}
       <CategoriaCheckbox
         name="vota_mvp"
         checked={votaMvp}

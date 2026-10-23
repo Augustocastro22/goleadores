@@ -1,4 +1,5 @@
 import Link from "next/link";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { redirect } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/admin";
 import {
@@ -90,7 +91,7 @@ export default async function AdminPage({
         ))}
       </div>
 
-      {tab === "grupo" && <GrupoTab grupo={grupo} />}
+      {tab === "grupo" && <GrupoTab grupo={grupo} supabase={supabase} />}
       {tab === "config" && <ConfigTab grupoId={grupo.id} />}
       {tab === "partidos" && <PartidosTab grupoId={grupo.id} />}
       {tab === "usuarios" && <UsuariosTab grupoId={grupo.id} miId={user.id} />}
@@ -98,11 +99,38 @@ export default async function AdminPage({
   );
 }
 
-async function GrupoTab({ grupo }: { grupo: MiGrupo }) {
+async function GrupoTab({ grupo, supabase }: { grupo: MiGrupo; supabase: SupabaseClient }) {
   const url = `${await getSiteUrl()}/unirse/${grupo.codigo_invitacion}`;
+  // La guía de primeros pasos se ve solo hasta que cargan el primer partido.
+  const { count: partidos } = await supabase
+    .from("partidos")
+    .select("id", { count: "exact", head: true })
+    .eq("grupo_id", grupo.id);
 
   return (
     <div className="flex flex-col gap-4">
+      {partidos === 0 && (
+        <div className="rounded-2xl border border-primary-500/30 bg-primary-500/10 p-4">
+          <p className="font-bold text-white">¡Listo, ya tenés tu grupo!</p>
+          <ol className="mt-2 flex flex-col gap-1 text-sm text-zinc-300">
+            <li>
+              <span className="font-semibold text-primary-400">1.</span> Mandá el link de invitación por
+              WhatsApp (acá abajo).
+            </li>
+            <li>
+              <span className="font-semibold text-primary-400">2.</span> Subí el escudo, si querés.
+            </li>
+            <li>
+              <span className="font-semibold text-primary-400">3.</span>{" "}
+              <Link href="/partidos/nuevo" className="underline hover:text-white">
+                Cargá el primer partido
+              </Link>
+              .
+            </li>
+          </ol>
+        </div>
+      )}
+
       <Card className="p-5">
         <h2 className="mb-1 font-bold text-white">Invitar al grupo</h2>
         <p className="mb-4 text-xs text-zinc-500">

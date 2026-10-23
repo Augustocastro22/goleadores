@@ -107,7 +107,7 @@ export async function signup(formData: FormData) {
       conNext(
         "/login?aviso=" +
           encodeURIComponent(
-            `Te mandamos un mail a ${email}. Tocá el link de confirmación y entrás directo.`
+            `Te mandamos un mail a ${email}. Tocá el link de confirmación y entrás directo. Si no lo ves, revisá spam o promociones.`
           ),
         formData
       )

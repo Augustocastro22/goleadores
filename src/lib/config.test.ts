@@ -100,6 +100,8 @@ describe("REGLAS_GRUPO_NUEVO", () => {
   it("un grupo nuevo arranca sin Peor Jugador, sin cambiar los grupos que ya existen", () => {
     expect(REGLAS_GRUPO_NUEVO.vota_peor).toBe(false);
     expect(REGLAS_GRUPO_NUEVO.vota_mvp).toBe(true);
+    expect(REGLAS_GRUPO_NUEVO.pedir_confirmacion).toBe(true);
+    expect(CONFIG_DEFAULTS.pedir_confirmacion).toBe(false);
     expect(CONFIG_DEFAULTS.vota_peor).toBe(true);
   });
 });

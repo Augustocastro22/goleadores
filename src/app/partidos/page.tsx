@@ -113,13 +113,26 @@ export default async function PartidosPage() {
       </div>
 
       {!partidos || partidos.length === 0 ? (
-        <Card className="px-5 py-10 text-center text-sm text-zinc-500">
-          Todavía no hay partidos cargados.
-          {grupo.rol === "admin" && (
-            <span className="mt-1 block">
-              Cargá el primero con <span className="text-zinc-300">+ Nuevo</span>, o invitá al
-              resto del grupo desde Admin.
-            </span>
+        <Card className="flex flex-col items-center gap-4 px-5 py-10 text-center">
+          {grupo.rol === "admin" ? (
+            <>
+              <div>
+                <p className="text-lg font-bold text-white">Cargá tu primer partido</p>
+                <p className="mt-1 text-sm text-zinc-500">
+                  Elegís quiénes juegan y les llega el aviso para confirmar.
+                </p>
+              </div>
+              <Link href="/partidos/nuevo" className={buttonClass("primary", "md")}>
+                <IconPlus className="h-4 w-4" /> Cargar primer partido
+              </Link>
+              <Link href="/admin?tab=grupo" className="text-sm text-zinc-500 hover:text-white">
+                ¿Todavía falta gente? Invitá al grupo
+              </Link>
+            </>
+          ) : (
+            <p className="text-sm text-zinc-500">
+              Todavía no hay partidos cargados. Cuando el admin arme el primero te llega un aviso.
+            </p>
           )}
         </Card>
       ) : (

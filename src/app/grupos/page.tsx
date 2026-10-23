@@ -18,6 +18,7 @@ import SubmitButton from "@/components/SubmitButton";
 import ConfirmSubmitButton from "@/components/ConfirmSubmitButton";
 import ActionForm from "@/components/ActionForm";
 import ReglasFields from "@/components/ReglasFields";
+import ModoJuegoFields from "@/components/ModoJuegoFields";
 import { REGLAS_GRUPO_NUEVO } from "@/lib/config";
 import { IconChevronRight } from "@/components/icons";
 import { urlConGrupo } from "@/lib/grupo-cookie";
@@ -60,14 +61,14 @@ export default async function GruposPage() {
     <div className="mx-auto flex max-w-md flex-col gap-6">
       <div>
         <h1 className="mb-1 text-2xl font-extrabold tracking-tight text-white">
-          {grupos.length === 0 && solicitudes.length === 0 ? "¡Hola!" : "Tus grupos"}
+          {grupos.length === 0 && solicitudes.length === 0 ? "Creá tu grupo o sumate a uno" : "Tus grupos"}
         </h1>
         <p className="text-sm text-zinc-500">
           {grupos.length > 0
             ? "Cada grupo tiene sus propios partidos, estadísticas y encuestas."
             : solicitudes.length > 0
               ? "Mientras esperás que te acepten, podés sumarte a otro grupo o crear el tuyo."
-              : "Para empezar, creá el grupo de tu equipo o sumate a uno con el link que te pasaron."}
+              : "Si organizás los partidos, creá el grupo y mandá el link por WhatsApp. Si ya te invitaron, pegá el link que te pasaron."}
         </p>
       </div>
 
@@ -188,16 +189,22 @@ export default async function GruposPage() {
             Nombre del grupo
             <Input type="text" name="nombre" required maxLength={60} placeholder="Fútbol de los jueves" />
           </Label>
-          <div className="flex flex-col gap-3 border-t border-border pt-4">
-            <p className="text-xs font-semibold tracking-wide text-zinc-500 uppercase">Reglas</p>
-            <ReglasFields inicial={REGLAS_GRUPO_NUEVO} />
-            <Switch
-              name="requiere_aprobacion"
-              titulo="Pedir aprobación para entrar"
-              detalle="Quien abra el link de invitación queda pendiente hasta que lo aceptes."
-            />
-            <p className="text-xs text-zinc-500">Todo esto se puede cambiar después desde Admin.</p>
-          </div>
+          <ModoJuegoFields inicial={REGLAS_GRUPO_NUEVO} />
+          <Switch
+            name="requiere_aprobacion"
+            titulo="Pedir aprobación para entrar"
+            detalle="Quien abra el link de invitación queda pendiente hasta que lo aceptes."
+          />
+          <details className="group rounded-xl border border-border">
+            <summary className="flex cursor-pointer list-none items-center justify-between px-4 py-3 text-sm font-semibold text-white">
+              Reglas avanzadas
+              <span className="text-xs font-normal text-zinc-500">Votaciones y confirmación</span>
+            </summary>
+            <div className="border-t border-border p-4">
+              <ReglasFields inicial={REGLAS_GRUPO_NUEVO} sinModoJuego />
+            </div>
+          </details>
+          <p className="text-xs text-zinc-500">Todo esto se puede cambiar después desde Admin.</p>
           <SubmitButton pendingText="Creando..." size="sm" className="self-start">
             Crear grupo
           </SubmitButton>
