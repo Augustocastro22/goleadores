@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { Profile } from "@/lib/types";
 import { createPartido } from "@/lib/actions/partidos";
 import ActionForm from "@/components/ActionForm";
@@ -10,7 +10,8 @@ import CanchaInput from "@/components/CanchaInput";
 import Avatar from "@/components/ui/Avatar";
 import { Input, Label } from "@/components/ui/Input";
 import { IconGoal } from "@/components/icons";
-import Marcador from "@/components/Marcador";
+import MarcadorEditable from "@/components/MarcadorEditable";
+import RepartoGoles from "@/components/RepartoGoles";
 import GolesInput from "@/components/GolesInput";
 import VotacionPartidoFields, { type VotarEnPartido } from "@/components/VotacionPartidoFields";
 import type { AppConfig } from "@/lib/config";
@@ -56,6 +57,8 @@ export default function NuevoPartidoForm({
   ]);
   const [votar, setVotar] = useState<VotarEnPartido>({ mvp: true, peor: true });
   const jugado = modo === "jugado";
+  // Los goles de los jugadores suman más que el resultado (lo informa GolesFields).
+  const [golesNoCierran, setGolesNoCierran] = useState(false);
   const nombres: [string, string] = interno
     ? [nombresEquipos[0].trim() || "Equipo 1", nombresEquipos[1].trim() || "Equipo 2"]
     : ["Nosotros", rival.trim() || "Rival"];
@@ -135,7 +138,7 @@ export default function NuevoPartidoForm({
             type="text"
             name="rival"
             required
-            placeholder="Contra quién juegan"
+            placeholder={jugado ? "Contra quién jugaron" : "Contra quién juegan"}
             value={rival}
             onChange={(e) => setRival(e.target.value)}
           />
@@ -196,7 +199,13 @@ export default function NuevoPartidoForm({
 
       {jugado && (
         <>
-          <GolesFields jugadores={jugadores} equipos={equipos} nombres={nombres} interno={interno} />
+          <GolesFields
+            jugadores={jugadores}
+            equipos={equipos}
+            nombres={nombres}
+            interno={interno}
+            onNoCierra={setGolesNoCierran}
+          />
           <VotacionPartidoFields
             config={config}
             cantidadJugadores={Object.values(equipos).filter((e) => e === "1" || e === "2").length}
@@ -210,6 +219,7 @@ export default function NuevoPartidoForm({
       <SubmitButton
         pendingText={jugado ? "Guardando..." : "Creando..."}
         className="mt-2"
+        disabled={jugado && golesNoCierran}
       >
         {jugado ? "Guardar partido jugado" : "Crear partido"}
       </SubmitButton>
@@ -218,14 +228,17 @@ export default function NuevoPartidoForm({
 }
 
 /**
- * Goles de cada uno de los que jugaron (campos "goles-<id>") y de los
- * invitados no registrados de cada equipo ("goles_otros" y "goles_rival").
+ * Primero el resultado de cada equipo y después los goles de cada uno de los
+ * que jugaron (campos "goles-<id>"). Lo que no se reparte entre jugadores son
+ * los invitados no registrados de cada equipo: se calcula solo y va en
+ * "goles_otros" y "goles_rival".
  */
 function GolesFields({
   jugadores,
   equipos,
   nombres,
   interno,
+  onNoCierra,
 }: {
   jugadores: Profile[];
   equipos: Record<string, EquipoElegido>;
@@ -233,68 +246,68 @@ function GolesFields({
   nombres: [string, string];
   /** Entre ellos: el segundo equipo también tiene jugadores del grupo. */
   interno: boolean;
+  /** Avisa si los jugadores de algún equipo suman más goles que su resultado. */
+  onNoCierra: (noCierra: boolean) => void;
 }) {
   const [goles, setGoles] = useState<Record<string, number>>({});
-  const [golesOtros, setGolesOtros] = useState(0);
-  const [golesRival, setGolesRival] = useState(0);
+  const [resultado1, setResultado1] = useState(0);
+  const [resultado2, setResultado2] = useState(0);
 
-  const delEquipo = (e: "1" | "2") =>
-    jugadores.filter((j) => equipos[j.id] === e);
-  const total = (e: "1" | "2", invitados: number) =>
-    delEquipo(e).reduce((suma, j) => suma + (goles[j.id] ?? 0), 0) + invitados;
+  const delEquipo = (e: "1" | "2") => jugadores.filter((j) => equipos[j.id] === e);
+  const deJugadores = (e: "1" | "2") => delEquipo(e).reduce((suma, j) => suma + (goles[j.id] ?? 0), 0);
+  const suma1 = deJugadores("1");
+  const suma2 = deJugadores("2");
+  const noCierra = suma1 > resultado1 || suma2 > resultado2;
 
-  const equipo = (
-    e: "1" | "2",
-    titulo: string,
-    invitados: number,
-    setInvitados: (v: number) => void,
-  ) => (
-    <div className="flex flex-col divide-y divide-border rounded-xl border border-border bg-white/5">
-      <p className="flex items-center gap-2 px-3.5 py-2 text-xs font-semibold text-zinc-400">
-        <IconGoal
-          className={`h-4 w-4 ${e === "1" ? "text-primary-400" : "text-gold-400"}`}
-        />{" "}
-        {titulo}
-      </p>
-      {delEquipo(e).map((j) => (
-        <GolesRow
-          key={j.id}
-          name={`goles-${j.id}`}
-          label={j.apodo}
-          value={goles[j.id] ?? 0}
-          onChange={(v) => setGoles((prev) => ({ ...prev, [j.id]: v }))}
-        />
-      ))}
-      <GolesRow
-        name={e === "1" ? "goles_otros" : "goles_rival"}
-        label="Invitados no registrados"
-        detalle="No cuentan para la tabla"
-        value={invitados}
-        onChange={setInvitados}
-      />
+  useEffect(() => {
+    onNoCierra(noCierra);
+  }, [noCierra, onNoCierra]);
+
+  const equipo = (e: "1" | "2", titulo: string, suma: number, resultado: number) => (
+    <div>
+      <div className="flex flex-col divide-y divide-border rounded-xl border border-border bg-white/5">
+        <p className="flex items-center gap-2 px-3.5 py-2 text-xs font-semibold text-zinc-400">
+          <IconGoal className={`h-4 w-4 ${e === "1" ? "text-primary-400" : "text-gold-400"}`} /> {titulo}
+        </p>
+        {delEquipo(e).map((j) => (
+          <GolesRow
+            key={j.id}
+            name={`goles-${j.id}`}
+            label={j.apodo}
+            value={goles[j.id] ?? 0}
+            onChange={(v) => setGoles((prev) => ({ ...prev, [j.id]: v }))}
+          />
+        ))}
+        <div className="flex items-center justify-between gap-3 px-3.5 py-2">
+          <span className="min-w-0 text-sm text-zinc-500">
+            Otros <span className="block text-xs text-zinc-600">Invitados no registrados; no cuentan para la tabla</span>
+          </span>
+          <span className="text-lg font-bold tabular-nums text-zinc-300">{Math.max(0, resultado - suma)}</span>
+        </div>
+      </div>
+      <RepartoGoles repartidos={suma} total={resultado} />
     </div>
   );
 
   return (
     <div>
-      <p className="mb-2 text-sm font-medium text-zinc-300">Goles</p>
-      <Marcador
-        golesNosotros={total("1", golesOtros)}
-        golesRival={total("2", golesRival)}
+      <p className="mb-2 text-sm font-medium text-zinc-300">Resultado y goles</p>
+      <MarcadorEditable
         nosotros={nombres[0]}
         rival={nombres[1]}
+        golesNosotros={resultado1}
+        golesRival={resultado2}
+        onChangeNosotros={setResultado1}
+        onChangeRival={setResultado2}
         className="mb-4 mt-1"
       />
+      {/* Lo que no se reparte entre jugadores: lo calcula el form y lo manda el servidor igual que antes. */}
+      <input type="hidden" name="goles_otros" value={Math.max(0, resultado1 - suma1)} />
+      <input type="hidden" name="goles_rival" value={Math.max(0, resultado2 - suma2)} />
       <div className="flex flex-col gap-3">
-        {equipo("1", nombres[0], golesOtros, setGolesOtros)}
-        {interno ? (
-          equipo("2", nombres[1], golesRival, setGolesRival)
-        ) : (
-          // Contra otro equipo: solo cuántos goles hizo el rival.
-          <div className="rounded-xl border border-border bg-white/5">
-            <GolesRow name="goles_rival" label={`Goles de ${nombres[1]}`} value={golesRival} onChange={setGolesRival} />
-          </div>
-        )}
+        {equipo("1", nombres[0], suma1, resultado1)}
+        {/* Contra otro equipo no hay lista del segundo: su resultado son todos sus goles. */}
+        {interno && equipo("2", nombres[1], suma2, resultado2)}
       </div>
     </div>
   );

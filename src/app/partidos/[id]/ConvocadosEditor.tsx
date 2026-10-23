@@ -9,7 +9,7 @@ import Button from "@/components/ui/Button";
 import Avatar from "@/components/ui/Avatar";
 import { actualizarConvocados } from "@/lib/actions/partidos";
 import { IconClose } from "@/components/icons";
-import { RespuestaSelect, ResumenRespuestas } from "./Confirmacion";
+import { RespuestaAdmin, ResumenRespuestas } from "./Confirmacion";
 import NombresEquipos from "@/components/NombresEquipos";
 import { Input } from "@/components/ui/Input";
 
@@ -261,7 +261,7 @@ export default function ConvocadosEditor({
                         )}
                       </div>
                       {respuestas?.[jugador.id] && !exMiembros.has(jugador.id) && (
-                        <RespuestaSelect
+                        <RespuestaAdmin
                           // Si la respuesta cambia desde otro lado, arranca de nuevo con la nueva.
                           key={respuestas[jugador.id]}
                           partidoId={partidoId}

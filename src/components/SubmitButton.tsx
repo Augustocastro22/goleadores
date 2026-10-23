@@ -11,12 +11,14 @@ export default function SubmitButton({
   variant,
   size,
   className,
+  disabled = false,
 }: {
   children: React.ReactNode;
   pendingText: string;
   variant?: ButtonVariant;
   size?: ButtonSize;
   className?: string;
+  disabled?: boolean;
 }) {
   // useFormStatus cubre los `<form action>` comunes; el contexto, los ActionForm
   // (que envían desde onSubmit y por eso useFormStatus no los ve).
@@ -26,7 +28,7 @@ export default function SubmitButton({
   // En un form de edición sin cambios no hay nada para guardar.
   const sinCambios = useContext(ActionFormSinCambiosContext);
   return (
-    <Button type="submit" variant={variant} size={size} className={className} disabled={pending || sinCambios}>
+    <Button type="submit" variant={variant} size={size} className={className} disabled={pending || sinCambios || disabled}>
       {pending ? pendingText : children}
     </Button>
   );

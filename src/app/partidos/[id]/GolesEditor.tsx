@@ -8,6 +8,8 @@ import Button from "@/components/ui/Button";
 import { IconGoal } from "@/components/icons";
 import Marcador from "@/components/Marcador";
 import GolesInput from "@/components/GolesInput";
+import MarcadorEditable from "@/components/MarcadorEditable";
+import RepartoGoles from "@/components/RepartoGoles";
 import { guardarGolesPartido } from "@/lib/actions/partidos";
 import VotacionPartidoFields, { type VotarEnPartido } from "@/components/VotacionPartidoFields";
 import type { AppConfig } from "@/lib/config";
@@ -78,8 +80,17 @@ export default function GolesEditor({
     for (const j of [...equipo1, ...equipo2]) inicial[j.jugadorId] = j.goles;
     return inicial;
   });
-  const [golesOtros, setGolesOtros] = useState(golesOtrosInit);
-  const [golesRival, setGolesRival] = useState(golesRivalInit);
+  // El resultado de cada equipo se carga primero; los goles de los jugadores se reparten adentro de él
+  // y lo que no se reparte queda en "Otros" (invitados, que no cuentan para la tabla).
+  const sumaEquipo = (lista: Jugador[]) => lista.reduce((total, j) => total + j.goles, 0);
+  const [resultado1, setResultado1] = useState(() => golesOtrosInit + sumaEquipo(equipo1));
+  const [resultado2, setResultado2] = useState(() => golesRivalInit + sumaEquipo(equipo2));
+  // Lo último guardado: para saber si hay algo que guardar al editar un partido ya cargado.
+  const [guardado, setGuardado] = useState(() => ({
+    goles: JSON.stringify([...equipo1, ...equipo2].map((j) => [j.jugadorId, j.goles])),
+    resultado1: golesOtrosInit + sumaEquipo(equipo1),
+    resultado2: golesRivalInit + sumaEquipo(equipo2),
+  }));
   const [votar, setVotar] = useState<VotarEnPartido>({ mvp: true, peor: true });
   const [editando, setEditando] = useState(isAdmin && !jugado);
   const [saving, setSaving] = useState(false);
@@ -89,11 +100,18 @@ export default function GolesEditor({
     () => equipo1.reduce((total, j) => total + (goles[j.jugadorId] ?? 0), 0),
     [equipo1, goles]
   );
-  const golesEquipo1 = golesDeJugadores + golesOtros;
-  const golesEquipo2 = useMemo(
-    () => equipo2.reduce((total, j) => total + (goles[j.jugadorId] ?? 0), 0) + golesRival,
-    [equipo2, goles, golesRival]
+  const golesDeJugadores2 = useMemo(
+    () => equipo2.reduce((total, j) => total + (goles[j.jugadorId] ?? 0), 0),
+    [equipo2, goles]
   );
+  // Lo que queda sin repartir va a "Otros"; si los jugadores suman de más, el resultado no cierra.
+  const golesOtros = Math.max(0, resultado1 - golesDeJugadores);
+  const golesRival = Math.max(0, resultado2 - golesDeJugadores2);
+  const deMas1 = golesDeJugadores - resultado1;
+  const deMas2 = golesDeJugadores2 - resultado2;
+  const noCierra = !esDesafio && (deMas1 > 0 || deMas2 > 0);
+  const golesEquipo1 = resultado1;
+  const golesEquipo2 = resultado2;
 
   // En un desafío: lo que no suman los jugadores son "otros".
   const otrosDesafio =
@@ -104,6 +122,13 @@ export default function GolesEditor({
   // Leyendo, primero los que hicieron goles; editando, el orden de siempre.
   const ordenar = (lista: Jugador[]) =>
     editando ? lista : [...lista].sort((a, b) => (goles[b.jugadorId] ?? 0) - (goles[a.jugadorId] ?? 0));
+
+  const golesActuales = JSON.stringify([...equipo1, ...equipo2].map((j) => [j.jugadorId, goles[j.jugadorId] ?? 0]));
+  const sinCambios =
+    jugado &&
+    golesActuales === guardado.goles &&
+    resultado1 === guardado.resultado1 &&
+    resultado2 === guardado.resultado2;
 
   async function handleGuardar() {
     setSaving(true);
@@ -120,6 +145,7 @@ export default function GolesEditor({
       setMessage({ type: "error", text: result.error });
     } else {
       setMessage({ type: "ok", text: "Goles guardados." });
+      setGuardado({ goles: golesActuales, resultado1, resultado2 });
       if (jugado) setEditando(false);
       router.refresh();
     }
@@ -133,7 +159,19 @@ export default function GolesEditor({
           <span className="truncate">{lugar}</span>
         </div>
         {!esDesafio ? (
-          <Marcador golesNosotros={golesEquipo1} golesRival={golesEquipo2} nosotros={nosotros} rival={rival} className="mt-4" />
+          editando ? (
+            <MarcadorEditable
+              nosotros={nosotros}
+              rival={rival}
+              golesNosotros={resultado1}
+              golesRival={resultado2}
+              onChangeNosotros={setResultado1}
+              onChangeRival={setResultado2}
+              className="mt-4"
+            />
+          ) : (
+            <Marcador golesNosotros={golesEquipo1} golesRival={golesEquipo2} nosotros={nosotros} rival={rival} className="mt-4" />
+          )
         ) : marcadorDesafio.mios != null && marcadorDesafio.rival != null ? (
           <Marcador golesNosotros={marcadorDesafio.mios} golesRival={marcadorDesafio.rival} rival={rival} className="mt-4" />
         ) : (
@@ -165,9 +203,10 @@ export default function GolesEditor({
               <span className="text-lg font-bold tabular-nums text-white">{otrosDesafio}</span>
             </div>
           ) : (
-            <InvitadosRow editable={editando} value={golesOtros} onChange={setGolesOtros} />
+            <OtrosRow mostrarSiempre={editando} value={golesOtros} />
           )}
         </Card>
+        {!esDesafio && editando && <RepartoGoles repartidos={golesDeJugadores} total={resultado1} />}
         {esDesafio && marcadorDesafio.mios != null && !golesDeMas && otrosDesafio > 0 && isAdmin && (
           <p className="mt-2 text-sm text-gold-400">
             {otrosDesafio === 1 ? "Queda 1 gol" : `Quedan ${otrosDesafio} goles`} en Otros: si {otrosDesafio === 1 ? "lo hizo" : "los hizo"} alguien
@@ -184,7 +223,7 @@ export default function GolesEditor({
 
       {/* Contra un equipo de afuera (nadie del grupo en el Equipo 2) sus goles ya están en el
           marcador: la lista vacía solo se muestra para cargarlos. */}
-      {!esDesafio && (editando || equipo2.length > 0) && (
+      {!esDesafio && (interno || equipo2.length > 0) && (
         <div>
           <h2 className="mb-3 flex items-center gap-2 text-lg font-bold text-white">
             <IconGoal className="h-5 w-5 text-gold-400" /> {interno ? `Goles · ${rival}` : `Goles de ${rival}`}
@@ -202,13 +241,9 @@ export default function GolesEditor({
                 onChange={(v) => setGoles((prev) => ({ ...prev, [j.jugadorId]: v }))}
               />
             ))}
-            <InvitadosRow
-              editable={editando}
-              value={golesRival}
-              onChange={setGolesRival}
-              label={interno || equipo2.length > 0 ? undefined : "Goles"}
-            />
+            <OtrosRow mostrarSiempre={editando} value={golesRival} />
           </Card>
+          {editando && equipo2.length > 0 && <RepartoGoles repartidos={golesDeJugadores2} total={resultado2} />}
         </div>
       )}
 
@@ -233,7 +268,7 @@ export default function GolesEditor({
           <Button
             type="button"
             onClick={handleGuardar}
-            disabled={saving || esperandoResultado || golesDeMas}
+            disabled={saving || esperandoResultado || golesDeMas || noCierra || sinCambios}
             className="w-full"
           >
             {saving ? "Guardando..." : "Guardar goles"}
@@ -303,34 +338,16 @@ function GolesLectura({ goles }: { goles: number }) {
   );
 }
 
-function InvitadosRow({
-  editable,
-  value,
-  onChange,
-  label,
-}: {
-  editable: boolean;
-  value: number;
-  onChange: (v: number) => void;
-  /** Contra un rival de afuera son todos sus goles: "Goles" en vez de "Invitados". */
-  label?: string;
-}) {
-  // Leyendo, sin goles de invitados no hace falta la fila.
-  if (!editable && value === 0) return null;
+/** Los goles que no se repartieron entre jugadores: invitados o de alguien que no está cargado. Se calculan solos. */
+function OtrosRow({ mostrarSiempre, value }: { mostrarSiempre: boolean; value: number }) {
+  // Leyendo, sin goles de otros no hace falta la fila.
+  if (!mostrarSiempre && value === 0) return null;
   return (
     <div className="flex items-center justify-between gap-3 px-4 py-3">
-      {label ? (
-        <span className="text-sm text-zinc-300">{label}</span>
-      ) : (
-        <span className="text-sm text-zinc-500">
-          Invitados no registrados <span className="text-zinc-600">(no cuentan para la tabla)</span>
-        </span>
-      )}
-      {editable ? (
-        <GolesInput value={value} onChange={onChange} />
-      ) : (
-        <GolesLectura goles={value} />
-      )}
+      <span className="text-sm text-zinc-500">
+        Otros <span className="text-zinc-600">(invitados no registrados; no cuentan para la tabla)</span>
+      </span>
+      <GolesLectura goles={value} />
     </div>
   );
 }

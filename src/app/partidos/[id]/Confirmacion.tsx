@@ -201,6 +201,40 @@ export function RespuestaSelect({
 }
 
 /**
+ * La respuesta de un convocado vista por el admin. Si el convocado ya dijo si
+ * juega se muestra para leer: pisarla es la excepción (se lo avisó por otro
+ * lado), así que cambiarla pide un toque en "Cambiar". Si no respondió, el
+ * selector queda a mano para que la defina.
+ */
+export function RespuestaAdmin({
+  partidoId,
+  jugadorId,
+  respuesta,
+}: {
+  partidoId: string;
+  jugadorId: string;
+  respuesta: Respuesta;
+}) {
+  const [cambiando, setCambiando] = useState(false);
+
+  if (respuesta === "pendiente" || cambiando) {
+    return <RespuestaSelect partidoId={partidoId} jugadorId={jugadorId} respuesta={respuesta} />;
+  }
+  return (
+    <span className="flex shrink-0 items-center gap-2">
+      <RespuestaBadge respuesta={respuesta} />
+      <button
+        type="button"
+        onClick={() => setCambiando(true)}
+        className="text-xs text-zinc-500 transition hover:text-white"
+      >
+        Cambiar
+      </button>
+    </span>
+  );
+}
+
+/**
  * Para el admin, antes de cargar el resultado: los que no respondieron, para
  * definir si jugaron o no.
  */

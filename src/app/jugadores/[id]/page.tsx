@@ -3,8 +3,7 @@ import { notFound } from "next/navigation";
 import { ComponentType, SVGProps } from "react";
 import { requireGrupo } from "@/lib/grupo";
 import { getConfig, nombresDelPartido } from "@/lib/config";
-import { votacionCerrada } from "@/lib/votacion";
-import type { EstadoVotacion, Profile, RankingRow, Rol } from "@/lib/types";
+import type { Profile, RankingRow, Rol } from "@/lib/types";
 import { calcularResultado, RESULTADO_CLASS, RESULTADO_PLURAL, type Resultado } from "@/lib/resultado";
 import Card from "@/components/ui/Card";
 import Avatar from "@/components/ui/Avatar";
@@ -156,50 +155,44 @@ export default async function JugadorDetallePage({
   const totalPartidosGrupo = (todosPartidosRes.data ?? []).length;
   const presenciaPerfecta = totalPartidosGrupo > 0 && partidosJugados === totalPartidosGrupo;
 
-  // Racha de MVP: partidos consecutivos (propios, con votación cerrada) elegido Mejor Jugador.
-  const misPartidosAsc = [...misPartidos].sort((a, b) => a.partidos.fecha.localeCompare(b.partidos.fecha));
-  const fueMvpPorPartido = await Promise.all(
-    (votaMvp ? misPartidosAsc : []).map(async (mp) => {
-      if (!mp.partidos.con_votacion || !mp.partidos.con_mvp) return false;
-      const { data: estado } = await supabase
-        .rpc("get_estado_votacion", { p_partido_id: mp.partido_id })
-        .single<EstadoVotacion>();
-      const cerrada = votacionCerrada({
-        cierraEn: mp.partidos.votacion_cierra_en,
-        totalParticipantes: estado?.total_participantes ?? 0,
-        votosMvp: estado?.votos_mvp ?? 0,
-        votosPeor: estado?.votos_peor ?? 0,
-        conMvp: mp.partidos.con_mvp,
-        conPeor: mp.partidos.con_peor,
-      });
-      if (!cerrada) return false;
-      const { data: ganadores } = await supabase.rpc("get_ganadores_votacion", {
-        p_partido_id: mp.partido_id,
-        p_tipo: "MVP",
-      });
-      return ((ganadores ?? []) as RankingRow[]).some((g) => g.jugador_id === id);
-    })
-  );
+  // MVP: el nivel más alto de veces elegido Mejor Jugador (no hace falta que sean seguidas).
+  const nivelMvp = votaMvp ? ([10, 5].find((n) => vecesMvp >= n) ?? 0) : 0;
 
-  let rachaMvpActual = 0;
-  let rachaMvpMax = 0;
-  for (const fueMvp of fueMvpPorPartido) {
-    if (fueMvp) {
-      rachaMvpActual += 1;
-      rachaMvpMax = Math.max(rachaMvpMax, rachaMvpActual);
-    } else {
-      rachaMvpActual = 0;
-    }
-  }
+  // Hat-trick: partidos con 3 o más goles propios.
+  const hatTricks = misPartidos.filter((mp) => mp.goles >= 3).length;
+  const maxGolesEnUnPartido = Math.max(0, ...misPartidos.map((mp) => mp.goles));
+
+  // Veterano: el nivel más alto de partidos jugados que alcanzó.
+  const nivelVeterano = [100, 50, 25].find((n) => partidosJugados >= n) ?? 0;
+
+  // Goleador del grupo: tiene la mayor cantidad de goles (empatado cuenta).
+  const maxGolesGrupo = Math.max(0, ...goleadores.map((r) => r.goles ?? 0));
+  const esGoleadorDelGrupo = goles > 0 && goles === maxGolesGrupo;
 
   const logrosCandidatos: (Logro | null)[] = [
+    esGoleadorDelGrupo
+      ? { icon: IconGoal, titulo: "Goleador del grupo", detalle: `Máximo goleador del grupo, con ${goles} goles.` }
+      : null,
+    hatTricks > 0
+      ? {
+          icon: IconGoal,
+          titulo: "Hat-trick",
+          detalle:
+            hatTricks === 1
+              ? `Metió ${maxGolesEnUnPartido} goles en un partido.`
+              : `${hatTricks} partidos con 3 goles o más (récord: ${maxGolesEnUnPartido}).`,
+        }
+      : null,
+    nivelVeterano > 0
+      ? { icon: IconUsers, titulo: "Veterano", detalle: `Jugó ${nivelVeterano} partidos o más con el grupo.` }
+      : null,
     votaPeor && partidosJugados > 0 && vecesPeor === 0
       ? { icon: IconThumbsDown, titulo: "Nunca la remó", detalle: "Nunca fue elegido Peor Jugador." }
       : null,
     rachaGolMax >= 3
       ? {
           icon: IconGoal,
-          titulo: "Racha goleadora",
+          titulo: "Mejor racha goleadora",
           detalle: `${rachaGolMax} partidos seguidos convirtiendo gol.`,
         }
       : null,
@@ -216,11 +209,11 @@ export default async function JugadorDetallePage({
             detalle: `${rachaPresenciaMax} partidos seguidos sin faltar.`,
           }
         : null,
-    rachaMvpMax >= 3
+    nivelMvp > 0
       ? {
           icon: IconTrophy,
-          titulo: "Racha de MVP",
-          detalle: `${rachaMvpMax} partidos seguidos elegido Mejor Jugador.`,
+          titulo: nivelMvp >= 10 ? "Crack del grupo" : "Figura",
+          detalle: `Elegido Mejor Jugador ${nivelMvp} veces o más.`,
         }
       : null,
   ];
