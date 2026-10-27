@@ -127,7 +127,7 @@ export default function BloqueosDelDia({
                       onClick={() => setEdicion({ ...edicion, todoElDia: op.valor })}
                       className={`flex-1 rounded-lg border px-3 py-1.5 text-xs font-semibold transition ${
                         edicion.todoElDia === op.valor
-                          ? "border-primary-500/40 bg-primary-500/15 text-primary-400"
+                          ? "border-danger-500/40 bg-danger-500/15 text-danger-400"
                           : "border-border bg-white/5 text-zinc-400 hover:text-white"
                       }`}
                     >

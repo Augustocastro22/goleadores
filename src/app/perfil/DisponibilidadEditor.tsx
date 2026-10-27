@@ -442,7 +442,7 @@ export default function DisponibilidadEditor({
                     onClick={() => setTodoElDia(op.valor)}
                     className={`flex-1 rounded-lg border px-3 py-1.5 text-xs font-semibold transition ${
                       todoElDia === op.valor
-                        ? "border-primary-500/40 bg-primary-500/15 text-primary-400"
+                        ? "border-danger-500/40 bg-danger-500/15 text-danger-400"
                         : "border-border bg-white/5 text-zinc-400 hover:text-white"
                     }`}
                   >
@@ -502,7 +502,7 @@ export default function DisponibilidadEditor({
                   <button
                     type="button"
                     onClick={() => setHorarios((hs) => [...hs, HORARIO_VACIO])}
-                    className="flex items-center gap-1.5 self-start text-xs font-semibold text-primary-400 hover:text-primary-300"
+                    className="flex items-center gap-1.5 self-start text-xs font-semibold text-danger-400 hover:text-white"
                   >
                     <IconPlus className="h-3.5 w-3.5" /> Agregar otro horario
                   </button>
