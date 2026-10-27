@@ -37,12 +37,13 @@ export default async function PerfilPage() {
     <div className="mx-auto max-w-sm">
       <h1 className="mb-6 text-2xl font-extrabold tracking-tight text-white">Mi perfil</h1>
       <div className="flex flex-col gap-5">
-        <PerfilForm profile={profile} rol={grupo?.rol ?? null} />
         <DisponibilidadEditor
           bloqueosIniciales={bloqueos ?? []}
           grupos={grupos.map((g) => ({ id: g.id, nombre: g.nombre }))}
           hoy={hoy}
+          hayGrupo={!!grupo}
         />
+        <PerfilForm profile={profile} rol={grupo?.rol ?? null} />
         <PushSubscribe />
         <EliminarCuenta />
         <a

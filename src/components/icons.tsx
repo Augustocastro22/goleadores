@@ -181,3 +181,14 @@ export function IconShare(props: SVGProps<SVGSVGElement>) {
     </svg>
   );
 }
+
+export function IconAvailability(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" strokeWidth={1.8} stroke="currentColor" {...props}>
+      <rect x="3.5" y="4.5" width="17" height="16" rx="3" />
+      <path d="M3.5 9.5h17" strokeLinecap="round" />
+      <path d="M8 3v3M16 3v3" strokeLinecap="round" />
+      <path d="m9 15 2 2 4-4" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}

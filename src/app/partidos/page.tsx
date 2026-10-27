@@ -7,6 +7,7 @@ import Badge from "@/components/ui/Badge";
 import { buttonClass } from "@/components/ui/Button";
 import { IconChevronRight, IconPlus } from "@/components/icons";
 import PushBanner from "@/components/PushBanner";
+import DisponibilidadBanner from "@/components/DisponibilidadBanner";
 import { hoyArgentina } from "@/lib/confirmacion";
 import { desafiosConGolesDeMas, esperaMiRespuesta, type DesafioVista } from "@/lib/desafios";
 import { esPartidoInterno, getConfig, nombresDelPartido } from "@/lib/config";
@@ -14,9 +15,9 @@ import { sugerirModoJuego } from "@/lib/modo-juego";
 import PreguntaModoJuego from "@/components/PreguntaModoJuego";
 
 export default async function PartidosPage() {
-  const { supabase, grupo } = await requireGrupo();
+  const { supabase, grupo, user } = await requireGrupo();
 
-  const [{ data: partidos }, { data: desafiosRaw }, config] = await Promise.all([
+  const [{ data: partidos }, { data: desafiosRaw }, config, { count: misBloqueos }] = await Promise.all([
     supabase
       .from("partidos")
       .select("*")
@@ -25,6 +26,10 @@ export default async function PartidosPage() {
       .returns<Partido[]>(),
     supabase.rpc("get_desafios", { p_grupo_id: grupo.id }),
     getConfig(supabase, grupo.id),
+    supabase
+      .from("bloqueos_disponibilidad")
+      .select("id", { count: "exact", head: true })
+      .eq("jugador_id", user.id),
   ]);
   // La pregunta única "¿Cómo juegan?" a los admins de un grupo que todavía no eligió.
   const preguntarModo = grupo.rol === "admin" && config.modo_juego === null;
@@ -91,6 +96,7 @@ export default async function PartidosPage() {
   return (
     <div>
       <PushBanner />
+      {misBloqueos === 0 && <DisponibilidadBanner />}
       {preguntarModo && <PreguntaModoJuego grupoId={grupo.id} sugerido={sugerido} />}
 
       <div className="mb-6 flex items-center justify-between">

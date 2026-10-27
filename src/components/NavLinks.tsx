@@ -7,6 +7,7 @@ const links = [
   { href: "/partidos", label: "Partidos" },
   { href: "/jugadores", label: "Jugadores" },
   { href: "/estadisticas", label: "Estadísticas" },
+  { href: "/disponibilidad", label: "Disponibilidad" },
   { href: "/encuestas", label: "Encuestas" },
 ];
 

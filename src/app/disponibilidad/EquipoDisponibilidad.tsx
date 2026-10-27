@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useMemo, useState } from "react";
 import type { Bloqueo } from "@/lib/types";
 import { AGENDA_DESDE, AGENDA_HASTA, bloqueosEnHora } from "@/lib/disponibilidad";
@@ -45,10 +46,12 @@ export default function EquipoDisponibilidad({
   jugadores,
   bloqueos,
   hoy,
+  yoId,
 }: {
   jugadores: Jugador[];
   bloqueos: Bloqueo[];
   hoy: string;
+  yoId: string;
 }) {
   const [lunes, setLunes] = useState(lunesDe(hoy));
   const [necesarios, setNecesarios] = useState(10);
@@ -280,7 +283,15 @@ export default function EquipoDisponibilidad({
           <p className="text-sm font-semibold text-white">
             Faltan cargar su disponibilidad ({sinCargar.length} de {total})
           </p>
-          <p className="text-xs text-zinc-500">Cuanta más gente la cargue, más confiable es esta grilla.</p>
+          <p className="text-xs text-zinc-500">
+            Cuentan como que pueden en todo momento hasta que marquen cuándo no. Cuanta más gente lo
+            cargue, más confiable es esta grilla.
+          </p>
+          {sinCargar.some((j) => j.id === yoId) && (
+            <Link href="/perfil" className="text-sm font-semibold text-primary-400 hover:text-primary-300">
+              Cargar la mía →
+            </Link>
+          )}
           <div className="flex flex-wrap gap-1.5">
             {sinCargar.map((j) => (
               <span key={j.id} className="rounded-full bg-white/5 px-2.5 py-1 text-xs text-zinc-300">

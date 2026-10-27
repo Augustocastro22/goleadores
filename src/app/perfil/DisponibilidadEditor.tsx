@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 import type { Bloqueo } from "@/lib/types";
 import {
@@ -72,10 +73,12 @@ export default function DisponibilidadEditor({
   bloqueosIniciales,
   grupos,
   hoy,
+  hayGrupo,
 }: {
   bloqueosIniciales: Bloqueo[];
   grupos: { id: string; nombre: string }[];
   hoy: string;
+  hayGrupo: boolean;
 }) {
   const nombreGrupo = new Map(grupos.map((g) => [g.id, g.nombre]));
   const [anioHoy, mesHoy] = [Number(hoy.slice(0, 4)), Number(hoy.slice(5, 7)) - 1];
@@ -237,12 +240,20 @@ export default function DisponibilidadEditor({
   return (
     <Card className="flex flex-col gap-4 p-6">
       <div>
-        <p className="font-semibold text-white">Disponibilidad</p>
+        <p className="font-semibold text-white">¿Cuándo podés jugar?</p>
         <p className="mt-1 text-xs text-zinc-500">
           Marcá cuándo no podés jugar: en el mes, días enteros o de un día a otro; en la semana,
-          las horas. Es solo un aviso para el admin al armar la convocatoria, no te saca solo del
-          partido.
+          las horas. El grupo ve las horas (no la nota) para elegir un horario que le sirva a
+          todos, y es solo un aviso: no te saca solo del partido.
         </p>
+        {hayGrupo && (
+          <Link
+            href="/disponibilidad"
+            className="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-primary-400 hover:text-primary-300"
+          >
+            Ver la disponibilidad del equipo <IconChevronRight className="h-3.5 w-3.5" />
+          </Link>
+        )}
       </div>
 
       <div className="inline-flex self-start rounded-xl border border-border bg-white/5 p-1">

@@ -3,12 +3,13 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
-import { IconMatches, IconPoll, IconStats, IconUsers } from "./icons";
+import { IconAvailability, IconMatches, IconPoll, IconStats, IconUsers } from "./icons";
 
 const items = [
   { href: "/partidos", label: "Partidos", Icon: IconMatches },
   { href: "/jugadores", label: "Jugadores", Icon: IconUsers },
   { href: "/estadisticas", label: "Stats", Icon: IconStats },
+  { href: "/disponibilidad", label: "Agenda", Icon: IconAvailability },
   { href: "/encuestas", label: "Encuestas", Icon: IconPoll },
 ];
 
