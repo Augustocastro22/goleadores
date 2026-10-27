@@ -31,5 +31,5 @@ as $$
     and (b.grupo_id is null or b.grupo_id = p_grupo_id);
 $$;
 
-revoke all on function public.get_disponibilidad_grupo(uuid) from public;
+revoke all on function public.get_disponibilidad_grupo(uuid) from public, anon;
 grant execute on function public.get_disponibilidad_grupo(uuid) to authenticated;
