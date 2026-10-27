@@ -54,7 +54,8 @@ export default function EquipoDisponibilidad({
   yoId: string;
 }) {
   const [lunes, setLunes] = useState(lunesDe(hoy));
-  const [necesarios, setNecesarios] = useState(10);
+  // Arranca pidiendo que puedan todos; se baja si hace falta (por ej. si no juegan todos).
+  const [necesarios, setNecesarios] = useState(jugadores.length);
   const [sel, setSel] = useState<{ fecha: string; hora: number } | null>(null);
 
   const dias = useMemo(() => Array.from({ length: 7 }, (_, i) => sumarDias(lunes, i)), [lunes]);
