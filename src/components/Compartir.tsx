@@ -111,6 +111,7 @@ export function HojaCompartir({ ruta, titulo, archivo, opciones, onCerrar }: Ima
   const extra = (opciones ?? []).map((o) => `&${o.param}=${encodeURIComponent(elegidas[o.param])}`).join("");
   const clave = `${formato}${extra}`;
   const [ajustesAbiertos, setAjustesAbiertos] = useState(false);
+  const [fondoAbierto, setFondoAbierto] = useState(false);
   // Una opción con una sola alternativa no se muestra: no hay nada que elegir.
   const conAlternativas = (opciones ?? []).filter((o) => o.items.length > 1);
   const paleta = (opciones ?? []).find((o) => o.modo === "paleta");
@@ -210,9 +211,14 @@ export function HojaCompartir({ ruta, titulo, archivo, opciones, onCerrar }: Ima
         </div>
 
         <div className="flex h-[34vh] items-center justify-center">
-          {lista ? (
+          {imagen && !error ? (
+            // Mientras se arma la nueva se sigue viendo la anterior, apagada: así no se vacía la vista en cada cambio.
             // eslint-disable-next-line @next/next/no-img-element -- es un blob recién generado, no una imagen del sitio
-            <img src={lista.url} alt="Vista previa" className="max-h-full max-w-full rounded-xl border border-border" />
+            <img
+              src={imagen.url}
+              alt="Vista previa"
+              className={`max-h-full max-w-full rounded-xl border border-border transition ${lista ? "" : "opacity-40"}`}
+            />
           ) : error ? (
             <p className="text-center text-sm text-danger-400">{error}</p>
           ) : (
@@ -222,38 +228,44 @@ export function HojaCompartir({ ruta, titulo, archivo, opciones, onCerrar }: Ima
           )}
         </div>
 
-        {/* Lo que se toca seguido, a la vista: el color (paleta) con el diseño, y qué mostrar (botones). */}
-        <div className="mt-2 flex flex-col gap-2">
-          {(paleta || chips) && (
-            <div className="flex items-center gap-2.5">
-              {paleta && <PuntoPaleta color={elegidas[paleta.param]} onElegir={(hex) => elegir(paleta, hex)} />}
-              {chips && (
-                <div className="flex-1">
-                  <Selector items={chips.items} actual={elegidas[chips.param]} onChange={(id) => elegir(chips, id)} />
-                </div>
-              )}
-            </div>
-          )}
-          {visibles.map((o) => (
-            <Selector key={o.param} items={o.items} actual={elegidas[o.param]} onChange={(id) => elegir(o, id)} />
-          ))}
-        </div>
+        {/* Lo que se toca seguido, a la vista: qué mostrar (botones). */}
+        {visibles.length > 0 && (
+          <div className="mt-2 flex flex-col gap-2">
+            {visibles.map((o) => (
+              <Selector key={o.param} items={o.items} actual={elegidas[o.param]} onChange={(id) => elegir(o, id)} />
+            ))}
+          </div>
+        )}
 
-        {/* Lo que casi nunca cambia, plegado: el formato (historia por defecto) y los ajustes. */}
+        {/* Lo que casi nunca cambia, plegado: el fondo (color y diseño), los ajustes y el formato (historia por defecto). */}
         <div className="mt-3 flex items-center justify-between gap-2">
-          {enAjustes.length > 0 ? (
-            <button
-              type="button"
-              onClick={() => setAjustesAbiertos((v) => !v)}
-              aria-expanded={ajustesAbiertos}
-              className="flex items-center gap-1 text-xs font-semibold text-zinc-400 transition hover:text-white"
-            >
-              Ajustes
-              <IconChevronRight className={`h-3.5 w-3.5 transition ${ajustesAbiertos ? "rotate-90" : ""}`} />
-            </button>
-          ) : (
-            <span />
-          )}
+          <div className="flex items-center gap-3">
+            {(paleta || chips) && (
+              <button
+                type="button"
+                onClick={() => setFondoAbierto((v) => !v)}
+                aria-expanded={fondoAbierto}
+                className="flex items-center gap-1.5 text-xs font-semibold text-zinc-400 transition hover:text-white"
+              >
+                {paleta && (
+                  <span className="h-3 w-3 rounded-full border border-white/20" style={{ backgroundColor: `#${elegidas[paleta.param]}` }} />
+                )}
+                Fondo
+                <IconChevronRight className={`h-3.5 w-3.5 transition ${fondoAbierto ? "rotate-90" : ""}`} />
+              </button>
+            )}
+            {enAjustes.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setAjustesAbiertos((v) => !v)}
+                aria-expanded={ajustesAbiertos}
+                className="flex items-center gap-1 text-xs font-semibold text-zinc-400 transition hover:text-white"
+              >
+                Ajustes
+                <IconChevronRight className={`h-3.5 w-3.5 transition ${ajustesAbiertos ? "rotate-90" : ""}`} />
+              </button>
+            )}
+          </div>
           <div className="flex rounded-lg border border-border bg-white/5 p-0.5">
             {FORMATOS.map((f) => (
               <button
@@ -269,6 +281,16 @@ export function HojaCompartir({ ruta, titulo, archivo, opciones, onCerrar }: Ima
             ))}
           </div>
         </div>
+        {fondoAbierto && (paleta || chips) && (
+          <div className="mt-2 flex items-center gap-2.5">
+            {paleta && <PuntoPaleta color={elegidas[paleta.param]} onElegir={(hex) => elegir(paleta, hex)} />}
+            {chips && (
+              <div className="flex-1">
+                <Selector items={chips.items} actual={elegidas[chips.param]} onChange={(id) => elegir(chips, id)} />
+              </div>
+            )}
+          </div>
+        )}
         {ajustesAbiertos && (
           <div className="mt-2 flex flex-col gap-2">
             {enAjustes.map((o) => (

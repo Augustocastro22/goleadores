@@ -28,20 +28,34 @@ export const SUPERFICIE = "rgba(255,255,255,0.06)";
 export const BORDE = "rgba(255,255,255,0.10)";
 
 /** Anton (OFL, Google Fonts): la tipografía condensada y pesada de los afiches. */
-export async function fuentesAfiche() {
-  const archivo = await readFile(join(process.cwd(), "src/lib/compartir/fonts/Anton-Regular.ttf"));
-  const data = archivo.buffer.slice(archivo.byteOffset, archivo.byteOffset + archivo.byteLength) as ArrayBuffer;
-  return [{ name: "Anton", data, weight: 400 as const, style: "normal" as const }];
+let fuenteAfiche: Promise<{ name: string; data: ArrayBuffer; weight: 400; style: "normal" }[]> | null = null;
+export function fuentesAfiche() {
+  // Se lee del disco una sola vez por instancia: cambiar color o diseño pide la imagen de nuevo.
+  fuenteAfiche ??= readFile(join(process.cwd(), "src/lib/compartir/fonts/Anton-Regular.ttf")).then((archivo) => {
+    const data = archivo.buffer.slice(archivo.byteOffset, archivo.byteOffset + archivo.byteLength) as ArrayBuffer;
+    return [{ name: "Anton", data, weight: 400 as const, style: "normal" as const }];
+  });
+  return fuenteAfiche;
 }
+
+/** Fotos ya bajadas: al probar colores y diseños se repiten las mismas, y bajarlas es lo más lento. */
+const FOTOS_VIGENCIA_MS = 10 * 60 * 1000;
+const FOTOS_MAXIMO = 200;
+const fotosBajadas = new Map<string, { valor: string; hasta: number }>();
 
 /** Una imagen (escudo, foto) como data URL; si no se puede bajar, null. */
 export async function comoDataUrl(url: string | null): Promise<string | null> {
   if (!url) return null;
+  const guardada = fotosBajadas.get(url);
+  if (guardada && guardada.hasta > Date.now()) return guardada.valor;
   try {
     const res = await fetch(url, { signal: AbortSignal.timeout(4000) });
     if (!res.ok) return null;
     const tipo = res.headers.get("content-type") ?? "image/png";
-    return `data:${tipo};base64,${Buffer.from(await res.arrayBuffer()).toString("base64")}`;
+    const valor = `data:${tipo};base64,${Buffer.from(await res.arrayBuffer()).toString("base64")}`;
+    if (fotosBajadas.size >= FOTOS_MAXIMO) fotosBajadas.delete(fotosBajadas.keys().next().value as string);
+    fotosBajadas.set(url, { valor, hasta: Date.now() + FOTOS_VIGENCIA_MS });
+    return valor;
   } catch {
     return null;
   }
