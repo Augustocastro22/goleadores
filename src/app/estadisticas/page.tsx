@@ -8,7 +8,8 @@ import Avatar from "@/components/ui/Avatar";
 import { IconGoal, IconThumbsDown, IconTrophy } from "@/components/icons";
 import { ComponentType, SVGProps } from "react";
 import GrupoLogo from "@/components/ui/GrupoLogo";
-import { BotonCompartir } from "@/components/Compartir";
+import { BotonCompartir, type Imagen } from "@/components/Compartir";
+import { OPCION_COLOR, OPCION_DISENO, OPCION_NOMBRES } from "@/lib/compartir/opciones";
 import { jugoDeLosDosTipos, leerFiltroPartidos, type FiltroPartidos } from "@/lib/tipos-partido";
 import { historialDesafios, type DesafioVista, type HistorialRival } from "@/lib/desafios";
 import { RESULTADO_CLASS, RESULTADO_PLURAL } from "@/lib/resultado";
@@ -98,6 +99,18 @@ export default async function EstadisticasPage({
           ruta: `/api/compartir?que=goleadores&grupo=${grupo.id}&filtro=${filtro}`,
           titulo: "Tabla de goleadores",
           archivo: "goleadores",
+          opciones: [
+            {
+              param: "estilo",
+              items: [
+                { id: "podio", label: "Podio" },
+                { id: "lista", label: "Lista" },
+              ],
+            },
+            OPCION_NOMBRES,
+            OPCION_COLOR,
+            OPCION_DISENO,
+          ],
         }}
         valueLabel="Goles"
         debajoDelTitulo={dosTipos ? <FiltroGoleadores actual={filtro} /> : undefined}
@@ -191,7 +204,7 @@ function RankingList({
   /** Algo entre el título y la tabla (el filtro de partidos de Goleadores). */
   debajoDelTitulo?: React.ReactNode;
   /** La imagen para compartir esta tabla (ver src/components/Compartir.tsx). */
-  compartir?: { ruta: string; titulo: string; archivo: string };
+  compartir?: Imagen;
   titulo: string;
   icon: ComponentType<SVGProps<SVGSVGElement>>;
   iconClassName: string;

@@ -13,6 +13,8 @@ import Card from "@/components/ui/Card";
 import Badge from "@/components/ui/Badge";
 import Avatar from "@/components/ui/Avatar";
 import ConfirmSubmitButton from "@/components/ConfirmSubmitButton";
+import { BotonCompartir } from "@/components/Compartir";
+import { OPCION_COLOR, OPCION_DISENO, OPCION_NOMBRES } from "@/lib/compartir/opciones";
 import { IconChevronRight } from "@/components/icons";
 import type { DesafioVista } from "@/lib/desafios";
 import { getCanchas, parecidas } from "@/lib/canchas";
@@ -220,8 +222,38 @@ export default async function PartidoDetailPage({
     goles: p.goles,
   });
 
+  // Para compartir: el resultado con los goles (si ya se jugó) y los convocados.
+  const compartir =
+    participantes.length > 0
+      ? {
+          ruta: `/api/compartir?que=partido&partido=${id}`,
+          titulo: partido.jugado ? "Resultado del partido" : "Convocados del partido",
+          archivo: partido.jugado ? "partido" : "convocados",
+          opciones: [
+            {
+              param: "vista",
+              items: partido.jugado
+                ? [
+                    { id: "resultado", label: "Resultado" },
+                    { id: "convocados", label: "Convocados" },
+                  ]
+                : [{ id: "convocados", label: "Convocados" }],
+            },
+            OPCION_NOMBRES,
+            OPCION_COLOR,
+            OPCION_DISENO,
+          ],
+        }
+      : null;
+
   return (
     <div className="flex flex-col gap-8">
+      {compartir && (
+        <div className="-mb-4 flex justify-end">
+          <BotonCompartir {...compartir} etiqueta="Compartir" />
+        </div>
+      )}
+
       {desafio && (
         <DesafioPanel
           desafio={desafio}
