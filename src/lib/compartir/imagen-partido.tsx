@@ -54,6 +54,8 @@ interface Columna {
   titulo: string | null;
   filas: JugadorPartido[];
   resto: number;
+  /** Goles de invitados: no son de ningún jugador, van como una nota al pie. */
+  otros: number;
 }
 
 /** Más pelotas que estas no entran en la fila: pasan a "pelota + número". */
@@ -130,16 +132,16 @@ export async function imagenPartido({
     else colorTitulo = "#e4e4e7";
   }
 
-  // Resultado: solo los que hicieron goles, con los de invitados ("Otros") al final de cada lado.
-  const goleadores = (lista: JugadorPartido[], otros: number) => {
-    const filas = lista.filter((j) => j.goles > 0).sort((a, b) => b.goles - a.goles);
-    return otros > 0 ? [...filas, { apodo: "Otros", nombre: "", fotoUrl: null, goles: otros }] : filas;
-  };
+  // Resultado: solo los que hicieron goles (los de invitados van aparte, como nota al pie).
+  const goleadores = (lista: JugadorPartido[]) =>
+    lista.filter((j) => j.goles > 0).sort((a, b) => b.goles - a.goles);
   // Convocados: por orden alfabético.
   const alfabetico = (lista: JugadorPartido[]) =>
     [...lista].sort((a, b) => etiqueta(a).localeCompare(etiqueta(b), "es"));
-  const lado1 = resultado ? goleadores(partido.equipo1, partido.otros1) : alfabetico(partido.equipo1);
-  const lado2 = resultado ? goleadores(partido.equipo2, partido.otros2) : alfabetico(partido.equipo2);
+  const lado1 = resultado ? goleadores(partido.equipo1) : alfabetico(partido.equipo1);
+  const lado2 = resultado ? goleadores(partido.equipo2) : alfabetico(partido.equipo2);
+  const otros1 = resultado ? partido.otros1 : 0;
+  const otros2 = resultado ? partido.otros2 : 0;
 
   const porColumna = resultado ? (historia ? 8 : 4) : historia ? 12 : 7;
   const recortar = (filas: JugadorPartido[], max: number) => ({
@@ -152,15 +154,16 @@ export async function imagenPartido({
     // Un solo equipo: la lista se parte en dos columnas para que entren más.
     const total = recortar(lado1, porColumna * 2);
     const mitad = Math.ceil(total.filas.length / 2);
-    columnas = [{ titulo: null, filas: total.filas.slice(0, mitad), resto: 0 }];
-    if (total.filas.length > mitad) columnas.push({ titulo: null, filas: total.filas.slice(mitad), resto: total.resto });
-    else columnas[0].resto = total.resto;
+    columnas = [{ titulo: null, filas: total.filas.slice(0, mitad), resto: 0, otros: 0 }];
+    if (total.filas.length > mitad) {
+      columnas.push({ titulo: null, filas: total.filas.slice(mitad), resto: total.resto, otros: 0 });
+    } else columnas[0].resto = total.resto;
   } else {
-    columnas = [{ titulo: partido.nosotros, ...recortar(lado1, porColumna) }];
-    if (dosEquipos) columnas.push({ titulo: partido.rival, ...recortar(lado2, porColumna) });
+    columnas = [{ titulo: partido.nosotros, ...recortar(lado1, porColumna), otros: otros1 }];
+    if (dosEquipos) columnas.push({ titulo: partido.rival, ...recortar(lado2, porColumna), otros: otros2 });
   }
   // Si solo un lado hizo goles, va esa columna sola, centrada.
-  if (resultado) columnas = columnas.filter((c) => c.filas.length > 0);
+  if (resultado) columnas = columnas.filter((c) => c.filas.length > 0 || c.otros > 0);
 
   // En historia la lista tiene que entrar entre las barras de Instagram: los renglones se achican si hay muchos.
   const maxFilas = Math.max(1, ...columnas.map((c) => c.filas.length));
@@ -323,6 +326,20 @@ export async function imagenPartido({
                   {resultado && subtitulo(columnas.length > 1 && c.titulo ? c.titulo : "Goleadores")}
                   {!resultado && c.titulo && subtitulo(c.titulo)}
                   {resultado ? golesColumna(c) : convocadosColumna(c, ci)}
+                  {c.otros > 0 && (
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: "center",
+                        fontSize: historia ? 28 : 22,
+                        color: GRIS_OSCURO,
+                        marginTop: historia ? 6 : 2,
+                      }}
+                    >
+                      {c.filas.length > 0 ? "+" : ""}
+                      {c.otros} {c.otros === 1 ? "gol de invitado" : "goles de invitados"}
+                    </div>
+                  )}
                   {c.resto > 0 && (
                     <div style={{ display: "flex", justifyContent: "center", fontSize: historia ? 28 : 22, color: GRIS }}>
                       +{c.resto} más
