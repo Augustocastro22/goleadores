@@ -195,7 +195,7 @@ export default function EquipoDisponibilidad({
           ))}
           {HORAS.map((h) => (
             <div key={h} className="contents">
-              <span className="pr-1 text-right text-[10px] leading-7 tabular-nums text-zinc-500">{h}</span>
+              <span className="pr-1 text-right text-[10px] leading-6 tabular-nums text-zinc-500">{h}</span>
               {dias.map((f) => {
                 const pueden = grilla.get(`${f}|${h}`) ?? 0;
                 const pasado = f < hoy;
@@ -208,21 +208,10 @@ export default function EquipoDisponibilidad({
                     disabled={pasado}
                     onClick={() => setSel({ fecha: f, hora: h })}
                     aria-label={`${etiquetaDia(f)} ${h} hs: pueden ${pueden} de ${total}`}
-                    style={
-                      pasado
-                        ? undefined
-                        : {
-                            backgroundColor: ok
-                              ? `rgba(16,185,129,${0.2 + 0.6 * (pueden / total)})`
-                              : `rgba(244,63,94,${0.08 + 0.22 * (1 - pueden / total)})`,
-                          }
-                    }
-                    className={`h-7 rounded text-[10px] font-semibold tabular-nums transition ${
-                      pasado ? "text-zinc-800" : ok ? "text-white" : "text-zinc-400"
+                    className={`h-6 rounded transition ${
+                      pasado ? "bg-transparent" : ok ? "bg-primary-500" : "bg-white/[0.06]"
                     } ${activo ? "ring-2 ring-white" : ""}`}
-                  >
-                    {pasado ? "" : pueden}
-                  </button>
+                  />
                 );
               })}
             </div>
@@ -231,12 +220,12 @@ export default function EquipoDisponibilidad({
 
         <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-zinc-500">
           <span className="flex items-center gap-1.5">
-            <span className="h-2.5 w-2.5 rounded-sm bg-primary-500/60" /> Llegan a {necesarios}
+            <span className="h-2.5 w-2.5 rounded-sm bg-primary-500" /> Llegan a {necesarios}
           </span>
           <span className="flex items-center gap-1.5">
-            <span className="h-2.5 w-2.5 rounded-sm bg-danger-500/25" /> Faltan jugadores
+            <span className="h-2.5 w-2.5 rounded-sm bg-white/[0.06]" /> No llegan
           </span>
-          <span>El número es cuántos pueden.</span>
+          <span>Tocá una casilla para ver quiénes pueden.</span>
         </div>
       </Card>
 
