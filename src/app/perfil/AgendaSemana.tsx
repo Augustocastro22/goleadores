@@ -159,7 +159,7 @@ export default function AgendaSemana({
     const color = bloqueada
       ? "bg-danger-500/35 text-danger-400"
       : marcada
-        ? "bg-primary-500/30 text-primary-400"
+        ? "bg-danger-500/10 text-danger-400 ring-1 ring-inset ring-danger-400"
         : "hover:bg-white/5";
     const forma =
       bloqueada || marcada
@@ -250,7 +250,7 @@ export default function AgendaSemana({
           <span className="h-2.5 w-2.5 rounded-sm bg-danger-500/50" /> No podés (guardado)
         </span>
         <span className="flex items-center gap-1.5">
-          <span className="h-2.5 w-2.5 rounded-sm bg-primary-500/50" /> Por guardar
+          <span className="h-2.5 w-2.5 rounded-sm bg-danger-500/10 ring-1 ring-inset ring-danger-400" /> Por guardar
         </span>
       </div>
 
@@ -267,7 +267,7 @@ export default function AgendaSemana({
       )}
 
       {hayMarcadas && (
-        <div className="flex flex-col gap-3 rounded-xl border border-primary-500/20 bg-primary-500/5 p-4">
+        <div className="flex flex-col gap-3 rounded-xl border border-danger-500/20 bg-danger-500/5 p-4">
           <div className="flex flex-col gap-0.5 text-sm">
             <span className="text-zinc-500">No puedo:</span>
             {[...marcadas.entries()]

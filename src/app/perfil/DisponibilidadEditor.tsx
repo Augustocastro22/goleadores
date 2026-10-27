@@ -350,7 +350,7 @@ export default function DisponibilidadEditor({
                   title={`Todos los ${DIAS_PLURAL[dia]}`}
                   className={`rounded-lg py-1 text-xs font-bold transition ${
                     diasSel.has(dia)
-                      ? "bg-primary-500/15 text-primary-400"
+                      ? "bg-danger-500/15 text-danger-400"
                       : "text-zinc-500 hover:bg-white/5 hover:text-white"
                   }`}
                 >
@@ -383,7 +383,7 @@ export default function DisponibilidadEditor({
                       pasado
                         ? "text-zinc-700"
                         : seleccionado
-                          ? "bg-primary-500/20 font-bold text-white ring-2 ring-primary-400"
+                          ? "bg-danger-500/10 font-bold text-white ring-2 ring-danger-400"
                           : completo
                             ? "bg-danger-500/20 font-semibold text-danger-400 hover:bg-danger-500/30"
                             : "text-zinc-200 hover:bg-white/5"
@@ -425,7 +425,7 @@ export default function DisponibilidadEditor({
           )}
 
           {haySeleccion && (
-            <div className="flex flex-col gap-3 rounded-xl border border-primary-500/20 bg-primary-500/5 p-4">
+            <div className="flex flex-col gap-3 rounded-xl border border-danger-500/20 bg-danger-500/5 p-4">
               <p className="text-sm text-zinc-300">
                 <span className="text-zinc-500">No puedo: </span>
                 <span className="font-semibold text-white">{resumenSeleccion}</span>
