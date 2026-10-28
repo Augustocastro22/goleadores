@@ -7,8 +7,15 @@ export interface Profile {
   apellido: string;
   apodo: string;
   foto_url: string | null;
+  /**
+   * Qué marca en su disponibilidad: cuándo "puede" (lo que deja vacío cuenta como que no)
+   * o cuándo "no_puede" (lo vacío cuenta como que sí). null: todavía no eligió (0037).
+   */
+  disponibilidad_modo?: ModoDisponibilidad | null;
   created_at: string;
 }
+
+export type ModoDisponibilidad = "puedo" | "no_puedo";
 
 export interface Grupo {
   id: string;
@@ -102,6 +109,8 @@ export interface Bloqueo {
   nota: string | null;
   /** Fechas en las que no aplica (ej: un domingo liberado de "todos los domingos"). */
   excepciones: string[];
+  /** true: marca de que puede jugar; false o ausente: de que no puede (0037, antes todos eran de no poder). */
+  disponible?: boolean;
   created_at: string;
 }
 

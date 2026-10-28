@@ -49,7 +49,7 @@ export default function DisponibilidadBanner() {
           <IconAvailability className="h-6 w-6" />
         </span>
         <div className="min-w-0 text-xs">
-          <p className="text-sm font-semibold text-white">¿Cuándo no podés jugar?</p>
+          <p className="text-sm font-semibold text-white">¿Cuándo podés jugar?</p>
           <p className="mt-0.5 text-zinc-400">
             Marcalo y el grupo elige un horario que le sirva a todos.
           </p>

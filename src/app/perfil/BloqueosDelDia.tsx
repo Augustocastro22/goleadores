@@ -1,8 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import type { Bloqueo } from "@/lib/types";
-import { HORARIOS, describirBloqueo, liberarDia } from "@/lib/disponibilidad";
+import type { Bloqueo, ModoDisponibilidad } from "@/lib/types";
+import { HORARIOS, TONOS, describirBloqueo, liberarDia } from "@/lib/disponibilidad";
 import { eliminarBloqueo, reemplazarBloqueo } from "@/lib/actions/disponibilidad";
 import Button from "@/components/ui/Button";
 import { IconClose } from "@/components/icons";
@@ -26,6 +26,7 @@ export default function BloqueosDelDia({
   titulo,
   fecha,
   bloqueos,
+  modo,
   nombreGrupo,
   onReemplazado,
   onBorrado,
@@ -35,6 +36,8 @@ export default function BloqueosDelDia({
   titulo: string;
   fecha: string;
   bloqueos: Bloqueo[];
+  /** El color del panel: rojo si hay algo de no poder, verde si solo de poder. */
+  modo: ModoDisponibilidad;
   nombreGrupo: Map<string, string>;
   onReemplazado: (id: string, nuevos: Bloqueo[]) => void;
   onBorrado: (id: string) => void;
@@ -92,7 +95,7 @@ export default function BloqueosDelDia({
   }
 
   return (
-    <div className="flex flex-col gap-3 rounded-xl border border-danger-500/20 bg-danger-500/5 p-4">
+    <div className={`flex flex-col gap-3 rounded-xl border p-4 ${TONOS[modo].panel}`}>
       <div className="flex items-center justify-between gap-2">
         <p className="text-sm font-semibold text-white">{titulo}</p>
         <button type="button" onClick={onCerrar} aria-label="Cerrar" className="text-zinc-500 hover:text-white">
@@ -105,9 +108,14 @@ export default function BloqueosDelDia({
       {bloqueos.map((b) => {
         const editando = edicion?.id === b.id;
         return (
-          <div key={b.id} className="flex flex-col gap-2 border-t border-danger-500/10 pt-3 first-of-type:border-0 first-of-type:pt-0">
+          <div key={b.id} className="flex flex-col gap-2 border-t border-border pt-3 first-of-type:border-0 first-of-type:pt-0">
             <div>
-              <p className="text-sm text-zinc-200">{describirBloqueo(b)}</p>
+              <p className="text-sm text-zinc-200">
+                <span className={`mr-1.5 text-xs font-semibold ${TONOS[b.disponible ? "puedo" : "no_puedo"].texto}`}>
+                  {b.disponible ? "Podés" : "No podés"}
+                </span>
+                {describirBloqueo(b)}
+              </p>
               <p className="text-xs text-zinc-500">
                 {b.grupo_id ? `Solo en ${nombreGrupo.get(b.grupo_id) ?? "un grupo"}` : "Todos mis grupos"}
                 {b.nota && ` · ${b.nota}`}
@@ -127,7 +135,7 @@ export default function BloqueosDelDia({
                       onClick={() => setEdicion({ ...edicion, todoElDia: op.valor })}
                       className={`flex-1 rounded-lg border px-3 py-1.5 text-xs font-semibold transition ${
                         edicion.todoElDia === op.valor
-                          ? "border-danger-500/40 bg-danger-500/15 text-danger-400"
+                          ? TONOS[b.disponible ? "puedo" : "no_puedo"].opcion
                           : "border-border bg-white/5 text-zinc-400 hover:text-white"
                       }`}
                     >

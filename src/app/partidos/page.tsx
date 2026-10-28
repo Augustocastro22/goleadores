@@ -8,6 +8,7 @@ import { buttonClass } from "@/components/ui/Button";
 import { IconChevronRight, IconPlus } from "@/components/icons";
 import PushBanner from "@/components/PushBanner";
 import DisponibilidadBanner from "@/components/DisponibilidadBanner";
+import DisponibilidadModoBanner from "@/components/DisponibilidadModoBanner";
 import { hoyArgentina } from "@/lib/confirmacion";
 import { desafiosConGolesDeMas, esperaMiRespuesta, type DesafioVista } from "@/lib/desafios";
 import { esPartidoInterno, getConfig, nombresDelPartido } from "@/lib/config";
@@ -17,7 +18,8 @@ import PreguntaModoJuego from "@/components/PreguntaModoJuego";
 export default async function PartidosPage() {
   const { supabase, grupo, user } = await requireGrupo();
 
-  const [{ data: partidos }, { data: desafiosRaw }, config, { count: misBloqueos }] = await Promise.all([
+  const [{ data: partidos }, { data: desafiosRaw }, config, { count: misBloqueos }, { data: miPerfil }] =
+    await Promise.all([
     supabase
       .from("partidos")
       .select("*")
@@ -30,7 +32,11 @@ export default async function PartidosPage() {
       .from("bloqueos_disponibilidad")
       .select("id", { count: "exact", head: true })
       .eq("jugador_id", user.id),
+    // Si todavía no existe la columna (0037), la consulta falla y no se pregunta nada.
+    supabase.from("profiles").select("disponibilidad_modo").eq("id", user.id).maybeSingle(),
   ]);
+  // Quien ya había cargado antes de que hubiera modos y todavía no respondió.
+  const preguntarDisponibilidad = (misBloqueos ?? 0) > 0 && miPerfil !== null && miPerfil.disponibilidad_modo === null;
   // La pregunta única "¿Cómo juegan?" a los admins de un grupo que todavía no eligió.
   const preguntarModo = grupo.rol === "admin" && config.modo_juego === null;
   const sugerido = preguntarModo ? await sugerirModoJuego(supabase, grupo.id) : null;
@@ -97,6 +103,7 @@ export default async function PartidosPage() {
     <div>
       <PushBanner />
       {misBloqueos === 0 && <DisponibilidadBanner />}
+      {preguntarDisponibilidad && <DisponibilidadModoBanner />}
       {preguntarModo && <PreguntaModoJuego grupoId={grupo.id} sugerido={sugerido} />}
 
       <div className="mb-6 flex items-center justify-between">

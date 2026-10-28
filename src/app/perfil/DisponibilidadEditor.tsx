@@ -2,15 +2,16 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import type { Bloqueo } from "@/lib/types";
+import type { Bloqueo, ModoDisponibilidad } from "@/lib/types";
 import {
   DIAS_SEMANA,
   HORARIOS,
+  TONOS,
   armarBloqueos,
   fechaCoincide,
   type Horario,
 } from "@/lib/disponibilidad";
-import { crearBloqueos } from "@/lib/actions/disponibilidad";
+import { crearBloqueos, guardarModoDisponibilidad } from "@/lib/actions/disponibilidad";
 import Card from "@/components/ui/Card";
 import AgendaSemana from "./AgendaSemana";
 import BloqueosDelDia from "./BloqueosDelDia";
@@ -71,16 +72,26 @@ function fechaCorta(fecha: string) {
  */
 export default function DisponibilidadEditor({
   bloqueosIniciales,
+  modoInicial,
   grupos,
   hoy,
   hayGrupo,
 }: {
   bloqueosIniciales: Bloqueo[];
+  /** Cómo eligió cargarla (null: todavía no eligió). */
+  modoInicial: ModoDisponibilidad | null;
   grupos: { id: string; nombre: string }[];
   hoy: string;
   hayGrupo: boolean;
 }) {
   const nombreGrupo = new Map(grupos.map((g) => [g.id, g.nombre]));
+  // Si marca cuándo puede o cuándo no. Sin elegir, lo que ya había cargado es de "no puedo".
+  const [modoDisp, setModoDisp] = useState(modoInicial);
+  const [eligiendo, setEligiendo] = useState(false);
+  const [guardandoModo, setGuardandoModo] = useState(false);
+  const [errorModo, setErrorModo] = useState<string | null>(null);
+  const activo: ModoDisponibilidad = modoDisp ?? "no_puedo";
+  const tono = TONOS[activo];
   const [anioHoy, mesHoy] = [Number(hoy.slice(0, 4)), Number(hoy.slice(5, 7)) - 1];
 
   // "mes" para días enteros y rangos; "semana" para marcar horas en una agenda.
@@ -121,6 +132,20 @@ export default function DisponibilidadEditor({
     });
   };
   const bloqueosDetalle = diaDetalle ? bloqueos.filter((b) => fechaCoincide(b, diaDetalle)) : [];
+
+  async function elegirModo(nuevo: ModoDisponibilidad) {
+    setGuardandoModo(true);
+    setErrorModo(null);
+    const result = await guardarModoDisponibilidad(nuevo);
+    setGuardandoModo(false);
+    if ("error" in result) {
+      setErrorModo(result.error);
+      return;
+    }
+    setModoDisp(nuevo);
+    setEligiendo(false);
+    limpiarSeleccion();
+  }
 
   const haySeleccion = fechasSel.size > 0 || diasSel.size > 0;
   const esMesActual = vista.anio === anioHoy && vista.mes === mesHoy;
@@ -214,6 +239,7 @@ export default function DisponibilidadEditor({
       }),
       grupoId: grupoId || null,
       nota: nota || null,
+      disponible: activo === "puedo",
     });
     setSaving(false);
     if ("error" in result) {
@@ -237,14 +263,21 @@ export default function DisponibilidadEditor({
     ...[...diasSel].sort().map((d) => `todos los ${DIAS_PLURAL[d]}`),
   ].join(", ");
 
+  // Sin modo elegido: si ya había cargado, se le pregunta si sigue así; si no, elige cómo cargar.
+  const hayQueElegir = modoDisp === null && bloqueos.length === 0;
+  const preguntaDeSiempre = modoDisp === null && bloqueos.length > 0 && !eligiendo;
+  const mostrarEleccion = hayQueElegir || eligiendo;
+
   return (
     <Card className="flex flex-col gap-4 p-6">
       <div>
         <p className="font-semibold text-white">¿Cuándo podés jugar?</p>
         <p className="mt-1 text-xs text-zinc-500">
-          Marcá cuándo no podés jugar: en el mes, días enteros o de un día a otro; en la semana,
-          las horas. El grupo ve las horas (no la nota) para elegir un horario que le sirva a
-          todos, y es solo un aviso: no te saca solo del partido.
+          {activo === "puedo"
+            ? "Marcá cuándo podés jugar: en el mes, días enteros o de un día a otro; en la semana, las horas."
+            : "Marcá cuándo no podés jugar: en el mes, días enteros o de un día a otro; en la semana, las horas."}{" "}
+          El grupo ve las horas (no la nota) para elegir un horario que le sirva a todos, y es solo un
+          aviso: no te saca solo del partido.
         </p>
         {hayGrupo && (
           <Link
@@ -255,6 +288,90 @@ export default function DisponibilidadEditor({
           </Link>
         )}
       </div>
+
+      {preguntaDeSiempre && (
+        <div className="flex flex-col gap-3 rounded-xl border border-border bg-white/5 p-4">
+          <p className="text-sm font-semibold text-white">Cómo cuenta lo que no marcaste</p>
+          <p className="text-sm text-zinc-300">
+            Hasta ahora lo que marcaste era cuándo <b className="text-danger-400">no podés</b> jugar, y lo que
+            dejaste sin marcar cuenta como que <b className="text-primary-400">podés</b>.
+          </p>
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <Button type="button" size="sm" onClick={() => elegirModo("no_puedo")} disabled={guardandoModo}>
+              {guardandoModo ? "Guardando..." : "Seguir así"}
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="secondary"
+              onClick={() => setEligiendo(true)}
+              disabled={guardandoModo}
+            >
+              Quiero cambiarlo
+            </Button>
+          </div>
+          {errorModo && <p className="text-sm text-danger-400">{errorModo}</p>}
+        </div>
+      )}
+
+      {mostrarEleccion && (
+        <div className="flex flex-col gap-3">
+          <p className="text-sm font-semibold text-white">¿Cómo preferís cargarla?</p>
+          {[
+            {
+              valor: "puedo" as const,
+              titulo: "Marco cuándo puedo",
+              detalle: "Lo que no marque cuenta como que no puedo.",
+            },
+            {
+              valor: "no_puedo" as const,
+              titulo: "Marco cuándo no puedo",
+              detalle: "Lo que no marque cuenta como que puedo.",
+            },
+          ].map((op) => (
+            <button
+              key={op.valor}
+              type="button"
+              disabled={guardandoModo}
+              onClick={() => elegirModo(op.valor)}
+              className={`rounded-xl border p-3 text-left transition disabled:opacity-60 ${TONOS[op.valor].panel} ${
+                modoDisp === op.valor ? "ring-2 ring-white/60" : "hover:brightness-125"
+              }`}
+            >
+              <span className={`block text-sm font-semibold ${TONOS[op.valor].texto}`}>{op.titulo}</span>
+              <span className="text-xs text-zinc-400">{op.detalle}</span>
+            </button>
+          ))}
+          {bloqueos.length > 0 && (
+            <p className="text-xs text-zinc-500">Lo que ya marcaste no se pierde: queda como está.</p>
+          )}
+          {errorModo && <p className="text-sm text-danger-400">{errorModo}</p>}
+          {eligiendo && (
+            <button
+              type="button"
+              onClick={() => setEligiendo(false)}
+              className="self-start text-xs text-zinc-500 hover:text-white"
+            >
+              Cancelar
+            </button>
+          )}
+        </div>
+      )}
+
+      {!mostrarEleccion && !preguntaDeSiempre && (
+        <>
+      {modoDisp && (
+        <p className="-mt-2 text-xs text-zinc-500">
+          Estás marcando{" "}
+          <span className={`font-semibold ${tono.texto}`}>
+            {activo === "puedo" ? "cuándo podés" : "cuándo no podés"}
+          </span>
+          . Lo que no marques cuenta como que {activo === "puedo" ? "no podés" : "podés"}.{" "}
+          <button type="button" onClick={() => setEligiendo(true)} className="font-semibold text-zinc-300 underline">
+            Cambiar
+          </button>
+        </p>
+      )}
 
       <div className="inline-flex self-start rounded-xl border border-border bg-white/5 p-1">
         {[
@@ -280,6 +397,7 @@ export default function DisponibilidadEditor({
       {pestana === "semana" ? (
         <AgendaSemana
           bloqueos={bloqueos}
+          modo={activo}
           grupos={grupos}
           hoy={hoy}
           nombreGrupo={nombreGrupo}
@@ -350,7 +468,7 @@ export default function DisponibilidadEditor({
                   title={`Todos los ${DIAS_PLURAL[dia]}`}
                   className={`rounded-lg py-1 text-xs font-bold transition ${
                     diasSel.has(dia)
-                      ? "bg-danger-500/15 text-danger-400"
+                      ? tono.opcion
                       : "text-zinc-500 hover:bg-white/5 hover:text-white"
                   }`}
                 >
@@ -366,8 +484,11 @@ export default function DisponibilidadEditor({
                 const fecha = aFecha(vista.anio, vista.mes, i + 1);
                 const pasado = fecha < hoy;
                 const delDia = bloqueos.filter((b) => fechaCoincide(b, fecha));
-                const completo = delDia.some((b) => !b.hora_desde);
+                const completos = delDia.filter((b) => !b.hora_desde);
+                const completo = completos.length > 0;
                 const parcial = !completo && delDia.length > 0;
+                // Si hay de las dos, gana "no puedo".
+                const tipoDia = (completo ? completos : delDia).some((b) => !b.disponible) ? "no_puedo" : "puedo";
                 const seleccionado = fechasSel.has(fecha) || diasSel.has(diaDeSemana(fecha));
                 return (
                   <button
@@ -377,21 +498,29 @@ export default function DisponibilidadEditor({
                     onClick={() => tocarDia(fecha)}
                     aria-pressed={seleccionado}
                     aria-label={`${i + 1} de ${MESES[vista.mes]}${
-                      completo ? ", no podés" : parcial ? ", no podés en algún horario" : ""
+                      completo || parcial
+                        ? `${tipoDia === "puedo" ? ", podés" : ", no podés"}${parcial ? " en algún horario" : ""}`
+                        : ""
                     }`}
                     className={`relative flex aspect-square items-center justify-center rounded-lg text-sm tabular-nums transition ${
                       pasado
                         ? "text-zinc-700"
                         : seleccionado
-                          ? "bg-danger-500/10 font-bold text-white ring-2 ring-danger-400"
+                          ? tono.diaSeleccionado
                           : completo
-                            ? "bg-danger-500/20 font-semibold text-danger-400 hover:bg-danger-500/30"
+                            ? tipoDia === "puedo"
+                              ? "bg-primary-500/20 font-semibold text-primary-400 hover:bg-primary-500/30"
+                              : "bg-danger-500/20 font-semibold text-danger-400 hover:bg-danger-500/30"
                             : "text-zinc-200 hover:bg-white/5"
                     }`}
                   >
                     {i + 1}
                     {parcial && !pasado && (
-                      <span className="absolute bottom-1 h-1 w-1 rounded-full bg-danger-400" />
+                      <span
+                        className={`absolute bottom-1 h-1 w-1 rounded-full ${
+                          tipoDia === "puedo" ? "bg-primary-400" : "bg-danger-400"
+                        }`}
+                      />
                     )}
                   </button>
                 );
@@ -400,10 +529,13 @@ export default function DisponibilidadEditor({
 
             <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-zinc-500">
               <span className="flex items-center gap-1.5">
-                <span className="h-2.5 w-2.5 rounded-sm bg-danger-500/40" /> No podés en todo el día
+                <span className="h-2.5 w-2.5 rounded-sm bg-primary-500/40" /> Podés todo el día
               </span>
               <span className="flex items-center gap-1.5">
-                <span className="h-1 w-1 rounded-full bg-danger-400" /> En algún horario
+                <span className="h-2.5 w-2.5 rounded-sm bg-danger-500/40" /> No podés todo el día
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="h-1 w-1 rounded-full bg-zinc-400" /> En algún horario
               </span>
             </div>
           </div>
@@ -413,6 +545,7 @@ export default function DisponibilidadEditor({
               titulo={`${DIAS_SEMANA[new Date(diaDetalle + "T00:00:00Z").getUTCDay()]} ${fechaCorta(diaDetalle)}`}
               fecha={diaDetalle}
               bloqueos={bloqueosDetalle}
+              modo={bloqueosDetalle.some((b) => !b.disponible) ? "no_puedo" : "puedo"}
               nombreGrupo={nombreGrupo}
               onReemplazado={reemplazado}
               onBorrado={borrado}
@@ -425,9 +558,9 @@ export default function DisponibilidadEditor({
           )}
 
           {haySeleccion && (
-            <div className="flex flex-col gap-3 rounded-xl border border-danger-500/20 bg-danger-500/5 p-4">
+            <div className={`flex flex-col gap-3 rounded-xl border p-4 ${tono.panel}`}>
               <p className="text-sm text-zinc-300">
-                <span className="text-zinc-500">No puedo: </span>
+                <span className="text-zinc-500">{activo === "puedo" ? "Puedo: " : "No puedo: "}</span>
                 <span className="font-semibold text-white">{resumenSeleccion}</span>
               </p>
 
@@ -442,7 +575,7 @@ export default function DisponibilidadEditor({
                     onClick={() => setTodoElDia(op.valor)}
                     className={`flex-1 rounded-lg border px-3 py-1.5 text-xs font-semibold transition ${
                       todoElDia === op.valor
-                        ? "border-danger-500/40 bg-danger-500/15 text-danger-400"
+                        ? tono.opcion
                         : "border-border bg-white/5 text-zinc-400 hover:text-white"
                     }`}
                   >
@@ -502,7 +635,7 @@ export default function DisponibilidadEditor({
                   <button
                     type="button"
                     onClick={() => setHorarios((hs) => [...hs, HORARIO_VACIO])}
-                    className="flex items-center gap-1.5 self-start text-xs font-semibold text-danger-400 hover:text-white"
+                    className={`flex items-center gap-1.5 self-start text-xs font-semibold ${tono.texto} hover:text-white`}
                   >
                     <IconPlus className="h-3.5 w-3.5" /> Agregar otro horario
                   </button>
@@ -546,6 +679,9 @@ export default function DisponibilidadEditor({
               </div>
             </div>
           )}
+
+        </>
+      )}
 
         </>
       )}

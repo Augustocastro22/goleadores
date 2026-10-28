@@ -28,7 +28,7 @@ export default async function DisponibilidadEquipoPage() {
         </Link>
       </p>
       <EquipoDisponibilidad
-        jugadores={miembros.map((m) => ({ id: m.id, nombre: m.nombre }))}
+        jugadores={miembros.map((m) => ({ id: m.id, nombre: m.nombre, modo: m.disponibilidad_modo ?? null }))}
         bloqueos={bloqueos}
         hoy={hoyArgentina()}
         yoId={user.id}

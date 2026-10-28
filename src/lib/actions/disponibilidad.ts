@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { mismoBloqueo, validarBloqueo, type BloqueoNuevo } from "@/lib/disponibilidad";
-import type { Bloqueo } from "@/lib/types";
+import type { Bloqueo, ModoDisponibilidad } from "@/lib/types";
 
 /** Tope por guardado, para que nadie cargue miles de filas de una. */
 const MAX_BLOQUEOS = 100;
@@ -18,7 +18,13 @@ function validarTodos(bloqueos: BloqueoNuevo[]): string | null {
   return null;
 }
 
-function aFila(b: BloqueoNuevo, jugadorId: string, grupoId: string | null, nota: string | null) {
+function aFila(
+  b: BloqueoNuevo,
+  jugadorId: string,
+  grupoId: string | null,
+  nota: string | null,
+  disponible: boolean
+) {
   return {
     jugador_id: jugadorId,
     grupo_id: grupoId,
@@ -30,6 +36,8 @@ function aFila(b: BloqueoNuevo, jugadorId: string, grupoId: string | null, nota:
     hora_hasta: b.hora_hasta,
     // Solo si hay: así guardar sin excepciones no depende de la columna nueva.
     ...(b.excepciones?.length ? { excepciones: b.excepciones } : {}),
+    // Ídem: solo las marcas de "puedo" necesitan la columna de 0037.
+    ...(disponible ? { disponible: true } : {}),
     nota,
   };
 }
@@ -44,10 +52,13 @@ export async function crearBloqueos({
   bloqueos,
   grupoId,
   nota,
+  disponible = false,
 }: {
   bloqueos: BloqueoNuevo[];
   grupoId: string | null;
   nota: string | null;
+  /** true: lo marcado es cuándo puede jugar; false: cuándo no puede. */
+  disponible?: boolean;
 }): Promise<{ error: string } | { bloqueos: Bloqueo[] }> {
   if (!Array.isArray(bloqueos) || bloqueos.length === 0) return { error: "Elegí al menos un día." };
   const error = validarTodos(bloqueos);
@@ -68,10 +79,10 @@ export async function crearBloqueos({
     .returns<Bloqueo[]>();
   const nuevos: BloqueoNuevo[] = [];
   for (const b of bloqueos) {
-    const conGrupo = { ...b, grupo_id: grupo };
+    const conGrupo = { ...b, grupo_id: grupo, disponible };
     const repetido =
       (existentes ?? []).some((e) => mismoBloqueo(e, conGrupo)) ||
-      nuevos.some((n) => mismoBloqueo({ ...n, grupo_id: grupo }, conGrupo));
+      nuevos.some((n) => mismoBloqueo({ ...n, grupo_id: grupo, disponible }, conGrupo));
     if (!repetido) nuevos.push(b);
   }
   if (nuevos.length === 0) return { bloqueos: [] };
@@ -79,7 +90,7 @@ export async function crearBloqueos({
   // RLS verifica que el grupo (si hay) sea uno del jugador.
   const { data, error: insertError } = await supabase
     .from("bloqueos_disponibilidad")
-    .insert(nuevos.map((b) => aFila(b, user.id, grupo, notaLimpia)))
+    .insert(nuevos.map((b) => aFila(b, user.id, grupo, notaLimpia, disponible)))
     .select("*")
     .returns<Bloqueo[]>();
   if (insertError) return { error: insertError.message };
@@ -123,7 +134,7 @@ export async function reemplazarBloqueo({
   if (nuevos.length > 0) {
     const { data, error: insertError } = await supabase
       .from("bloqueos_disponibilidad")
-      .insert(nuevos.map((b) => aFila(b, user.id, original.grupo_id, original.nota)))
+      .insert(nuevos.map((b) => aFila(b, user.id, original.grupo_id, original.nota, !!original.disponible)))
       .select("*")
       .returns<Bloqueo[]>();
     if (insertError) return { error: insertError.message };
@@ -160,5 +171,30 @@ export async function eliminarBloqueo(formData: FormData) {
   if (error) return { error: error.message };
 
   revalidatePath("/perfil");
+  return { success: true };
+}
+
+/**
+ * Guarda cómo prefiere cargar su disponibilidad (ver 0037): marcando cuándo
+ * puede (lo vacío cuenta como que no) o cuándo no puede (lo vacío cuenta
+ * como que sí). Lo ya marcado no se toca.
+ */
+export async function guardarModoDisponibilidad(
+  modo: ModoDisponibilidad
+): Promise<{ error: string } | { success: true }> {
+  if (modo !== "puedo" && modo !== "no_puedo") return { error: "Modo inválido." };
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "No autenticado." };
+
+  const { error } = await supabase.from("profiles").update({ disponibilidad_modo: modo }).eq("id", user.id);
+  if (error) return { error: error.message };
+
+  revalidatePath("/perfil");
+  revalidatePath("/disponibilidad");
+  revalidatePath("/partidos");
   return { success: true };
 }

@@ -8,6 +8,8 @@ import {
   liberarDia,
   mismoBloqueo,
   partirRango,
+  puedeEnHora,
+  tipoEnHora,
   validarBloqueo,
 } from "./disponibilidad";
 import type { Bloqueo } from "./types";
@@ -243,5 +245,57 @@ describe("liberarDia", () => {
 
   it("un día puntual desaparece", () => {
     expect(liberarDia(bloqueo({ tipo: "puntual", fecha_desde: "2026-10-11" }), "2026-10-11")).toEqual([]);
+  });
+});
+
+describe("modo puedo / no puedo", () => {
+  // 2026-10-10 es sábado.
+  const noPuedeNoche = bloqueo({ tipo: "puntual", fecha_desde: "2026-10-10", hora_desde: "20:00", hora_hasta: "24:00" });
+  const puedeTarde = bloqueo({
+    tipo: "puntual",
+    fecha_desde: "2026-10-10",
+    hora_desde: "15:00",
+    hora_hasta: "19:00",
+    disponible: true,
+  });
+
+  it("sin marcar, en 'no_puedo' o sin elegir puede, y en 'puedo' no", () => {
+    expect(puedeEnHora("no_puedo", [], "2026-10-10", 16)).toBe(true);
+    expect(puedeEnHora(null, [], "2026-10-10", 16)).toBe(true);
+    expect(puedeEnHora("puedo", [], "2026-10-10", 16)).toBe(false);
+  });
+
+  it("una marca de 'no puedo' le saca la hora en cualquier modo", () => {
+    expect(puedeEnHora("no_puedo", [noPuedeNoche], "2026-10-10", 21)).toBe(false);
+    expect(puedeEnHora(null, [noPuedeNoche], "2026-10-10", 21)).toBe(false);
+    expect(puedeEnHora("no_puedo", [noPuedeNoche], "2026-10-10", 16)).toBe(true);
+  });
+
+  it("una marca de 'puedo' le da la hora en 'puedo', y solo esas", () => {
+    expect(puedeEnHora("puedo", [puedeTarde], "2026-10-10", 16)).toBe(true);
+    expect(puedeEnHora("puedo", [puedeTarde], "2026-10-10", 20)).toBe(false);
+    expect(puedeEnHora("puedo", [puedeTarde], "2026-10-11", 16)).toBe(false);
+  });
+
+  it("si hay de las dos en la misma hora, gana 'no puedo'", () => {
+    const todo = bloqueo({ tipo: "puntual", fecha_desde: "2026-10-10", disponible: true });
+    const excepcion = bloqueo({ tipo: "puntual", fecha_desde: "2026-10-10", hora_desde: "20:00", hora_hasta: "22:00" });
+    expect(puedeEnHora("puedo", [todo, excepcion], "2026-10-10", 21)).toBe(false);
+    expect(puedeEnHora("puedo", [todo, excepcion], "2026-10-10", 18)).toBe(true);
+    expect(tipoEnHora([todo, excepcion], "2026-10-10", 21)).toBe("no_puedo");
+    expect(tipoEnHora([todo, excepcion], "2026-10-10", 18)).toBe("puedo");
+    expect(tipoEnHora([todo], "2026-10-11", 18)).toBeNull();
+  });
+
+  it("una marca de 'puedo' no cuenta para el aviso de la convocatoria", () => {
+    expect(bloqueaFecha(puedeTarde, "2026-10-10", "16:00:00")).toBe(false);
+    expect(bloqueaFecha(noPuedeNoche, "2026-10-10", "21:00:00")).toBe(true);
+  });
+
+  it("el mismo horario de 'puedo' y de 'no puedo' no es el mismo bloqueo", () => {
+    const a = { ...noPuedeNoche, disponible: false };
+    const b = { ...noPuedeNoche, disponible: true };
+    expect(mismoBloqueo(a, b)).toBe(false);
+    expect(mismoBloqueo(a, { ...noPuedeNoche })).toBe(true);
   });
 });

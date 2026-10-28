@@ -1,4 +1,4 @@
-import type { Bloqueo } from "./types";
+import type { Bloqueo, ModoDisponibilidad } from "./types";
 
 export const DIAS_SEMANA = [
   "Domingo",
@@ -65,6 +65,8 @@ export function describirBloqueo(bloqueo: Bloqueo): string {
  * horario, así que se avisa igual (es solo un aviso, no excluye a nadie).
  */
 export function bloqueaFecha(bloqueo: Bloqueo, fecha: string, hora: string | null): boolean {
+  // Una marca de "puedo" no bloquea nada.
+  if (bloqueo.disponible) return false;
   if (!fechaCoincide(bloqueo, fecha)) return false;
   if (!bloqueo.hora_desde || !bloqueo.hora_hasta || !hora) return true;
   return hora >= bloqueo.hora_desde && hora <= bloqueo.hora_hasta;
@@ -74,7 +76,7 @@ export function bloqueaFecha(bloqueo: Bloqueo, fecha: string, hora: string | nul
 export type BloqueoNuevo = Pick<
   Bloqueo,
   "tipo" | "fecha_desde" | "fecha_hasta" | "dia_semana" | "hora_desde" | "hora_hasta"
-> & { excepciones?: string[] };
+> & { excepciones?: string[]; disponible?: boolean };
 
 export interface Horario {
   desde: string;
@@ -106,6 +108,72 @@ export function bloqueosEnHora(bloqueos: Bloqueo[], fecha: string, h: number): B
         (b.hora_desde.slice(0, 5) < aHora(h + 1) && b.hora_hasta.slice(0, 5) > aHora(h)))
   );
 }
+
+/**
+ * Lo marcado en una hora: "no_puedo" si hay algo de no poder (le gana a lo
+ * otro), "puedo" si solo hay marcas de poder, o null si no hay nada.
+ */
+export function tipoEnHora(bloqueos: Bloqueo[], fecha: string, h: number): ModoDisponibilidad | null {
+  const enHora = bloqueosEnHora(bloqueos, fecha, h);
+  if (enHora.length === 0) return null;
+  return enHora.some((b) => !b.disponible) ? "no_puedo" : "puedo";
+}
+
+/**
+ * Si un jugador puede en esa hora. Sin marcar vale lo que diga su modo
+ * ("puedo": no puede; "no_puedo" o sin elegir: puede, como era antes de que
+ * hubiera modo); lo marcado de poder suma y lo marcado de no poder gana.
+ */
+export function puedeEnHora(
+  modo: ModoDisponibilidad | null,
+  bloqueos: Bloqueo[],
+  fecha: string,
+  h: number
+): boolean {
+  const marca = tipoEnHora(bloqueos, fecha, h);
+  if (marca) return marca === "puedo";
+  return modo !== "puedo";
+}
+
+/**
+ * Clases de Tailwind de cada modo: verde para lo que se puede, rojo para lo
+ * que no (los textos de "puedo" usan el verde de la marca).
+ */
+export const TONOS: Record<
+  ModoDisponibilidad,
+  {
+    /** Lo ya guardado (celdas de la agenda, días del calendario). */
+    guardado: string;
+    /** Lo seleccionado, todavía sin guardar. */
+    pendiente: string;
+    /** Panel que se abre con lo seleccionado. */
+    panel: string;
+    /** Opción elegida dentro de un panel. */
+    opcion: string;
+    texto: string;
+    diaSeleccionado: string;
+    leyenda: string;
+  }
+> = {
+  puedo: {
+    guardado: "bg-primary-500/35 text-primary-400",
+    pendiente: "bg-primary-500/10 text-primary-400 ring-1 ring-inset ring-primary-400",
+    panel: "border-primary-500/20 bg-primary-500/5",
+    opcion: "border-primary-500/40 bg-primary-500/15 text-primary-400",
+    texto: "text-primary-400",
+    diaSeleccionado: "bg-primary-500/10 font-bold text-white ring-2 ring-primary-400",
+    leyenda: "bg-primary-500/50",
+  },
+  no_puedo: {
+    guardado: "bg-danger-500/35 text-danger-400",
+    pendiente: "bg-danger-500/10 text-danger-400 ring-1 ring-inset ring-danger-400",
+    panel: "border-danger-500/20 bg-danger-500/5",
+    opcion: "border-danger-500/40 bg-danger-500/15 text-danger-400",
+    texto: "text-danger-400",
+    diaSeleccionado: "bg-danger-500/10 font-bold text-white ring-2 ring-danger-400",
+    leyenda: "bg-danger-500/50",
+  },
+};
 
 /**
  * Arma los bloqueos de lo marcado en la agenda semanal (fecha → horas). Las
@@ -227,6 +295,7 @@ export function mismoBloqueo(
     hora(a.hora_desde) === hora(b.hora_desde) &&
     hora(a.hora_hasta) === hora(b.hora_hasta) &&
     (a.grupo_id ?? null) === (b.grupo_id ?? null) &&
+    !!a.disponible === !!b.disponible &&
     [...(a.excepciones ?? [])].sort().join() === [...(b.excepciones ?? [])].sort().join()
   );
 }

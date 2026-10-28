@@ -1,13 +1,15 @@
 "use client";
 
 import { useState } from "react";
-import type { Bloqueo } from "@/lib/types";
+import type { Bloqueo, ModoDisponibilidad } from "@/lib/types";
 import {
   AGENDA_DESDE,
   AGENDA_HASTA,
+  TONOS,
   bloqueosDeAgenda,
   bloqueosEnHora,
   fechaCoincide,
+  tipoEnHora,
 } from "@/lib/disponibilidad";
 import { crearBloqueos } from "@/lib/actions/disponibilidad";
 import Button from "@/components/ui/Button";
@@ -62,6 +64,7 @@ function tramosTexto(horas: number[]) {
  */
 export default function AgendaSemana({
   bloqueos,
+  modo,
   grupos,
   hoy,
   nombreGrupo,
@@ -70,6 +73,8 @@ export default function AgendaSemana({
   onBorrado,
 }: {
   bloqueos: Bloqueo[];
+  /** Qué se está marcando: cuándo puede o cuándo no. */
+  modo: ModoDisponibilidad;
   grupos: { id: string; nombre: string }[];
   hoy: string;
   nombreGrupo: Map<string, string>;
@@ -85,6 +90,7 @@ export default function AgendaSemana({
   const [diaDetalle, setDiaDetalle] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const tono = TONOS[modo];
 
   const lunes = sumarDias(lunesDe(hoy), semana * 7);
   const fechas = Array.from({ length: 7 }, (_, i) => sumarDias(lunes, i));
@@ -131,6 +137,7 @@ export default function AgendaSemana({
       bloqueos: bloqueosDeAgenda(marcadas, repetir),
       grupoId: grupoId || null,
       nota: nota || null,
+      disponible: modo === "puedo",
     });
     setSaving(false);
     if ("error" in result) {
@@ -156,10 +163,11 @@ export default function AgendaSemana({
     let fin = h;
     while (igual(fin + 1)) fin++;
 
-    const color = bloqueada
-      ? "bg-danger-500/35 text-danger-400"
+    const guardada = bloqueada ? tipoEnHora(bloqueos, fecha, h) : null;
+    const color = guardada
+      ? TONOS[guardada].guardado
       : marcada
-        ? "bg-danger-500/10 text-danger-400 ring-1 ring-inset ring-danger-400"
+        ? tono.pendiente
         : "hover:bg-white/5";
     const forma =
       bloqueada || marcada
@@ -174,7 +182,7 @@ export default function AgendaSemana({
         onClick={() => tocarHora(fecha, h)}
         aria-pressed={marcada}
         aria-label={`${DIAS_CORTOS[new Date(fecha + "T00:00:00Z").getUTCDay()]} ${numeroDia(fecha)}, de ${h} a ${h + 1}${
-          bloqueada ? ", no podés" : marcada ? ", marcada" : ""
+          guardada === "no_puedo" ? ", no podés" : guardada === "puedo" ? ", podés" : marcada ? ", marcada" : ""
         }`}
         className={`relative h-7 border-t border-border text-left transition disabled:opacity-30 ${color} ${forma}`}
       >
@@ -247,10 +255,13 @@ export default function AgendaSemana({
 
       <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-zinc-500">
         <span className="flex items-center gap-1.5">
-          <span className="h-2.5 w-2.5 rounded-sm bg-danger-500/50" /> No podés (guardado)
+          <span className={`h-2.5 w-2.5 rounded-sm ${TONOS.puedo.leyenda}`} /> Podés
         </span>
         <span className="flex items-center gap-1.5">
-          <span className="h-2.5 w-2.5 rounded-sm bg-danger-500/10 ring-1 ring-inset ring-danger-400" /> Por guardar
+          <span className={`h-2.5 w-2.5 rounded-sm ${TONOS.no_puedo.leyenda}`} /> No podés
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span className={`h-2.5 w-2.5 rounded-sm ${tono.pendiente}`} /> Por guardar
         </span>
       </div>
 
@@ -259,6 +270,7 @@ export default function AgendaSemana({
           titulo={`${DIAS_CORTOS[new Date(diaDetalle + "T00:00:00Z").getUTCDay()]} ${fechaCorta(diaDetalle)}`}
           fecha={diaDetalle}
           bloqueos={bloqueosDetalle}
+          modo={bloqueosDetalle.some((b) => !b.disponible) ? "no_puedo" : "puedo"}
           nombreGrupo={nombreGrupo}
           onReemplazado={onReemplazado}
           onBorrado={onBorrado}
@@ -267,9 +279,9 @@ export default function AgendaSemana({
       )}
 
       {hayMarcadas && (
-        <div className="flex flex-col gap-3 rounded-xl border border-danger-500/20 bg-danger-500/5 p-4">
+        <div className={`flex flex-col gap-3 rounded-xl border p-4 ${tono.panel}`}>
           <div className="flex flex-col gap-0.5 text-sm">
-            <span className="text-zinc-500">No puedo:</span>
+            <span className="text-zinc-500">{modo === "puedo" ? "Puedo:" : "No puedo:"}</span>
             {[...marcadas.entries()]
               .filter(([, horas]) => horas.length > 0)
               .sort(([a], [b]) => a.localeCompare(b))
@@ -294,7 +306,7 @@ export default function AgendaSemana({
                 onClick={() => setRepetir(op.valor)}
                 className={`flex-1 rounded-lg border px-3 py-1.5 text-xs font-semibold transition ${
                   repetir === op.valor
-                    ? "border-danger-500/40 bg-danger-500/15 text-danger-400"
+                    ? tono.opcion
                     : "border-border bg-white/5 text-zinc-400 hover:text-white"
                 }`}
               >

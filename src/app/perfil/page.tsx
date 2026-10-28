@@ -39,6 +39,7 @@ export default async function PerfilPage() {
       <div className="flex flex-col gap-5">
         <DisponibilidadEditor
           bloqueosIniciales={bloqueos ?? []}
+          modoInicial={profile.disponibilidad_modo ?? null}
           grupos={grupos.map((g) => ({ id: g.id, nombre: g.nombre }))}
           hoy={hoy}
           hayGrupo={!!grupo}

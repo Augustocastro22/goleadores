@@ -2,8 +2,8 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import type { Bloqueo } from "@/lib/types";
-import { AGENDA_DESDE, AGENDA_HASTA, bloqueosEnHora } from "@/lib/disponibilidad";
+import type { Bloqueo, ModoDisponibilidad } from "@/lib/types";
+import { AGENDA_DESDE, AGENDA_HASTA, puedeEnHora } from "@/lib/disponibilidad";
 import Card from "@/components/ui/Card";
 import { IconChevronRight } from "@/components/icons";
 
@@ -29,6 +29,8 @@ function etiquetaDia(fecha: string) {
 interface Jugador {
   id: string;
   nombre: string;
+  /** Cómo carga su disponibilidad (null: todavía no eligió). */
+  modo: ModoDisponibilidad | null;
 }
 interface Franja {
   fecha: string;
@@ -70,15 +72,15 @@ export default function EquipoDisponibilidad({
 
   /** Quiénes no pueden de h a h+1 en esa fecha. */
   function noPueden(fecha: string, h: number) {
-    return jugadores.filter((j) => bloqueosEnHora(porJugador.get(j.id) ?? [], fecha, h).length > 0);
+    return jugadores.filter((j) => !puedeEnHora(j.modo, porJugador.get(j.id) ?? [], fecha, h));
   }
 
   const grilla = useMemo(() => {
     const m = new Map<string, number>();
     for (const fecha of dias) {
       for (const h of HORAS) {
-        const no = jugadores.filter((j) => bloqueosEnHora(porJugador.get(j.id) ?? [], fecha, h).length > 0);
-        m.set(`${fecha}|${h}`, jugadores.length - no.length);
+        const pueden = jugadores.filter((j) => puedeEnHora(j.modo, porJugador.get(j.id) ?? [], fecha, h));
+        m.set(`${fecha}|${h}`, pueden.length);
       }
     }
     return m;
@@ -274,8 +276,8 @@ export default function EquipoDisponibilidad({
             Faltan cargar su disponibilidad ({sinCargar.length} de {total})
           </p>
           <p className="text-xs text-zinc-500">
-            Cuentan como que pueden en todo momento hasta que marquen cuándo no. Cuanta más gente lo
-            cargue, más confiable es esta grilla.
+            Si no eligieron marcar cuándo pueden, cuentan como que pueden en todo momento hasta que
+            marquen cuándo no. Cuanta más gente lo cargue, más confiable es esta grilla.
           </p>
           {sinCargar.some((j) => j.id === yoId) && (
             <Link href="/perfil" className="text-sm font-semibold text-primary-400 hover:text-primary-300">
