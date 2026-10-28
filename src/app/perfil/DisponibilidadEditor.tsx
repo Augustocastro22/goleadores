@@ -291,25 +291,27 @@ export default function DisponibilidadEditor({
 
       {preguntaDeSiempre && (
         <div className="flex flex-col gap-3 rounded-xl border border-border bg-white/5 p-4">
-          <p className="text-sm font-semibold text-white">Cómo cuenta lo que no marcaste</p>
+          <p className="text-sm font-semibold text-white">Tu disponibilidad</p>
           <p className="text-sm text-zinc-300">
-            Hasta ahora lo que marcaste era cuándo <b className="text-danger-400">no podés</b> jugar, y lo que
-            dejaste sin marcar cuenta como que <b className="text-primary-400">podés</b>.
+            Marcaste los bloques en los que <b className="text-danger-400">no podés</b> jugar. ¿Preferís que el
+            resto cuente como que <b className="text-primary-400">podés</b>, o configurar a mano cuándo{" "}
+            <b className="text-primary-400">podés</b>?
           </p>
-          <div className="flex flex-col gap-2 sm:flex-row">
+          <div className="flex flex-col gap-2">
             <Button type="button" size="sm" onClick={() => elegirModo("no_puedo")} disabled={guardandoModo}>
-              {guardandoModo ? "Guardando..." : "Seguir así"}
+              {guardandoModo ? "Guardando..." : "Que el resto cuente como que puedo"}
             </Button>
             <Button
               type="button"
               size="sm"
               variant="secondary"
-              onClick={() => setEligiendo(true)}
+              onClick={() => elegirModo("puedo")}
               disabled={guardandoModo}
             >
-              Quiero cambiarlo
+              Configurar a mano cuándo puedo
             </Button>
           </div>
+          <p className="text-xs text-zinc-500">Lo que ya marcaste no se pierde, y lo podés cambiar cuando quieras.</p>
           {errorModo && <p className="text-sm text-danger-400">{errorModo}</p>}
         </div>
       )}
@@ -343,7 +345,10 @@ export default function DisponibilidadEditor({
             </button>
           ))}
           {bloqueos.length > 0 && (
-            <p className="text-xs text-zinc-500">Lo que ya marcaste no se pierde: queda como está.</p>
+            <p className="text-xs text-zinc-500">
+              Lo que ya marcaste no se pierde: queda como está. Cambia cómo cuenta lo que dejes sin marcar, y lo
+              podés volver a cambiar cuando quieras.
+            </p>
           )}
           {errorModo && <p className="text-sm text-danger-400">{errorModo}</p>}
           {eligiendo && (

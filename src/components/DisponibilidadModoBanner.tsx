@@ -1,9 +1,10 @@
 "use client";
 
-import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { IconAvailability } from "@/components/icons";
-import Button, { buttonClass } from "@/components/ui/Button";
+import Button from "@/components/ui/Button";
+import type { ModoDisponibilidad } from "@/lib/types";
 import { guardarModoDisponibilidad } from "@/lib/actions/disponibilidad";
 
 /**
@@ -12,22 +13,25 @@ import { guardarModoDisponibilidad } from "@/lib/actions/disponibilidad";
  * marcar cuenta como que puede. Puede seguir así o ir a cambiarlo.
  */
 export default function DisponibilidadModoBanner() {
+  const router = useRouter();
   const [oculto, setOculto] = useState(false);
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   if (oculto) return null;
 
-  async function seguirAsi() {
+  async function elegir(modo: ModoDisponibilidad) {
     setGuardando(true);
     setError(null);
-    const result = await guardarModoDisponibilidad("no_puedo");
+    const result = await guardarModoDisponibilidad(modo);
     setGuardando(false);
     if ("error" in result) {
       setError(result.error);
       return;
     }
-    setOculto(true);
+    // Para configurar a mano cuándo puede, va a su disponibilidad.
+    if (modo === "puedo") router.push("/perfil");
+    else setOculto(true);
   }
 
   return (
@@ -39,20 +43,21 @@ export default function DisponibilidadModoBanner() {
         <div className="min-w-0 text-xs">
           <p className="text-sm font-semibold text-white">Tu disponibilidad</p>
           <p className="mt-0.5 text-zinc-400">
-            Lo que marcaste era cuándo <span className="font-semibold text-danger-400">no podés</span> jugar, y lo
-            que no marcaste cuenta como que <span className="font-semibold text-primary-400">podés</span>. ¿Seguimos
-            así?
+            Marcaste los bloques en los que <span className="font-semibold text-danger-400">no podés</span> jugar.
+            ¿Preferís que el resto cuente como que <span className="font-semibold text-primary-400">podés</span>, o
+            configurar a mano cuándo <span className="font-semibold text-primary-400">podés</span>?
           </p>
         </div>
       </div>
-      <div className="mt-3 flex flex-col gap-2 sm:flex-row">
-        <Button type="button" size="sm" onClick={seguirAsi} disabled={guardando} className="flex-1">
-          {guardando ? "Guardando..." : "Sí, seguir así"}
+      <div className="mt-3 flex flex-col gap-2">
+        <Button type="button" size="sm" onClick={() => elegir("no_puedo")} disabled={guardando}>
+          {guardando ? "Guardando..." : "Que el resto cuente como que puedo"}
         </Button>
-        <Link href="/perfil" className={`${buttonClass("secondary", "sm")} flex-1`}>
-          Cambiar la configuración
-        </Link>
+        <Button type="button" size="sm" variant="secondary" onClick={() => elegir("puedo")} disabled={guardando}>
+          Configurar a mano cuándo puedo
+        </Button>
       </div>
+      <p className="mt-2 text-[11px] text-zinc-500">Lo que ya marcaste no se pierde, y lo podés cambiar cuando quieras.</p>
       {error && <p className="mt-2 text-xs text-danger-400">{error}</p>}
     </div>
   );
