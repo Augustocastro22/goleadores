@@ -5,7 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { enviarPush } from "@/lib/push/send";
 
-const MOTIVOS = ["borrar_cuenta", "mis_datos", "otro"] as const;
+const MOTIVOS = ["idea", "falla", "borrar_cuenta", "mis_datos", "otro"] as const;
 const MAX_MENSAJES_POR_HORA = 3;
 const MAX_MENSAJES_TOTAL_POR_HORA = 20;
 
@@ -32,7 +32,12 @@ export async function enviarMensajeContacto(formData: FormData) {
     .replace(/[\r\n]+/g, " ")
     .trim();
   const email = String(formData.get("email") ?? "").trim().toLowerCase();
-  const mensaje = String(formData.get("mensaje") ?? "").trim();
+  let mensaje = String(formData.get("mensaje") ?? "").trim();
+  // Con un reporte de falla se suma el dispositivo, para poder reproducirlo.
+  const dispositivo = String(formData.get("dispositivo") ?? "")
+    .replace(/[\r\n]+/g, " ")
+    .trim()
+    .slice(0, 250);
 
   if (!MOTIVOS.includes(motivo as (typeof MOTIVOS)[number])) return { error: "Elegí el motivo." };
   if (!nombre || nombre.length > 100) return { error: "Poné tu nombre." };
@@ -41,6 +46,11 @@ export async function enviarMensajeContacto(formData: FormData) {
   }
   if (!mensaje) return { error: "Escribí tu mensaje." };
   if (mensaje.length > 2000) return { error: "El mensaje puede tener hasta 2000 caracteres." };
+  if (motivo === "falla" && dispositivo) {
+    // La tabla acepta hasta 2000 caracteres en total.
+    const pie = `\n\n—\nDispositivo: ${dispositivo}`;
+    if (mensaje.length + pie.length <= 2000) mensaje += pie;
+  }
 
   const supabase = await createClient();
   const {
@@ -96,6 +106,8 @@ export async function enviarMensajeContacto(formData: FormData) {
 }
 
 const MOTIVO_LABEL: Record<string, string> = {
+  idea: "Idea o mejora",
+  falla: "Algo no funciona",
   borrar_cuenta: "Pide borrar su cuenta",
   mis_datos: "Consulta sobre sus datos",
   otro: "Otra consulta",

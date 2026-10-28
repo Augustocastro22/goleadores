@@ -192,3 +192,12 @@ export function IconAvailability(props: SVGProps<SVGSVGElement>) {
     </svg>
   );
 }
+
+export function IconFeedback(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" strokeWidth={1.8} stroke="currentColor" {...props}>
+      <path d="M4 5.5A2.5 2.5 0 0 1 6.5 3h11A2.5 2.5 0 0 1 20 5.5v8a2.5 2.5 0 0 1-2.5 2.5H11l-4.5 4v-4h0A2.5 2.5 0 0 1 4 13.5z" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M12 7.5v3.2M12 13h.01" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}

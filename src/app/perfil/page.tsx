@@ -5,6 +5,7 @@ import type { Bloqueo } from "@/lib/types";
 import PerfilForm from "./PerfilForm";
 import DisponibilidadEditor from "./DisponibilidadEditor";
 import PushSubscribe from "@/components/PushSubscribe";
+import { IconChevronRight, IconFeedback } from "@/components/icons";
 import Link from "next/link";
 import EliminarCuenta from "./EliminarCuenta";
 
@@ -47,6 +48,19 @@ export default async function PerfilPage() {
         <PerfilForm profile={profile} rol={grupo?.rol ?? null} />
         <PushSubscribe />
         <EliminarCuenta />
+        <Link
+          href="/contacto?motivo=idea"
+          className="flex items-center justify-between gap-3 rounded-2xl border border-border bg-surface/80 px-5 py-4 transition hover:border-border-strong hover:bg-surface-2/80"
+        >
+          <span className="flex items-center gap-3">
+            <IconFeedback className="h-6 w-6 shrink-0 text-primary-400" />
+            <span>
+              <span className="block text-sm font-semibold text-white">Sugerencias y reportes</span>
+              <span className="text-xs text-zinc-500">¿Una idea o algo que no anda?</span>
+            </span>
+          </span>
+          <IconChevronRight className="h-4 w-4 shrink-0 text-zinc-500" />
+        </Link>
         <a
           href={INSTAGRAM_URL}
           target="_blank"

@@ -14,7 +14,7 @@ export default function PrivacidadPage() {
     year: "numeric",
   });
   const contacto = (
-    <Link href="/contacto" className="text-primary-400 hover:text-primary-300">
+    <Link href="/contacto?motivo=mis_datos" className="text-primary-400 hover:text-primary-300">
       el formulario de contacto
     </Link>
   );
