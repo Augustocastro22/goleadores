@@ -272,13 +272,20 @@ export default function DisponibilidadEditor({
     <Card className="flex flex-col gap-4 p-6">
       <div>
         <p className="font-semibold text-white">¿Cuándo podés jugar?</p>
-        <p className="mt-1 text-xs text-zinc-500">
-          {activo === "puedo"
-            ? "Marcá cuándo podés jugar: en el mes, días enteros o de un día a otro; en la semana, las horas."
-            : "Marcá cuándo no podés jugar: en el mes, días enteros o de un día a otro; en la semana, las horas."}{" "}
-          El grupo ve las horas (no la nota) para elegir un horario que le sirva a todos, y es solo un
-          aviso: no te saca solo del partido.
+        <p className="mt-1 text-sm text-zinc-400">
+          Marcá {activo === "puedo" ? "cuándo podés" : "cuándo no podés"} y el grupo elige el mejor horario.
         </p>
+        <ul className="mt-2 flex flex-col gap-1 text-xs text-zinc-500">
+          <li>
+            <b className="font-semibold text-zinc-300">Mes:</b> tocá un día. Tocá la letra (L, M, J…) para marcar
+            todos los lunes, martes, jueves…
+          </li>
+          <li>
+            <b className="font-semibold text-zinc-300">Semana:</b> marcá las horas y elegí “Todas las semanas”
+            para que se repita.
+          </li>
+          <li>El grupo ve los horarios, no tu nota.</li>
+        </ul>
         {hayGrupo && (
           <Link
             href="/disponibilidad"
@@ -366,16 +373,21 @@ export default function DisponibilidadEditor({
       {!mostrarEleccion && !preguntaDeSiempre && (
         <>
       {modoDisp && (
-        <p className="-mt-2 text-xs text-zinc-500">
-          Estás marcando{" "}
-          <span className={`font-semibold ${tono.texto}`}>
-            {activo === "puedo" ? "cuándo podés" : "cuándo no podés"}
-          </span>
-          . Lo que no marques cuenta como que {activo === "puedo" ? "no podés" : "podés"}.{" "}
-          <button type="button" onClick={() => setEligiendo(true)} className="font-semibold text-zinc-300 underline">
+        <div className={`flex items-center justify-between gap-3 rounded-xl border px-3 py-2 ${tono.panel}`}>
+          <p className="text-xs text-zinc-300">
+            <span className={`font-semibold ${tono.texto}`}>
+              Marcás {activo === "puedo" ? "cuándo podés" : "cuándo no podés"}.
+            </span>{" "}
+            Lo vacío cuenta como que {activo === "puedo" ? "no podés" : "podés"}.
+          </p>
+          <button
+            type="button"
+            onClick={() => setEligiendo(true)}
+            className="shrink-0 text-xs font-semibold text-zinc-300 underline hover:text-white"
+          >
             Cambiar
           </button>
-        </p>
+        </div>
       )}
 
       <div className="inline-flex self-start rounded-xl border border-border bg-white/5 p-1">
