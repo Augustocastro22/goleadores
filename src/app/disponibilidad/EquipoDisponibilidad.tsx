@@ -36,7 +36,9 @@ interface Franja {
   fecha: string;
   desde: number;
   hasta: number;
-  pueden: number;
+  /** Los que pueden en la hora con menos gente de la franja, y en la que más. */
+  minimo: number;
+  maximo: number;
 }
 
 /**
@@ -86,21 +88,30 @@ export default function EquipoDisponibilidad({
     return m;
   }, [dias, jugadores, porJugador]);
 
-  // Mejores franjas: horas seguidas (mínimo 2) con al menos `necesarios` jugadores.
-  const mejores = useMemo(() => {
-    const out: Franja[] = [];
+  // Mejores franjas: horas seguidas que llegan a `necesarios` jugadores (las mismas casillas verdes
+  // de la grilla). Se prefieren las de 2 horas o más; si no hay, se muestran las de 1 hora.
+  const { mejores, soloUnaHora } = useMemo(() => {
+    const todas: Franja[] = [];
     for (const fecha of dias) {
       if (fecha < hoy) continue;
       for (let i = 0; i < HORAS.length; i++) {
-        if ((grilla.get(`${fecha}|${HORAS[i]}`) ?? 0) < necesarios) continue;
+        const cuenta = (k: number) => grilla.get(`${fecha}|${HORAS[k]}`) ?? 0;
+        if (cuenta(i) < necesarios) continue;
         const desde = HORAS[i];
-        // Se corta cuando cambia la cantidad, para no mezclar horas buenas con regulares.
-        const pueden = grilla.get(`${fecha}|${desde}`)!;
-        while (i + 1 < HORAS.length && grilla.get(`${fecha}|${HORAS[i + 1]}`) === pueden) i++;
-        if (HORAS[i] + 1 - desde >= 2) out.push({ fecha, desde, hasta: HORAS[i] + 1, pueden });
+        let minimo = cuenta(i);
+        let maximo = cuenta(i);
+        while (i + 1 < HORAS.length && cuenta(i + 1) >= necesarios) {
+          i++;
+          minimo = Math.min(minimo, cuenta(i));
+          maximo = Math.max(maximo, cuenta(i));
+        }
+        todas.push({ fecha, desde, hasta: HORAS[i] + 1, minimo, maximo });
       }
     }
-    return out.sort((a, b) => b.pueden - a.pueden || b.hasta - b.desde - (a.hasta - a.desde)).slice(0, 4);
+    const largas = todas.filter((f) => f.hasta - f.desde >= 2);
+    const elegidas = largas.length > 0 ? largas : todas;
+    elegidas.sort((a, b) => b.minimo - a.minimo || b.hasta - b.desde - (a.hasta - a.desde));
+    return { mejores: elegidas.slice(0, 4), soloUnaHora: largas.length === 0 && todas.length > 0 };
   }, [grilla, dias, necesarios, hoy]);
 
   const total = jugadores.length;
@@ -137,10 +148,15 @@ export default function EquipoDisponibilidad({
         </div>
         {mejores.length === 0 ? (
           <p className="text-sm text-zinc-500">
-            Esta semana no hay 2 horas seguidas con {necesarios} jugadores. Probá con otra semana o bajá el mínimo.
+            Esta semana no hay ningún horario con {necesarios} jugadores. Probá con otra semana o bajá el mínimo.
           </p>
         ) : (
           <ul className="flex flex-col gap-2">
+            {soloUnaHora && (
+              <li className="text-xs text-zinc-500">
+                No hay franjas de 2 horas seguidas con {necesarios} jugadores; estas son de 1 hora.
+              </li>
+            )}
             {mejores.map((f) => (
               <li key={f.fecha + f.desde}>
                 <button
@@ -155,7 +171,7 @@ export default function EquipoDisponibilidad({
                     </span>
                   </span>
                   <span className="text-sm font-bold tabular-nums text-primary-400">
-                    {f.pueden} de {total}
+                    {f.minimo === f.maximo ? f.minimo : `${f.minimo}–${f.maximo}`} de {total}
                   </span>
                 </button>
               </li>
