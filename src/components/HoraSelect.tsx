@@ -9,7 +9,13 @@ const HORAS_PARTIDO = Array.from({ length: 32 }, (_, i) => {
  * Si el partido ya tenía una hora fuera de la lista (cargada antes), se
  * agrega para no perderla al editar.
  */
-export default function HoraSelect({ defaultValue = "" }: { defaultValue?: string }) {
+export default function HoraSelect({
+  defaultValue = "",
+  onChange,
+}: {
+  defaultValue?: string;
+  onChange?: (hora: string) => void;
+}) {
   const opciones =
     defaultValue && !HORAS_PARTIDO.includes(defaultValue)
       ? [...HORAS_PARTIDO, defaultValue].sort()
@@ -19,6 +25,7 @@ export default function HoraSelect({ defaultValue = "" }: { defaultValue?: strin
     <select
       name="hora"
       defaultValue={defaultValue}
+      onChange={onChange && ((e) => onChange(e.target.value))}
       className="w-full appearance-none rounded-xl border border-border bg-white/5 px-3.5 py-2.5 text-white outline-none transition focus:border-primary-400/60 focus:ring-2 focus:ring-primary-400/20"
     >
       <option value="" className="bg-surface">

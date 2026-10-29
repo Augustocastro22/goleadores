@@ -23,6 +23,7 @@ import {
 } from "@/lib/confirmacion";
 import type { Respuesta } from "@/lib/types";
 import type { DesafioVista } from "@/lib/desafios";
+import type { Ocupado } from "@/components/AvisosConvocado";
 import { errorGolesPorCorregir, golesPorCorregir } from "@/lib/goles-por-corregir";
 
 function errorResultadoAntesDeTiempo(fecha: string, hora: string | null) {
@@ -102,6 +103,14 @@ async function avisarConvocatoria(
       { ...avisoConvocatoria(partido, pedirConfirmacion, { nombres: nombresInterno, mio }), url }
     );
   }
+}
+
+/** Los que ese día ya están convocados en otro grupo, para avisarlo al armar la convocatoria. */
+export async function ocupadosEnFecha(fecha: string): Promise<Ocupado[]> {
+  const { supabase, user, grupo } = await getContexto();
+  if (!user || grupo?.rol !== "admin" || !/^\d{4}-\d{2}-\d{2}$/.test(fecha)) return [];
+  const { data } = await supabase.rpc("get_ocupados_otro_grupo", { p_grupo_id: grupo.id, p_fecha: fecha });
+  return (data ?? []) as Ocupado[];
 }
 
 /**

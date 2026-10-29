@@ -5,6 +5,7 @@ import { getConfig } from "@/lib/config";
 import { hoyArgentina } from "@/lib/confirmacion";
 import { errorGolesPorCorregir, golesPorCorregir } from "@/lib/goles-por-corregir";
 import { getCanchas } from "@/lib/canchas";
+import type { Bloqueo } from "@/lib/types";
 import Card from "@/components/ui/Card";
 import { buttonClass } from "@/components/ui/Button";
 import NuevoPartidoForm from "./NuevoPartidoForm";
@@ -22,6 +23,17 @@ export default async function NuevoPartidoPage() {
     getCanchas(supabase, grupo.id),
     sugerirModoJuego(supabase, grupo.id),
   ]);
+
+  // Lo que dijeron que no pueden, para avisar al convocar (los generales y los de este grupo).
+  const { data: bloqueos } = await supabase
+    .from("bloqueos_disponibilidad")
+    .select("*")
+    .in(
+      "jugador_id",
+      jugadores.map((j) => j.id)
+    )
+    .or(`grupo_id.is.null,grupo_id.eq.${grupo.id}`)
+    .returns<Bloqueo[]>();
 
   return (
     <div className="mx-auto max-w-md">
@@ -44,6 +56,7 @@ export default async function NuevoPartidoPage() {
             pideConfirmacion={config.pedir_confirmacion}
             canchas={canchas}
             config={config}
+            bloqueos={bloqueos ?? []}
           />
         )}
       </Card>

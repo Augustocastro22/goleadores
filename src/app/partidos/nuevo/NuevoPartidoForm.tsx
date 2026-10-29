@@ -1,8 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import type { Profile } from "@/lib/types";
-import { createPartido } from "@/lib/actions/partidos";
+import { useEffect, useMemo, useState } from "react";
+import type { Bloqueo, Profile } from "@/lib/types";
+import { bloqueaFecha } from "@/lib/disponibilidad";
+import { createPartido, ocupadosEnFecha } from "@/lib/actions/partidos";
+import AvisosConvocado, { type Ocupado } from "@/components/AvisosConvocado";
 import ActionForm from "@/components/ActionForm";
 import SubmitButton from "@/components/SubmitButton";
 import HoraSelect from "@/components/HoraSelect";
@@ -31,7 +33,10 @@ export default function NuevoPartidoForm({
   pideConfirmacion,
   canchas,
   config,
+  bloqueos,
 }: {
+  /** Lo que los jugadores dijeron que no pueden, para avisar al convocar. */
+  bloqueos: Bloqueo[];
   jugadores: Profile[];
   /** Fecha de hoy en Argentina, para limitar el calendario según el modo. */
   hoy: string;
@@ -57,6 +62,35 @@ export default function NuevoPartidoForm({
   ]);
   const [votar, setVotar] = useState<VotarEnPartido>({ mvp: true, peor: true });
   const jugado = modo === "jugado";
+  // Fecha y hora del partido, para avisar a quién convocás que dijo que no puede (solo al programar).
+  const [fecha, setFecha] = useState("");
+  const [hora, setHora] = useState("");
+  // Los ocupados de otro grupo se piden por fecha; se usan solo si son de la fecha que está puesta.
+  const [ocupadosCargados, setOcupadosCargados] = useState<{ fecha: string; lista: Ocupado[] }>({
+    fecha: "",
+    lista: [],
+  });
+  useEffect(() => {
+    if (jugado || !fecha) return;
+    let vigente = true;
+    ocupadosEnFecha(fecha).then((lista) => vigente && setOcupadosCargados({ fecha, lista }));
+    return () => {
+      vigente = false;
+    };
+  }, [fecha, jugado]);
+  const ocupados = useMemo(
+    () => (!jugado && ocupadosCargados.fecha === fecha ? ocupadosCargados.lista : []),
+    [jugado, fecha, ocupadosCargados]
+  );
+  const bloqueoPorJugador = useMemo(() => {
+    const map = new Map<string, Bloqueo>();
+    if (jugado || !fecha) return map;
+    for (const b of bloqueos) {
+      if (!map.has(b.jugador_id) && bloqueaFecha(b, fecha, hora || null)) map.set(b.jugador_id, b);
+    }
+    return map;
+  }, [bloqueos, fecha, hora, jugado]);
+  const ocupadoPorJugador = useMemo(() => new Map(ocupados.map((o) => [o.jugador_id, o])), [ocupados]);
   // Los goles de los jugadores suman más que el resultado (lo informa GolesFields).
   const [golesNoCierran, setGolesNoCierran] = useState(false);
   const nombres: [string, string] = interno
@@ -83,7 +117,10 @@ export default function NuevoPartidoForm({
           <button
             key={valor}
             type="button"
-            onClick={() => setModo(valor)}
+            onClick={() => {
+              setModo(valor);
+              setFecha(""); // el input de fecha se vacía al cambiar de modo
+            }}
             aria-pressed={modo === valor}
             className={`rounded-lg px-3 py-2 text-sm font-semibold transition ${
               modo === valor
@@ -112,12 +149,13 @@ export default function NuevoPartidoForm({
             type="date"
             name="fecha"
             required
+            onChange={(e) => setFecha(e.target.value)}
             {...(jugado ? { max: hoy } : { min: hoy })}
           />
         </Label>
         <Label className="w-28 shrink-0">
           Hora
-          <HoraSelect />
+          <HoraSelect onChange={setHora} />
         </Label>
       </div>
       <Label>
@@ -176,10 +214,16 @@ export default function NuevoPartidoForm({
               {/* Al menos este ancho para el nombre: si los botones no entran al lado, bajan a otra línea. */}
               <div className="flex min-w-[7.5rem] flex-1 items-center gap-3">
                 <Avatar src={jugador.foto_url} alt={jugador.apodo} size={28} />
-                <span className="block truncate text-sm text-zinc-200">
-                  {jugador.nombre} {jugador.apellido}{" "}
-                  <span className="text-zinc-500">({jugador.apodo})</span>
-                </span>
+                <div className="min-w-0">
+                  <span className="block truncate text-sm text-zinc-200">
+                    {jugador.nombre} {jugador.apellido}{" "}
+                    <span className="text-zinc-500">({jugador.apodo})</span>
+                  </span>
+                  <AvisosConvocado
+                    bloqueo={bloqueoPorJugador.get(jugador.id)}
+                    ocupado={ocupadoPorJugador.get(jugador.id)}
+                  />
+                </div>
               </div>
               <EquipoPicker
                 jugadorId={jugador.id}

@@ -3,7 +3,8 @@
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { Bloqueo, Profile, Respuesta } from "@/lib/types";
-import { bloqueaFecha, describirBloqueo } from "@/lib/disponibilidad";
+import { bloqueaFecha } from "@/lib/disponibilidad";
+import AvisosConvocado, { type Ocupado } from "@/components/AvisosConvocado";
 import Card from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
 import Avatar from "@/components/ui/Avatar";
@@ -15,18 +16,7 @@ import { Input } from "@/components/ui/Input";
 
 type Equipo = 1 | 2;
 
-/** Un jugador que ese día ya está convocado en un partido de otro grupo (get_ocupados_otro_grupo). */
-export interface Ocupado {
-  jugador_id: string;
-  hora: string | null;
-  /** Si confirmó que juega allá (si no, solo está convocado). */
-  confirmado: boolean;
-}
-
-function textoOcupado(o: Ocupado) {
-  const hora = o.hora ? ` (${o.hora.slice(0, 5)}hs)` : "";
-  return o.confirmado ? `Ya juega con otro grupo ese día${hora}` : `Está convocado en otro grupo ese día${hora}`;
-}
+export type { Ocupado };
 
 export default function ConvocadosEditor({
   partidoId,
@@ -249,13 +239,7 @@ export default function ConvocadosEditor({
                           {jugador.nombre} {jugador.apellido}{" "}
                           <span className="text-zinc-500">({jugador.apodo})</span>
                         </span>
-                        {bloqueo && (
-                          <p className="truncate text-xs text-gold-400">
-                            ⚠ Dijo que no puede: {describirBloqueo(bloqueo)}
-                            {bloqueo.nota ? ` (${bloqueo.nota})` : ""}
-                          </p>
-                        )}
-                        {ocupado && <p className="truncate text-xs text-gold-400">⚠ {textoOcupado(ocupado)}</p>}
+                        <AvisosConvocado bloqueo={bloqueo} ocupado={ocupado} />
                         {exMiembros.has(jugador.id) && (
                           <p className="truncate text-xs text-danger-400">Ya no está en el grupo: sacalo con Editar.</p>
                         )}
@@ -348,13 +332,7 @@ export default function ConvocadosEditor({
                       {jugador.nombre} {jugador.apellido}{" "}
                       <span className="text-zinc-500">({jugador.apodo})</span>
                     </span>
-                    {bloqueo && (
-                      <p className="truncate text-xs text-gold-400">
-                        ⚠ Dijo que no puede: {describirBloqueo(bloqueo)}
-                        {bloqueo.nota ? ` (${bloqueo.nota})` : ""}
-                      </p>
-                    )}
-                    {ocupado && <p className="truncate text-xs text-gold-400">⚠ {textoOcupado(ocupado)}</p>}
+                    <AvisosConvocado bloqueo={bloqueo} ocupado={ocupado} />
                     {exMiembro && <p className="truncate text-xs text-danger-400">Ya no está en el grupo</p>}
                   </div>
                 </div>
