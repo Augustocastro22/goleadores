@@ -9,6 +9,7 @@ import Card from "@/components/ui/Card";
 import Avatar from "@/components/ui/Avatar";
 import Badge from "@/components/ui/Badge";
 import { IconChevronRight, IconGoal, IconThumbsDown, IconTrophy, IconUsers } from "@/components/icons";
+import { leerFiltroPartidos, type FiltroPartidos } from "@/lib/tipos-partido";
 
 interface PartidoJugadoRow {
   partido_id: string;
@@ -40,8 +41,10 @@ interface Logro {
 
 export default async function JugadorDetallePage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ tipo?: string }>;
 }) {
   const { id } = await params;
   const { supabase, grupo } = await requireGrupo();
@@ -84,8 +87,9 @@ export default async function JugadorDetallePage({
   const peorRows = (peorRes.data ?? []) as RankingRow[];
 
   const misStats = goleadores.find((r) => r.jugador_id === id);
-  const goles = misStats?.goles ?? 0;
-  const partidosJugados = misStats?.partidos_jugados ?? 0;
+  // Totales de todos los partidos: los logros se miden con esto; lo que se muestra arriba puede filtrarse (más abajo).
+  const golesTotales = misStats?.goles ?? 0;
+  const partidosTotales = misStats?.partidos_jugados ?? 0;
   const vecesMvp = mvpRows.find((r) => r.jugador_id === id)?.veces_elegido ?? 0;
   const vecesPeor = peorRows.find((r) => r.jugador_id === id)?.veces_elegido ?? 0;
 
@@ -125,8 +129,19 @@ export default async function JugadorDetallePage({
       resultadosPorPartido.set(mp.partido_id, resultado);
     }
   }
+  // Si jugó de los dos tipos (contra otros equipos y entre ellos), se puede ver cada uno por separado.
+  const hayDosTipos = internos.size > 0 && internos.size < misPartidos.length;
+  const filtro: FiltroPartidos = hayDosTipos ? leerFiltroPartidos((await searchParams).tipo) : "todos";
+  const visibles = misPartidos.filter(
+    (mp) => filtro === "todos" || (filtro === "entre_nosotros") === internos.has(mp.partido_id)
+  );
+  const goles = filtro === "todos" ? golesTotales : visibles.reduce((total, mp) => total + mp.goles, 0);
+  const partidosJugados = filtro === "todos" ? partidosTotales : visibles.length;
   const conteo: Record<Resultado, number> = { G: 0, E: 0, P: 0 };
-  for (const resultado of resultadosPorPartido.values()) conteo[resultado] += 1;
+  for (const mp of visibles) {
+    const resultado = resultadosPorPartido.get(mp.partido_id);
+    if (resultado) conteo[resultado] += 1;
+  }
 
   // Racha goleadora: partidos consecutivos (propios) convirtiendo al menos un gol.
   let rachaGolActual = 0;
@@ -153,7 +168,7 @@ export default async function JugadorDetallePage({
     }
   }
   const totalPartidosGrupo = (todosPartidosRes.data ?? []).length;
-  const presenciaPerfecta = totalPartidosGrupo > 0 && partidosJugados === totalPartidosGrupo;
+  const presenciaPerfecta = totalPartidosGrupo > 0 && partidosTotales === totalPartidosGrupo;
 
   // MVP: el nivel más alto de veces elegido Mejor Jugador (no hace falta que sean seguidas).
   const nivelMvp = votaMvp ? ([10, 5].find((n) => vecesMvp >= n) ?? 0) : 0;
@@ -163,15 +178,15 @@ export default async function JugadorDetallePage({
   const maxGolesEnUnPartido = Math.max(0, ...misPartidos.map((mp) => mp.goles));
 
   // Veterano: el nivel más alto de partidos jugados que alcanzó.
-  const nivelVeterano = [100, 50, 25].find((n) => partidosJugados >= n) ?? 0;
+  const nivelVeterano = [100, 50, 25].find((n) => partidosTotales >= n) ?? 0;
 
   // Goleador del grupo: tiene la mayor cantidad de goles (empatado cuenta).
   const maxGolesGrupo = Math.max(0, ...goleadores.map((r) => r.goles ?? 0));
-  const esGoleadorDelGrupo = goles > 0 && goles === maxGolesGrupo;
+  const esGoleadorDelGrupo = golesTotales > 0 && golesTotales === maxGolesGrupo;
 
   const logrosCandidatos: (Logro | null)[] = [
     esGoleadorDelGrupo
-      ? { icon: IconGoal, titulo: "Goleador del grupo", detalle: `Máximo goleador del grupo, con ${goles} goles.` }
+      ? { icon: IconGoal, titulo: "Goleador del grupo", detalle: `Máximo goleador del grupo, con ${golesTotales} goles.` }
       : null,
     hatTricks > 0
       ? {
@@ -186,7 +201,7 @@ export default async function JugadorDetallePage({
     nivelVeterano > 0
       ? { icon: IconUsers, titulo: "Veterano", detalle: `Jugó ${nivelVeterano} partidos o más con el grupo.` }
       : null,
-    votaPeor && partidosJugados > 0 && vecesPeor === 0
+    votaPeor && partidosTotales > 0 && vecesPeor === 0
       ? { icon: IconThumbsDown, titulo: "Nunca la remó", detalle: "Nunca fue elegido Peor Jugador." }
       : null,
     rachaGolMax >= 3
@@ -239,6 +254,7 @@ export default async function JugadorDetallePage({
         <Badge variant={rol === "admin" ? "gold" : "neutral"}>
           {rol === "admin" ? "Admin" : "Jugador"}
         </Badge>
+        {hayDosTipos && <FiltroTipo jugadorId={id} actual={filtro} />}
         <div
           className={`mt-2 grid w-full divide-x divide-border border-t border-border pt-4 ${
             COLS[2 + Number(votaMvp) + Number(votaPeor)]
@@ -249,6 +265,9 @@ export default async function JugadorDetallePage({
           {votaMvp && <StatCol value={vecesMvp} label="MVP" />}
           {votaPeor && <StatCol value={vecesPeor} label="Peor" />}
         </div>
+        {filtro !== "todos" && (votaMvp || votaPeor) && (
+          <p className="text-[11px] text-zinc-600">MVP y Peor cuentan todos los partidos.</p>
+        )}
         {misPartidos.length > 0 && (
           <div className="flex items-center justify-center gap-4">
             {(["G", "E", "P"] as const).map((r) => (
@@ -286,13 +305,13 @@ export default async function JugadorDetallePage({
 
       <section>
         <h2 className="mb-3 text-lg font-bold text-white">Historial de partidos</h2>
-        {misPartidos.length === 0 ? (
+        {visibles.length === 0 ? (
           <Card className="px-5 py-8 text-center text-sm text-zinc-500">
             Todavía no jugó ningún partido.
           </Card>
         ) : (
           <Card className="divide-y divide-border overflow-hidden py-1">
-            {misPartidos.map((mp) => {
+            {visibles.map((mp) => {
               const fecha = new Date(mp.partidos.fecha + "T00:00:00");
               const resultado = resultadosPorPartido.get(mp.partido_id);
               // Entre ellos: "Blancos vs Negros" y en cuál jugó (si no, "vs Negros" confundía al que jugó en Negros).
@@ -332,6 +351,34 @@ export default async function JugadorDetallePage({
           </Card>
         )}
       </section>
+    </div>
+  );
+}
+
+const FILTROS: { valor: FiltroPartidos; texto: string }[] = [
+  { valor: "todos", texto: "Todos" },
+  { valor: "rivales", texto: "Contra rivales" },
+  { valor: "entre_nosotros", texto: "Entre nosotros" },
+];
+
+/** Qué partidos cuentan las estadísticas de arriba: solo aparece si jugó de los dos tipos. */
+function FiltroTipo({ jugadorId, actual }: { jugadorId: string; actual: FiltroPartidos }) {
+  return (
+    <div className="flex flex-wrap justify-center gap-1.5">
+      {FILTROS.map((f) => (
+        <Link
+          key={f.valor}
+          href={f.valor === "todos" ? `/jugadores/${jugadorId}` : `/jugadores/${jugadorId}?tipo=${f.valor}`}
+          scroll={false}
+          className={`rounded-full border px-3 py-1 text-xs font-semibold transition ${
+            actual === f.valor
+              ? "border-primary-500/40 bg-primary-500/10 text-primary-400"
+              : "border-border text-zinc-400 hover:text-white"
+          }`}
+        >
+          {f.texto}
+        </Link>
+      ))}
     </div>
   );
 }

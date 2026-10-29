@@ -25,6 +25,7 @@ import GolesEditor from "./GolesEditor";
 import DesafioPanel, { type PropuestaResultado } from "./DesafioPanel";
 import type { Ocupado } from "./ConvocadosEditor";
 import ConvocadosEditor from "./ConvocadosEditor";
+import SobreResultado, { type GanadorSobre } from "@/components/SobreResultado";
 import VotoSelects, { type Candidato } from "./VotoSelects";
 import { PendientesCard, RespuestaBadge, RespuestaCard, ResumenRespuestas } from "./Confirmacion";
 
@@ -423,6 +424,7 @@ export default async function PartidoDetailPage({
             <div className="flex flex-col gap-3">
               {conMvp && (
                 <ResultadoVotacion
+                  partidoId={id}
                   label="Mejor Jugador"
                   filas={desgloseMvp}
                   desempate={desempates.find((d) => d.tipo === "MVP") ?? null}
@@ -431,6 +433,7 @@ export default async function PartidoDetailPage({
               )}
               {conPeor && (
                 <ResultadoVotacion
+                  partidoId={id}
                   label="Peor Jugador"
                   peor
                   filas={desglosePeor}
@@ -583,12 +586,14 @@ function ConvocadosList({
  * - si no había cómo definirlo (o volvió a empatar), cuentan todos los empatados.
  */
 function ResultadoVotacion({
+  partidoId,
   label,
   peor = false,
   filas,
   desempate,
   plazos,
 }: {
+  partidoId: string;
   label: string;
   /** El ganador se marca en rojo en vez de verde. */
   peor?: boolean;
@@ -616,12 +621,8 @@ function ResultadoVotacion({
   const nombresEmpatados = (desempate?.candidatos_apodos ?? empatados.map((f) => f.apodo)).join(" y ");
   const apodoDe = (id: string) => filas.find((f) => f.jugador_id === id)?.apodo ?? "?";
 
-  return (
-    <Card className="flex flex-col gap-3 p-4">
-      <div className="flex items-center justify-between gap-2">
-        <p className="text-sm font-semibold text-white">{label}</p>
-        {pendiente && <Badge variant="gold">Empate · falta definir</Badge>}
-      </div>
+  const detalle = (
+    <>
       {/* Todas las filas iguales (misma foto y alto); el ganador se marca solo con el fondo. */}
       <div className="-mx-2 flex flex-col gap-1">
         {filas.map((f) => {
@@ -660,7 +661,7 @@ function ResultadoVotacion({
             Empataron {nombresEmpatados}. Todavía <span className="font-semibold text-white">no hay ganador</span>:
             lo definen con un voto extra los que no votaron a ninguno de los empatados
             {plazos.get(desempate.id) ? `, hasta el ${formatearCierreVotacion(plazos.get(desempate.id)!)}` : ""}.
-            Si sigue parejo, cuentan todos.
+            Ya se les envió una notificación para que voten. Si sigue parejo, cuentan todos.
           </p>
         )
       ) : desempate?.ganador_id ? (
@@ -676,7 +677,41 @@ function ResultadoVotacion({
           </p>
         )
       )}
-    </Card>
+    </>
+  );
+
+  // Con ganador, el resultado va escondido en un sobre (y la tabla aparece al abrirlo).
+  // Con el desempate pendiente todavía no hay a quién revelar: se muestra la tabla.
+  if (pendiente || ganadores.length === 0) {
+    return (
+      <Card className="flex flex-col gap-3 p-4">
+        <div className="flex items-center justify-between gap-2">
+          <p className="text-sm font-semibold text-white">{label}</p>
+          {pendiente && <Badge variant="gold">Empate · falta definir</Badge>}
+        </div>
+        {detalle}
+      </Card>
+    );
+  }
+
+  const aCarta = (f: RankingRow): GanadorSobre => ({
+    id: f.jugador_id,
+    apodo: f.apodo,
+    nombre: f.nombre,
+    apellido: f.apellido,
+    fotoUrl: f.foto_url,
+    votos: f.votos,
+  });
+  return (
+    <SobreResultado
+      id={`${partidoId}-${peor ? "peor" : "mvp"}`}
+      titulo={label}
+      peor={peor}
+      ganadores={filas.filter((f) => ganadores.includes(f.jugador_id)).map(aCarta)}
+      candidatos={filas.map(aCarta)}
+    >
+      <div className="flex flex-col gap-3">{detalle}</div>
+    </SobreResultado>
   );
 }
 

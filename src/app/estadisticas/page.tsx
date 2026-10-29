@@ -13,6 +13,8 @@ import { OPCION_COLOR, OPCION_DISENO, OPCION_NOMBRES } from "@/lib/compartir/opc
 import { jugoDeLosDosTipos, leerFiltroPartidos, type FiltroPartidos } from "@/lib/tipos-partido";
 import { historialDesafios, type DesafioVista, type HistorialRival } from "@/lib/desafios";
 import { RESULTADO_CLASS, RESULTADO_PLURAL } from "@/lib/resultado";
+import PilaSobres, { SoloSiAbierto, type SobrePila } from "@/components/PilaSobres";
+import type { GanadorSobre } from "@/components/SobreResultado";
 
 export default async function EstadisticasPage({
   searchParams,
@@ -69,8 +71,11 @@ export default async function EstadisticasPage({
   let ultimoMvp: RankingRow[] = [];
   let ultimoPeor: RankingRow[] = [];
   let ultimoDesempates: DesempatePartido[] = [];
+  // Todos los que recibieron votos en el último partido: son las caras que pasan por la ruleta del sobre.
+  let desgloseMvp: RankingRow[] = [];
+  let desglosePeor: RankingRow[] = [];
   if (ultimoPartidoCerradoId) {
-    const [ultimoMvpRes, ultimoPeorRes, desempatesRes] = await Promise.all([
+    const [ultimoMvpRes, ultimoPeorRes, desempatesRes, desgloseMvpRes, desglosePeorRes] = await Promise.all([
       supabase.rpc("get_ganadores_votacion", {
         p_partido_id: ultimoPartidoCerradoId,
         p_tipo: "MVP",
@@ -80,15 +85,51 @@ export default async function EstadisticasPage({
         p_tipo: "PEOR",
       }),
       supabase.rpc("get_desempates_partido", { p_partido_id: ultimoPartidoCerradoId }),
+      supabase.rpc("get_desglose_votos", { p_partido_id: ultimoPartidoCerradoId, p_tipo: "MVP" }),
+      supabase.rpc("get_desglose_votos", { p_partido_id: ultimoPartidoCerradoId, p_tipo: "PEOR" }),
     ]);
+    desgloseMvp = (desgloseMvpRes.data ?? []) as RankingRow[];
+    desglosePeor = (desglosePeorRes.data ?? []) as RankingRow[];
     ultimoDesempates = (desempatesRes.data ?? []) as DesempatePartido[];
     ultimoMvp = (ultimoMvpRes.data ?? []) as RankingRow[];
     ultimoPeor = (ultimoPeorRes.data ?? []) as RankingRow[];
   }
 
+  // Los sobres del último partido (los mismos que en el partido: abrir uno acá o allá cuenta para los dos).
+  const ultimoPartido = recientes.find((p) => p.id === ultimoPartidoCerradoId);
+  const aCarta = (f: RankingRow): GanadorSobre => ({
+    id: f.jugador_id,
+    apodo: f.apodo,
+    nombre: f.nombre,
+    apellido: f.apellido,
+    fotoUrl: f.foto_url,
+    votos: f.votos,
+  });
+  const sobres: SobrePila[] = [];
+  if (ultimoPartido) {
+    // Con el desempate pendiente todavía no hay ganador a quien revelar.
+    const sobreDe = (tipo: "MVP" | "PEOR", ganadores: RankingRow[], desglose: RankingRow[]): SobrePila | null =>
+      ganadores.length === 0 || ultimoDesempates.some((d) => d.tipo === tipo && !d.resuelto)
+        ? null
+        : {
+            id: `${ultimoPartido.id}-${tipo === "MVP" ? "mvp" : "peor"}`,
+            titulo: tipo === "MVP" ? "Mejor Jugador" : "Peor Jugador",
+            peor: tipo === "PEOR",
+            ganadores: ganadores.map(aCarta),
+            candidatos: (desglose.length > 0 ? desglose : ganadores).map(aCarta),
+          };
+    const mvpSobre = config.vota_mvp && ultimoPartido.con_mvp ? sobreDe("MVP", ultimoMvp, desgloseMvp) : null;
+    const peorSobre = config.vota_peor && ultimoPartido.con_peor ? sobreDe("PEOR", ultimoPeor, desglosePeor) : null;
+    if (mvpSobre) sobres.push(mvpSobre);
+    if (peorSobre) sobres.push(peorSobre);
+  }
+  const sobreId = (tipo: "mvp" | "peor") =>
+    sobres.find((s) => s.id.endsWith(`-${tipo}`))?.id;
+
   return (
     <div className="flex flex-col gap-8">
       <h1 className="text-2xl font-extrabold tracking-tight text-white">Estadísticas</h1>
+      {sobres.length > 0 && <PilaSobres sobres={sobres} />}
       <RankingList
         titulo="Goleadores"
         icon={IconGoal}
@@ -125,6 +166,7 @@ export default async function EstadisticasPage({
           valueLabel="Veces"
           podio
           ultimoPartidoGanadores={ultimoMvp}
+          ultimoPartidoSobreId={sobreId("mvp")}
           ultimoPartidoPendiente={ultimoDesempates.find((d) => d.tipo === "MVP" && !d.resuelto)}
         />
       )}
@@ -138,6 +180,7 @@ export default async function EstadisticasPage({
           valueLabel="Veces"
           podio
           ultimoPartidoGanadores={ultimoPeor}
+          ultimoPartidoSobreId={sobreId("peor")}
           ultimoPartidoPendiente={ultimoDesempates.find((d) => d.tipo === "PEOR" && !d.resuelto)}
         />
       )}
@@ -197,10 +240,13 @@ function RankingList({
   valueLabel,
   podio = false,
   ultimoPartidoGanadores,
+  ultimoPartidoSobreId,
   ultimoPartidoPendiente,
   compartir,
   debajoDelTitulo,
 }: {
+  /** El sobre del último partido: la línea con el ganador aparece recién cuando se abrió. */
+  ultimoPartidoSobreId?: string;
   /** Algo entre el título y la tabla (el filtro de partidos de Goleadores). */
   debajoDelTitulo?: React.ReactNode;
   /** La imagen para compartir esta tabla (ver src/components/Compartir.tsx). */
@@ -247,14 +293,19 @@ function RankingList({
           <span className="text-zinc-400">{ultimoPartidoPendiente.candidatos_apodos.join(" y ")}</span>, falta definir
         </p>
       ) : ultimoPartidoGanadores && ultimoPartidoGanadores.length > 0 && (
-        <p className="mb-3 pl-10 text-xs text-zinc-500">
-          Último partido:{" "}
-          <span className="text-zinc-400">
-            {ultimoPartidoGanadores.map((g) => g.apodo).join(" y ")}
-          </span>{" "}
-          con {ultimoPartidoGanadores[0].votos}{" "}
-          {ultimoPartidoGanadores[0].votos === 1 ? "voto" : "votos"}
-        </p>
+        (() => {
+          const linea = (
+            <p className="mb-3 pl-10 text-xs text-zinc-500">
+              Último partido:{" "}
+              <span className="text-zinc-400">
+                {ultimoPartidoGanadores.map((g) => g.apodo).join(" y ")}
+              </span>{" "}
+              con {ultimoPartidoGanadores[0].votos}{" "}
+              {ultimoPartidoGanadores[0].votos === 1 ? "voto" : "votos"}
+            </p>
+          );
+          return ultimoPartidoSobreId ? <SoloSiAbierto id={ultimoPartidoSobreId}>{linea}</SoloSiAbierto> : linea;
+        })()
       )}
       {filas.length === 0 ? (
         <Card className="px-5 py-8 text-center text-sm text-zinc-500">Todavía no hay datos.</Card>
