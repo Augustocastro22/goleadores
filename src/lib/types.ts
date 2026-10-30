@@ -50,6 +50,8 @@ export interface Partido {
   con_peor: boolean;
   /** Hasta cuándo se vota: lo fija la base al cargar el resultado (ver 0029_votacion_24h.sql). */
   votacion_cierra_en: string | null;
+  /** Cuántos recordatorios de votación se mandaron: 0, 1 o 2 (ver 0039_votacion_48h_cierre_manual.sql). */
+  votacion_recordatorios: number;
   /** La cancha del grupo donde se juega (la asigna la base según `lugar`, ver 0026_canchas.sql). */
   cancha_id: string | null;
   /** Si es el partido de este grupo en un desafío contra otro grupo (ver 0022_desafios.sql). */

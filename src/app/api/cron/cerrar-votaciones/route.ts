@@ -3,6 +3,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { cerrarDesempatesVencidos, cerrarVotacionSiCorresponde } from "@/lib/votaciones";
 import { avisarDesafio } from "@/lib/desafios-avisos";
 import { recordarConfirmaciones } from "@/lib/recordatorios";
+import { recordarVotaciones } from "@/lib/recordatorios-votacion";
 
 /**
  * Corre una vez por día (ver vercel.json). Cierra por vencimiento las
@@ -10,7 +11,8 @@ import { recordarConfirmaciones } from "@/lib/recordatorios";
  * completar todos los votos" ya se notifica al toque desde votar() en
  * src/lib/actions/votos.ts, y el vencido también se cierra apenas alguien
  * abre el partido. Esto cubre los que nadie abrió (y lo mismo con los
- * desempates, que vencen a las 24 h).
+ * desempates, que vencen a las 24 h). También manda los recordatorios de las
+ * votaciones abiertas (ver src/lib/recordatorios-votacion.ts).
  */
 export async function GET(request: NextRequest) {
   const secret = process.env.CRON_SECRET;
@@ -45,9 +47,13 @@ export async function GET(request: NextRequest) {
   // Convocados que no dijeron si juegan: recordatorio el día anterior y la mañana del partido.
   const recordados = await recordarConfirmaciones();
 
+  // Votaciones abiertas: a los que no votaron y al admin, cuántos faltan y cuándo cierra.
+  const recordadosVotacion = await recordarVotaciones();
+
   return NextResponse.json({
     cerrados: (partidos ?? []).length,
     desafios: (desafiosVencidos ?? []).length,
     recordados,
+    recordadosVotacion,
   });
 }

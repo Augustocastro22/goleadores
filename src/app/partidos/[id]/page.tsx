@@ -4,8 +4,13 @@ import { esPartidoInterno, getConfig, grupoVota as votaAlgo, nombresDelPartido }
 import Link from "next/link";
 import { deletePartido } from "@/lib/actions/partidos";
 import { urlConGrupo } from "@/lib/grupo-cookie";
-import { votarDesempate, votarPartido } from "@/lib/actions/votos";
-import { formatearCierreVotacion, votacionCerrada } from "@/lib/votacion";
+import { cerrarVotacion, votarDesempate, votarPartido } from "@/lib/actions/votos";
+import {
+  formatearCierreVotacion,
+  puedeCerrarVotacionAMano,
+  VOTACION_CIERRE_MANUAL_HORAS,
+  votacionCerrada,
+} from "@/lib/votacion";
 import { cerrarDesempatesVencidos, cerrarVotacionSiCorresponde } from "@/lib/votaciones";
 import { formatearMomento, partidoYaPaso, puedeCargarResultado, resultadoHabilitadoDesde } from "@/lib/confirmacion";
 import type { Bloqueo, DesempatePartido, EstadoVotacion, Profile, RankingRow, Respuesta } from "@/lib/types";
@@ -163,6 +168,9 @@ export default async function PartidoDetailPage({
   const candidatos = participantes.filter((p) => p.jugador_id !== user.id);
 
   let cerrada = false;
+  // Cuántos de los que jugaron ya votaron todo lo que se vota (lo ve el admin mientras está abierta).
+  let votaronVotacion = 0;
+  let totalVotacion = 0;
   let desgloseMvp: RankingRow[] = [];
   let desglosePeor: RankingRow[] = [];
   let desempates: DesempatePartido[] = [];
@@ -183,6 +191,8 @@ export default async function PartidoDetailPage({
       conMvp,
       conPeor,
     });
+    totalVotacion = totalParticipantes;
+    votaronVotacion = conMvp && conPeor ? Math.min(votosMvp, votosPeor) : conMvp ? votosMvp : votosPeor;
 
     if (cerrada) {
       // Venció el plazo y todavía no se cerró (el cron corre una vez por
@@ -455,6 +465,43 @@ export default async function PartidoDetailPage({
               votoPeorId={votoPeorId}
             />
           )}
+        </section>
+      )}
+
+      {/* El admin ve cuántos faltan votar y, pasadas 24 h desde que se cargó el resultado, puede cerrarla
+          él (por ejemplo, si ya sabe que alguien no va a votar). Si no, se cierra sola a las 48 h. */}
+      {isAdmin && partido.jugado && partido.con_votacion && !cerrada && partido.votacion_cierra_en && (
+        <section>
+          <Card className="flex flex-col gap-2 px-4 py-3">
+            <p className="text-sm font-semibold text-white">Cierre de la votación</p>
+            <p className="text-sm text-zinc-400">
+              {totalVotacion === 1 ? "Votó" : "Votaron"} {votaronVotacion} de {totalVotacion}. Se cierra sola el{" "}
+              {formatearCierreVotacion(partido.votacion_cierra_en)}.
+            </p>
+            {puedeCerrarVotacionAMano(partido.votacion_cierra_en) ? (
+              <ActionForm action={cerrarVotacion} className="flex flex-col gap-2">
+                <input type="hidden" name="partido_id" value={id} />
+                <ConfirmSubmitButton
+                  confirmMessage={`Votaron ${votaronVotacion} de ${totalVotacion}. Si la cerrás ahora, el resultado se define con esos votos y ya nadie puede votar. ¿Cerrar la votación?`}
+                  confirmLabel="Cerrar votación"
+                  confirmClassName="border border-primary-500/30 bg-primary-500/15 text-primary-400 hover:bg-primary-500/25"
+                  className="w-full rounded-xl border border-border-strong bg-white/5 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-white/10"
+                >
+                  Cerrar votación ahora
+                </ConfirmSubmitButton>
+              </ActionForm>
+            ) : (
+              <p className="text-xs text-zinc-500">
+                Podés cerrarla a mano desde el{" "}
+                {formatearCierreVotacion(
+                  new Date(
+                    new Date(partido.votacion_cierra_en).getTime() - VOTACION_CIERRE_MANUAL_HORAS * 60 * 60 * 1000
+                  ).toISOString()
+                )}
+                .
+              </p>
+            )}
+          </Card>
         </section>
       )}
 

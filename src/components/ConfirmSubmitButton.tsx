@@ -14,6 +14,7 @@ import { useRef } from "react";
 export default function ConfirmSubmitButton({
   confirmMessage,
   confirmLabel = "Confirmar",
+  confirmClassName = "border border-danger-500/30 bg-danger-500/15 text-danger-400 hover:bg-danger-500/25",
   className,
   title,
   children,
@@ -21,6 +22,8 @@ export default function ConfirmSubmitButton({
   confirmMessage: string;
   /** Texto del botón que confirma (ej: "Salir", "Eliminar"). */
   confirmLabel?: string;
+  /** Colores del botón que confirma: por defecto rojo (acciones que borran); para otras, uno neutro. */
+  confirmClassName?: string;
   className?: string;
   title?: string;
   children: React.ReactNode;
@@ -57,7 +60,7 @@ export default function ConfirmSubmitButton({
             <button
               type="submit"
               onClick={cerrar}
-              className="rounded-xl border border-danger-500/30 bg-danger-500/15 px-4 py-2 text-sm font-semibold text-danger-400 transition hover:bg-danger-500/25"
+              className={`rounded-xl px-4 py-2 text-sm font-semibold transition ${confirmClassName}`}
             >
               {confirmLabel}
             </button>

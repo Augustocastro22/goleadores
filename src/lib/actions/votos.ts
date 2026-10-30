@@ -90,6 +90,32 @@ export async function votar(formData: FormData) {
 }
 
 /**
+ * Un admin del grupo cierra la votación a mano, pasadas 24 horas desde que se
+ * cargó el resultado (ver cerrar_votacion en 0039_votacion_48h_cierre_manual.sql,
+ * que es quien chequea el permiso y el plazo). Después sigue el cierre de
+ * siempre: avisa a los que jugaron, la marca cerrada y abre los desempates.
+ */
+export async function cerrarVotacion(formData: FormData) {
+  const partidoId = String(formData.get("partido_id") ?? "");
+  if (!partidoId) return { error: "Partido inválido." };
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "No autenticado." };
+
+  const { error } = await supabase.rpc("cerrar_votacion", { p_partido_id: partidoId });
+  if (error) return { error: error.message };
+
+  await cerrarVotacionSiCorresponde(partidoId);
+
+  revalidatePath(`/partidos/${partidoId}`);
+  revalidatePath("/estadisticas");
+  return { success: true };
+}
+
+/**
  * El form de votación del partido: Mejor y/o Peor en un solo envío. Devuelve
  * el error para mostrarlo (antes se descartaba y nadie sabía si había votado).
  */
