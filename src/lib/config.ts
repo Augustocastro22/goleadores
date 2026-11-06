@@ -92,11 +92,22 @@ export async function getConfig(supabase: SupabaseClient, grupoId: string): Prom
 
 /**
  * Si un partido lo juegan entre ellos (dos equipos del grupo) o contra otro
- * equipo: lo dice si alguien del grupo jugó en el segundo equipo. Así se lee
- * igual en los partidos viejos, de antes de elegir cómo juega el grupo.
+ * equipo: lo dice si alguien del grupo jugó en el segundo equipo (así se lee
+ * igual en los partidos viejos, de antes de elegir cómo juega el grupo) o si
+ * tiene el nombre del primer equipo (`nombre_equipo`, que solo se guarda entre
+ * ellos): un partido convocado con los equipos todavía sin armar.
  */
-export function esPartidoInterno(jugadoresEquipo2: number, desafioId: string | null = null): boolean {
-  return !desafioId && jugadoresEquipo2 > 0;
+export function esPartidoInterno(
+  jugadoresEquipo2: number,
+  desafioId: string | null = null,
+  nombreEquipo: string | null = null
+): boolean {
+  return !desafioId && (jugadoresEquipo2 > 0 || !!nombreEquipo?.trim());
+}
+
+/** Entre ellos, convocado pero con los equipos todavía sin armar (todos en el primero). */
+export function equiposSinArmar(interno: boolean, jugadoresEquipo2: number): boolean {
+  return interno && jugadoresEquipo2 === 0;
 }
 
 /** Los nombres a mostrar de los dos lados de un partido. */

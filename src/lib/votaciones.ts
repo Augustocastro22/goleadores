@@ -1,6 +1,6 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { categoriasTexto, votacionCerrada } from "@/lib/votacion";
-import { calcularEmpate, cierreDesempate, DESEMPATE_HORAS, ganadorDesempate } from "@/lib/desempate";
+import { calcularEmpate, cierreDesempate, DESEMPATE_HORAS, ganadorDesempate, textoEmpateSinDefinir } from "@/lib/desempate";
 import { enviarPush } from "@/lib/push/send";
 import { urlConGrupo } from "@/lib/grupo-cookie";
 import type { TipoVoto } from "@/lib/types";
@@ -188,8 +188,8 @@ export async function cerrarVotacionSiCorresponde(partidoId: string) {
  * Resuelve un desempate si ya votaron todos los elegibles que siguen en el
  * grupo, o si venció el plazo (DESEMPATE_HORAS): ahí se decide con los votos
  * que haya (ver ganadorDesempate). Sin ganador (siguen parejos, nadie votó o
- * no queda nadie que pueda votar) cuenta el empate original: todos los
- * empatados, igual que cuando no se abre desempate.
+ * no queda nadie que pueda votar) cuenta el empate original: los empatados
+ * (hasta MAX_CO_GANADORES), igual que cuando no se abre desempate.
  *
  * Nunca se dice quiénes lo definieron: solo que se definió.
  */
@@ -237,7 +237,6 @@ export async function resolverDesempateSiCorresponde(desempateId: string) {
     .select("jugador_id")
     .eq("partido_id", desempate.partido_id);
   const categoria = CATEGORIA_LABEL[desempate.tipo as TipoVoto];
-  const empatados = (desempate.candidatos as string[]).length === 2 ? "los dos" : "todos";
   await enviarPush(
     (participantes ?? []).map((p) => p.jugador_id).filter((id) => miembros.has(id)),
     ganadorId
@@ -248,7 +247,7 @@ export async function resolverDesempateSiCorresponde(desempateId: string) {
         }
       : {
           title: "El empate quedó sin definir",
-          body: `${categoria} vs ${partido.rival}: siguió parejo, así que cuentan ${empatados}.`,
+          body: `${categoria} vs ${partido.rival}: siguió parejo, así que ${textoEmpateSinDefinir((desempate.candidatos as string[]).length)}.`,
           url: urlConGrupo(`/partidos/${desempate.partido_id}`, partido.grupo_id),
         }
   );

@@ -8,7 +8,8 @@ import AvisosConvocado, { type Ocupado } from "@/components/AvisosConvocado";
 import Card from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
 import Avatar from "@/components/ui/Avatar";
-import { actualizarConvocados } from "@/lib/actions/partidos";
+import { actualizarConvocados, corregirJugaron } from "@/lib/actions/partidos";
+import { sortearEquipos } from "@/lib/sorteo";
 import { IconClose } from "@/components/icons";
 import { RespuestaAdmin, ResumenRespuestas } from "./Confirmacion";
 import NombresEquipos from "@/components/NombresEquipos";
@@ -34,7 +35,13 @@ export default function ConvocadosEditor({
   nombresEquipos,
   mostrarResumen = true,
   cambioDeModo,
+  modo = "convocatoria",
 }: {
+  /**
+   * "convocatoria": antes del resultado. "jugaron": con el resultado cargado,
+   * para corregir quiénes jugaron (mientras la votación esté abierta).
+   */
+  modo?: "convocatoria" | "jugaron";
   /**
    * Para pasar el partido de "contra otro equipo" a "entre nosotros" (o al
    * revés) al editar, y cambiar los nombres. No va en un desafío ni en un
@@ -79,8 +86,11 @@ export default function ConvocadosEditor({
   const [nombresEditados, setNombresEditados] = useState<[string, string]>(cambioDeModo?.nombres ?? ["", ""]);
   // Botones al editar: con cambio de modo, según el modo elegido; si no, como venía.
   const soloUno = cambioDeModo ? !interno : unSoloEquipo;
+  const jugaron = modo === "jugaron";
   // Con confirmación todavía tienen que decir si van: "Convocado"; sin, ya juegan.
-  const botonSolo = respuestas ? "Convocado" : "Juega";
+  const botonSolo = jugaron ? "Jugó" : respuestas ? "Convocado" : "Juega";
+  // Entre ellos, convocados pero con los equipos todavía sin armar (todos en el primero).
+  const sinArmar = !jugaron && !!nombresEquipos && equipo2IdsInit.length === 0 && equipo1IdsInit.length > 0;
   const etiquetas: [string, string] | undefined = cambioDeModo
     ? interno
       ? [nombresEditados[0] || "Equipo 1", nombresEditados[1] || "Equipo 2"]
@@ -173,29 +183,76 @@ export default function ConvocadosEditor({
     });
   }
 
+  /** Reparte al azar en los dos equipos a los convocados que no dijeron que no juegan. */
+  function sortear() {
+    setMessage(null);
+    setAsignaciones((prev) => {
+      const ids = Object.keys(prev).filter((id) => respuestas?.[id] !== "no_juega" && !exMiembros.has(id));
+      return { ...prev, ...sortearEquipos(ids) };
+    });
+  }
+
   async function handleGuardar() {
+    const participantes = Object.entries(asignaciones).map(([jugadorId, equipo]) => ({ jugadorId, equipo }));
+    if (jugaron) {
+      const sacados = [...equipo1IdsInit, ...equipo2IdsInit].filter((id) => !asignaciones[id]);
+      if (
+        sacados.length > 0 &&
+        !window.confirm(
+          `A ${sacados.length === 1 ? "quien sacás" : `los ${sacados.length} que sacás`} se le borran los goles y los votos de este partido. ¿Seguir?`
+        )
+      ) {
+        return;
+      }
+    }
     setSaving(true);
     setMessage(null);
-    const result = await actualizarConvocados({
-      partidoId,
-      participantes: Object.entries(asignaciones).map(([jugadorId, equipo]) => ({
-        jugadorId,
-        equipo,
-      })),
-      equipos: cambioDeModo
-        ? interno
-          ? { interno: true, rival: nombresEditados[1], nombreEquipo: nombresEditados[0] }
-          : { interno: false, rival: rivalEditado, nombreEquipo: null }
-        : undefined,
-    });
+    const result = jugaron
+      ? await corregirJugaron({ partidoId, participantes })
+      : await actualizarConvocados({
+          partidoId,
+          participantes,
+          equipos: cambioDeModo
+            ? interno
+              ? { interno: true, rival: nombresEditados[1], nombreEquipo: nombresEditados[0] }
+              : { interno: false, rival: rivalEditado, nombreEquipo: null }
+            : undefined,
+        });
     setSaving(false);
     if (result.error) {
       setMessage({ type: "error", text: result.error });
     } else {
-      setMessage({ type: "ok", text: "Convocatoria guardada." });
+      setMessage({ type: "ok", text: jugaron ? "Listo: se corrigió quiénes jugaron." : "Convocatoria guardada." });
       setEditando(false);
       router.refresh();
     }
+  }
+
+  // Con el resultado cargado no se repite la lista (está en los goles): solo la opción de corregirla.
+  if (jugaron && !editando) {
+    return (
+      <Card className="flex flex-col gap-2 px-4 py-3">
+        <p className="text-sm text-zinc-400">¿Faltó alguien que estaba anotado, o jugó alguien que no?</p>
+        <button
+          type="button"
+          onClick={empezarEdicion}
+          className="self-start text-sm font-semibold text-primary-400 hover:text-primary-300"
+        >
+          Corregir quiénes jugaron
+        </button>
+        {message && (
+          <p
+            className={`rounded-xl border px-3.5 py-2.5 text-sm ${
+              message.type === "ok"
+                ? "border-primary-500/20 bg-primary-500/10 text-primary-400"
+                : "border-danger-500/20 bg-danger-500/10 text-danger-400"
+            }`}
+          >
+            {message.text}
+          </p>
+        )}
+      </Card>
+    );
   }
 
   if (!editando) {
@@ -218,6 +275,21 @@ export default function ConvocadosEditor({
         )}
         {!hayConvocados && (
           <Card className="px-4 py-3 text-sm text-zinc-500">Todavía no hay nadie convocado.</Card>
+        )}
+        {sinArmar && (
+          <Card className="mb-3 flex flex-col gap-2 border-gold-500/20 px-4 py-3">
+            <p className="text-sm text-zinc-300">
+              Los equipos todavía no están armados. Armalos (o sortealos) cuando sepas quiénes van: hay que
+              tenerlos antes de cargar el resultado.
+            </p>
+            <button
+              type="button"
+              onClick={empezarEdicion}
+              className="self-start text-sm font-semibold text-primary-400 hover:text-primary-300"
+            >
+              Armar equipos
+            </button>
+          </Card>
         )}
         <div className="flex flex-col gap-3">
           {equiposActuales.map((equipo) => (
@@ -277,7 +349,7 @@ export default function ConvocadosEditor({
 
   return (
     <div>
-      <h2 className="mb-3 text-lg font-bold text-white">Convocatoria</h2>
+      <h2 className="mb-3 text-lg font-bold text-white">{jugaron ? "Quiénes jugaron" : "Convocatoria"}</h2>
       <Card className="p-4">
         {cambioDeModo && (
           <div className="mb-3">
@@ -306,11 +378,25 @@ export default function ConvocadosEditor({
           </div>
         )}
         <p className="mb-3 text-xs text-zinc-500">
-          {soloUno
-            ? `Marcá a quién convocás. Para sacar a alguien tocá la ✕ (o de nuevo ${botonSolo}).`
-            : "Marcá quién juega y en qué equipo. Para sacar a alguien tocá la ✕ (o de nuevo su equipo)."}{" "}
-          Podés sumar o sacar gente hasta antes de cargar el resultado.
+          {jugaron
+            ? soloUno
+              ? "Marcá quiénes jugaron. A quien saques se le borran sus goles y sus votos de este partido; quien sumes puede votar."
+              : "Marcá en qué equipo jugó cada uno. A quien saques se le borran sus goles y sus votos de este partido; quien sumes puede votar."
+            : soloUno
+              ? `Marcá a quién convocás. Para sacar a alguien tocá la ✕ (o de nuevo ${botonSolo}).`
+              : "Marcá quién juega y en qué equipo. Para sacar a alguien tocá la ✕ (o de nuevo su equipo)."}
+          {!jugaron && sinArmar && " Los equipos todavía no están armados: sortealos o elegí el equipo de cada uno."}
         </p>
+        {!soloUno && !jugaron && (
+          <button
+            type="button"
+            onClick={sortear}
+            disabled={cantidad < 2}
+            className="mb-3 w-full rounded-xl border border-gold-500/30 bg-gold-500/10 px-4 py-2 text-sm font-semibold text-gold-400 transition hover:bg-gold-500/20 disabled:opacity-40"
+          >
+            Sortear equipos{respuestas ? " (entre los que no dijeron que no)" : ""}
+          </button>
+        )}
         <div className="flex flex-col gap-2">
           {jugadores.map((jugador) => {
             const equipo = asignaciones[jugador.id];
@@ -382,7 +468,7 @@ export default function ConvocadosEditor({
         <div className="mt-4 flex flex-col gap-2">
           <div className="flex gap-2">
             <Button type="button" onClick={handleGuardar} disabled={saving} className="flex-1">
-              {saving ? "Guardando..." : `Guardar convocatoria (${cantidad})`}
+              {saving ? "Guardando..." : jugaron ? `Guardar (${cantidad})` : `Guardar convocatoria (${cantidad})`}
             </Button>
             <Button
               type="button"

@@ -2,6 +2,10 @@
 
 import { useState } from "react";
 import { IconChevronRight } from "@/components/icons";
+import ActionForm from "@/components/ActionForm";
+import SubmitButton from "@/components/SubmitButton";
+import Card from "@/components/ui/Card";
+import { votarPartido } from "@/lib/actions/votos";
 
 export interface Candidato {
   id: string;
@@ -9,10 +13,71 @@ export interface Candidato {
 }
 
 /**
- * Los selects de Mejor y Peor Jugador. A quien elegiste en una categoría no
- * lo podés elegir en la otra (tampoco si ya lo votaste antes).
+ * La votación de un partido abierto. Si ya votó todo lo que se vota, muestra
+ * a quién votó (el voto no se cambia: votado, queda).
  */
-export default function VotoSelects({
+export default function VotacionForm({
+  partidoId,
+  candidatos,
+  conMvp,
+  conPeor,
+  votoMvpId,
+  votoPeorId,
+}: {
+  partidoId: string;
+  candidatos: Candidato[];
+  conMvp: boolean;
+  conPeor: boolean;
+  votoMvpId: string | null;
+  votoPeorId: string | null;
+}) {
+  const yaVoto = (!conMvp || votoMvpId !== null) && (!conPeor || votoPeorId !== null);
+  const nombreDe = (id: string | null) => candidatos.find((c) => c.id === id)?.nombre ?? "?";
+
+  if (yaVoto) {
+    return (
+      <Card className="flex flex-col gap-2 px-4 py-3 text-sm">
+        <p className="text-zinc-400">Ya votaste en este partido:</p>
+        {conMvp && (
+          <p className="text-zinc-300">
+            Mejor Jugador: <span className="font-semibold text-white">{nombreDe(votoMvpId)}</span>
+          </p>
+        )}
+        {conPeor && (
+          <p className="text-zinc-300">
+            Peor Jugador: <span className="font-semibold text-white">{nombreDe(votoPeorId)}</span>
+          </p>
+        )}
+      </Card>
+    );
+  }
+  if (candidatos.length === 0) return null;
+
+  return (
+    <Card className="flex flex-col gap-4 p-4">
+      <ActionForm action={votarPartido} className="flex flex-col gap-4">
+        <input type="hidden" name="partido_id" value={partidoId} />
+        <VotoSelects
+          candidatos={candidatos}
+          conMvp={conMvp}
+          conPeor={conPeor}
+          votoMvpId={votoMvpId}
+          votoPeorId={votoPeorId}
+        />
+        <SubmitButton pendingText="Votando..." size="sm" className="self-start">
+          Votar
+        </SubmitButton>
+        <p className="text-xs text-zinc-500">Una vez que votás, el voto queda.</p>
+      </ActionForm>
+    </Card>
+  );
+}
+
+/**
+ * Los selects de Mejor y Peor Jugador. Una categoría ya votada no se vuelve a
+ * votar. A quien elegiste en una categoría no lo podés elegir en la otra.
+ */
+function VotoSelects({
   candidatos,
   conMvp,
   conPeor,

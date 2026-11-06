@@ -7,6 +7,7 @@ import { getContexto, rolEn } from "@/lib/grupo";
 import { urlConGrupo } from "@/lib/grupo-cookie";
 import { filasConfig, parseConfig, parseModoJuego } from "@/lib/config";
 import { revisarTrasSalida } from "@/lib/votaciones";
+import { hoyArgentina, puedeCargarResultado } from "@/lib/confirmacion";
 
 /**
  * Todo lo de /admin opera sobre el grupo que se estaba mirando (el grupo_id
@@ -61,13 +62,14 @@ export async function editarPartido(formData: FormData) {
   const lugar = String(formData.get("lugar") ?? "").trim();
   const rival = String(formData.get("rival") ?? "").trim();
   const avisar = formData.get("avisar") === "on";
+  const reconfirmar = formData.get("reconfirmar") === "on";
   if (!partidoId || !fecha || !lugar || !rival) {
     return { error: "Completá fecha, lugar y rival." };
   }
 
   const { data: anterior } = await supabase
     .from("partidos")
-    .select("grupo_id, fecha, hora, jugado, desafio_id")
+    .select("grupo_id, fecha, hora, jugado, desafio_id, nombre_equipo")
     .eq("id", partidoId)
     .single();
   if (!anterior) return { error: "Partido no encontrado." };
@@ -79,20 +81,45 @@ export async function editarPartido(formData: FormData) {
     return { error: "Es un partido de un desafío: no se puede editar desde acá." };
   }
 
+  // Las mismas reglas de fecha que al crearlo: uno jugado no puede quedar en
+  // el futuro (ni antes de que termine) y uno programado no puede pasar a una
+  // fecha que ya pasó.
+  const cambioHorario = anterior.fecha !== fecha || (anterior.hora?.slice(0, 5) ?? null) !== hora;
+  if (cambioHorario) {
+    if (anterior.jugado && !puedeCargarResultado(fecha, hora)) {
+      return { error: "El partido ya tiene resultado: no puede quedar en una fecha u hora que todavía no pasó." };
+    }
+    if (!anterior.jugado && fecha < hoyArgentina()) {
+      return { error: "Esa fecha ya pasó: un partido programado tiene que ser de hoy en adelante." };
+    }
+  }
+
   const { error } = await supabase
     .from("partidos")
     .update({ fecha, hora, lugar, rival })
     .eq("id", partidoId);
   if (error) return { error: error.message };
 
+  // Cambió el día o la hora: si el admin lo pide, todos vuelven a confirmar
+  // (menos él, que ya sabe). Los que dijeron que no, también: puede que ahora sí puedan.
+  const reconfirma = reconfirmar && cambioHorario && !anterior.jugado;
+  if (reconfirma) {
+    await supabase
+      .from("partido_jugadores")
+      .update({ respuesta: "pendiente" })
+      .eq("partido_id", partidoId)
+      .neq("jugador_id", ctx.user!.id)
+      .neq("respuesta", "pendiente");
+  }
+
   // Solo se avisa el cambio de horario de un partido que todavía no se jugó;
   // cambiar lugar o rival no manda nada.
-  const cambioHorario = anterior.fecha !== fecha || (anterior.hora?.slice(0, 5) ?? null) !== hora;
-  if (avisar && cambioHorario && !anterior.jugado) {
+  if ((avisar || reconfirma) && cambioHorario && !anterior.jugado) {
     const { data: convocados } = await supabase
       .from("partido_jugadores")
       .select("jugador_id")
-      .eq("partido_id", partidoId);
+      .eq("partido_id", partidoId)
+      .neq("jugador_id", ctx.user!.id);
     const fechaFormateada = new Date(fecha + "T00:00:00").toLocaleDateString("es-AR", {
       weekday: "long",
       day: "numeric",
@@ -103,7 +130,7 @@ export async function editarPartido(formData: FormData) {
       (convocados ?? []).map((c) => c.jugador_id),
       {
         title: "Cambió el horario del partido",
-        body: `El partido vs ${rival} ahora es el ${fechaFormateada}${horaFormateada} en ${lugar}.`,
+        body: `El partido ${anterior.nombre_equipo ? `${anterior.nombre_equipo} vs ${rival}` : `vs ${rival}`} ahora es el ${fechaFormateada}${horaFormateada} en ${lugar}.${reconfirma ? " Confirmá de nuevo si jugás." : ""}`,
         url: urlConGrupo(`/partidos/${partidoId}`, anterior.grupo_id),
       }
     );

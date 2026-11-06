@@ -5,13 +5,14 @@ import { redirect } from "next/navigation";
 import { enviarPush } from "@/lib/push/send";
 import {
   esPartidoInterno,
-  filasConfig,
   getConfig,
   nombresDelPartido,
   validarNombresEquipos,
   votacionDelPartido,
 } from "@/lib/config";
-import { categoriasTexto, VOTACION_HORAS } from "@/lib/votacion";
+import { categoriasTexto, VOTACION_HORAS, votacionVencida } from "@/lib/votacion";
+import { cerrarVotacionSiCorresponde } from "@/lib/votaciones";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { getContexto, rolEn } from "@/lib/grupo";
 import { urlConGrupo } from "@/lib/grupo-cookie";
 import {
@@ -24,7 +25,6 @@ import {
 import type { Respuesta } from "@/lib/types";
 import type { DesafioVista } from "@/lib/desafios";
 import type { Ocupado } from "@/components/AvisosConvocado";
-import { errorGolesPorCorregir, golesPorCorregir } from "@/lib/goles-por-corregir";
 
 function errorResultadoAntesDeTiempo(fecha: string, hora: string | null) {
   return `Ese partido todavía no terminó: el resultado se puede cargar desde el ${formatearMomento(
@@ -62,8 +62,8 @@ function respuestaInicial(jugadorId: string, pedir: boolean, quienConvoca: strin
 function avisoConvocatoria(
   partido: { fecha: string; hora: string | null; rival: string; lugar: string },
   pedirConfirmacion: boolean,
-  /** Entre ellos: los dos equipos y en cuál juega quien recibe el aviso. */
-  equipo?: { nombres: [string, string]; mio: 1 | 2 }
+  /** Entre ellos: los dos equipos y en cuál juega quien recibe el aviso (sin `mio`: equipos sin armar). */
+  equipo?: { nombres: [string, string]; mio?: 1 | 2 }
 ) {
   const fecha = new Date(partido.fecha + "T00:00:00").toLocaleDateString("es-AR", {
     day: "numeric",
@@ -72,7 +72,11 @@ function avisoConvocatoria(
   const hora = partido.hora ? ` a las ${partido.hora.slice(0, 5)}` : "";
   const cierre = pedirConfirmacion ? "Estás convocado: confirmá si jugás." : "¡Ya estás convocado!";
   const cruce = equipo ? `${equipo.nombres[0]} vs ${equipo.nombres[1]}` : `vs ${partido.rival}`;
-  const tuEquipo = equipo ? ` Jugás en ${equipo.nombres[equipo.mio - 1]}.` : "";
+  const tuEquipo = equipo
+    ? equipo.mio
+      ? ` Jugás en ${equipo.nombres[equipo.mio - 1]}.`
+      : " Los equipos se arman más adelante."
+    : "";
   return {
     title: "Nuevo partido",
     body: `${fecha}${hora} ${cruce} en ${partido.lugar}.${tuEquipo} ${cierre}`,
@@ -88,8 +92,17 @@ async function avisarConvocatoria(
   partido: { fecha: string; hora: string | null; rival: string; lugar: string },
   pedirConfirmacion: boolean,
   url: string,
-  nombresInterno: [string, string] | null
+  nombresInterno: [string, string] | null,
+  /** Entre ellos con los equipos todavía sin armar: se avisa sin decir en cuál juega. */
+  equiposArmados = true
 ) {
+  if (nombresInterno && !equiposArmados) {
+    await enviarPush(
+      convocados.map((c) => c.jugadorId),
+      { ...avisoConvocatoria(partido, pedirConfirmacion, { nombres: nombresInterno }), url }
+    );
+    return;
+  }
   if (!nombresInterno) {
     await enviarPush(
       convocados.map((c) => c.jugadorId),
@@ -122,9 +135,6 @@ export async function createPartido(formData: FormData) {
   const { supabase, user, grupo } = await getContexto();
   if (!user || grupo?.rol !== "admin") return { error: "Solo el admin puede cargar partidos." };
 
-  const pendientes = await golesPorCorregir(supabase, grupo.id);
-  if (pendientes.length > 0) return { error: errorGolesPorCorregir(pendientes) };
-
   const jugado = formData.get("modo") === "jugado";
   const fecha = String(formData.get("fecha") ?? "");
   const hora = String(formData.get("hora") ?? "").trim() || null;
@@ -141,12 +151,20 @@ export async function createPartido(formData: FormData) {
 
   // Entre ellos (dos equipos del grupo) o contra otro equipo (ver NuevoPartidoForm).
   const interno = formData.get("interno") === "1";
+  // Entre ellos se puede convocar primero y armar los equipos después (con los
+  // que confirmen): todos entran al primero hasta que se arman.
+  const equiposDespues = interno && !jugado && formData.get("equipos_despues") === "1";
+  if (equiposDespues) for (const p of participantes) p.equipo = 1;
   if (!fecha || !lugar || !rival || participantes.length === 0) {
     return {
       error: interno ? "Completá fecha, lugar y quién juega en cada equipo." : "Completá fecha, lugar, rival y quién juega.",
     };
   }
-  if (interno && !(participantes.some((p) => p.equipo === 1) && participantes.some((p) => p.equipo === 2))) {
+  if (
+    interno &&
+    !equiposDespues &&
+    !(participantes.some((p) => p.equipo === 1) && participantes.some((p) => p.equipo === 2))
+  ) {
     return { error: "Armá los dos equipos: tiene que haber al menos uno en cada uno." };
   }
   if (!participantes.some((p) => p.equipo === 1)) {
@@ -190,13 +208,6 @@ export async function createPartido(formData: FormData) {
 
   if (error) return { error: error.message };
 
-  // Los nombres que usaron quedan como los del grupo para el próximo partido entre ellos.
-  if (nombreEquipo !== null) {
-    await supabase
-      .from("config")
-      .upsert(filasConfig(grupo.id, { nombre_equipo_1: nombreEquipo, nombre_equipo_2: rival }, user.id));
-  }
-
   // Un partido que ya pasó no es una convocatoria: entran todos como que
   // jugaron y no se avisa a nadie (los avisa guardarGolesPartido, más abajo).
   const yaPaso = jugado || partidoYaPaso(fecha, hora);
@@ -221,7 +232,8 @@ export async function createPartido(formData: FormData) {
       { fecha, hora, rival, lugar },
       pedir,
       urlConGrupo(`/partidos/${partido.id}`, grupo.id),
-      nombreEquipo !== null ? [nombreEquipo, rival] : null
+      nombreEquipo !== null ? [nombreEquipo, rival] : null,
+      !equiposDespues
     );
   }
 
@@ -265,6 +277,99 @@ export async function deletePartido(formData: FormData) {
   redirect("/partidos");
 }
 
+function fechaCorta(fecha: string) {
+  return new Date(fecha + "T00:00:00").toLocaleDateString("es-AR", { day: "numeric", month: "long" });
+}
+
+/**
+ * Un partido programado que no se juega: queda en el historial como
+ * cancelado (no se borra) y se avisa a los convocados que no dijeron que no.
+ * Borrar queda para un partido cargado por error.
+ */
+export async function cancelarPartido(formData: FormData) {
+  const partidoId = String(formData.get("partido_id") ?? "");
+  const motivo = String(formData.get("motivo") ?? "").trim().slice(0, 140);
+  if (!partidoId) return { error: "Partido inválido." };
+
+  const { supabase, userId, isAdmin, grupoId } = await requireAdminDePartido(partidoId);
+  if (!isAdmin || !grupoId) return { error: "Solo el admin puede cancelar partidos." };
+
+  const { data: partido } = await supabase
+    .from("partidos")
+    .select("fecha, hora, rival, jugado, desafio_id, cancelado_en")
+    .eq("id", partidoId)
+    .single();
+  if (!partido) return { error: "Partido no encontrado." };
+  if (partido.desafio_id) return { error: "Es un partido de un desafío: para que no se juegue, cancelá el desafío." };
+  if (partido.jugado) return { error: "El partido ya tiene resultado: no se puede cancelar." };
+  if (partido.cancelado_en) return { error: "El partido ya estaba cancelado." };
+
+  const { error } = await supabase
+    .from("partidos")
+    .update({ cancelado_en: new Date().toISOString() })
+    .eq("id", partidoId);
+  if (error) return { error: error.message };
+
+  const { data: convocados } = await supabase
+    .from("partido_jugadores")
+    .select("jugador_id, respuesta")
+    .eq("partido_id", partidoId);
+  const hora = partido.hora ? ` a las ${partido.hora.slice(0, 5)}` : "";
+  await enviarPush(
+    (convocados ?? []).filter((c) => c.respuesta !== "no_juega" && c.jugador_id !== userId).map((c) => c.jugador_id),
+    {
+      title: "Se canceló el partido",
+      body: `El partido vs ${partido.rival} del ${fechaCorta(partido.fecha)}${hora} no se juega.${motivo ? ` ${motivo}` : ""}`,
+      url: urlConGrupo(`/partidos/${partidoId}`, grupoId),
+    }
+  );
+
+  revalidatePath("/partidos");
+  revalidatePath(`/partidos/${partidoId}`);
+  return { success: true };
+}
+
+/** Deshace la cancelación: el partido vuelve a estar programado (con la misma convocatoria). */
+export async function reprogramarPartido(formData: FormData) {
+  const partidoId = String(formData.get("partido_id") ?? "");
+  if (!partidoId) return { error: "Partido inválido." };
+
+  const { supabase, userId, isAdmin, grupoId } = await requireAdminDePartido(partidoId);
+  if (!isAdmin || !grupoId) return { error: "Solo el admin puede volver a programar un partido." };
+
+  const { data: partido } = await supabase
+    .from("partidos")
+    .select("fecha, hora, rival, cancelado_en")
+    .eq("id", partidoId)
+    .single();
+  if (!partido) return { error: "Partido no encontrado." };
+  if (!partido.cancelado_en) return { error: "El partido no está cancelado." };
+  if (partido.fecha < hoyArgentina()) {
+    return { error: "La fecha del partido ya pasó: cambiale la fecha (en Editar) antes de volver a programarlo." };
+  }
+
+  const { error } = await supabase.from("partidos").update({ cancelado_en: null }).eq("id", partidoId);
+  if (error) return { error: error.message };
+
+  const { data: convocados } = await supabase
+    .from("partido_jugadores")
+    .select("jugador_id, respuesta")
+    .eq("partido_id", partidoId);
+  const hora = partido.hora ? ` a las ${partido.hora.slice(0, 5)}` : "";
+  await enviarPush(
+    (convocados ?? []).filter((c) => c.respuesta !== "no_juega" && c.jugador_id !== userId).map((c) => c.jugador_id),
+    {
+      title: "Al final se juega",
+      body: `El partido vs ${partido.rival} del ${fechaCorta(partido.fecha)}${hora} vuelve a estar en pie.`,
+      url: urlConGrupo(`/partidos/${partidoId}`, grupoId),
+    }
+  );
+
+  revalidatePath("/partidos");
+  revalidatePath(`/partidos/${partidoId}`);
+  return { success: true };
+}
+
 export interface ConvocadosInput {
   partidoId: string;
   participantes: { jugadorId: string; equipo: 1 | 2 }[];
@@ -286,13 +391,14 @@ export async function actualizarConvocados({ partidoId, participantes, equipos }
 
   const { data: partido } = await supabase
     .from("partidos")
-    .select("rival, nombre_equipo, fecha, hora, lugar, jugado, desafio_id")
+    .select("rival, nombre_equipo, fecha, hora, lugar, jugado, desafio_id, cancelado_en")
     .eq("id", partidoId)
     .single();
   if (!partido) return { error: "Partido no encontrado." };
   if (partido.jugado) {
-    return { error: "El partido ya se jugó, no se puede editar la convocatoria." };
+    return { error: "El partido ya se jugó: corregí quiénes jugaron desde el resultado." };
   }
+  if (partido.cancelado_en) return { error: "El partido está cancelado." };
 
   // Cambio de modo o de nombres (entre ellos / contra otro equipo).
   if (equipos && !partido.desafio_id) {
@@ -301,9 +407,7 @@ export async function actualizarConvocados({ partidoId, participantes, equipos }
       const nombreEquipo = (equipos.nombreEquipo ?? "").trim();
       const errorNombres = validarNombresEquipos(nombreEquipo, rival);
       if (errorNombres) return { error: errorNombres };
-      if (!participantes.some((p) => p.equipo === 2)) {
-        return { error: "Armá los dos equipos: tiene que haber al menos uno en cada uno." };
-      }
+      // Sin nadie en el segundo: los equipos se arman más adelante (antes del resultado).
     } else {
       if (!rival) return { error: "Poné contra quién juegan." };
       if (participantes.some((p) => p.equipo === 2)) {
@@ -319,16 +423,11 @@ export async function actualizarConvocados({ partidoId, participantes, equipos }
       if (error) return { error: error.message };
       partido.rival = rival;
       partido.nombre_equipo = nombreEquipo;
-      // Los nombres que usaron quedan como los del grupo para la próxima.
-      if (nombreEquipo !== null) {
-        await supabase
-          .from("config")
-          .upsert(filasConfig(grupoId, { nombre_equipo_1: nombreEquipo, nombre_equipo_2: rival }, userId!));
-      }
     }
   }
   const nombresInterno: [string, string] | null =
-    partido.nombre_equipo && participantes.some((p) => p.equipo === 2) ? [partido.nombre_equipo, partido.rival] : null;
+    partido.nombre_equipo && !partido.desafio_id ? [partido.nombre_equipo, partido.rival] : null;
+  const equiposArmados = participantes.some((p) => p.equipo === 2);
   // En un desafío el Equipo 2 es el otro grupo.
   if (partido.desafio_id && participantes.some((p) => p.equipo === 2)) {
     return { error: "En un desafío todos los convocados juegan en el mismo equipo." };
@@ -382,20 +481,19 @@ export async function actualizarConvocados({ partidoId, participantes, equipos }
     if (error) return { error: error.message };
   }
 
-  if (!yaPaso && (aAgregar.length > 0 || aBorrar.length > 0)) {
-    const fechaFormateada = new Date(partido.fecha + "T00:00:00").toLocaleDateString("es-AR", {
-      day: "numeric",
-      month: "long",
-    });
+  if (!yaPaso) {
+    const fechaFormateada = fechaCorta(partido.fecha);
     const horaFormateada = partido.hora ? ` a las ${partido.hora.slice(0, 5)}` : "";
+    const url = urlConGrupo(`/partidos/${partidoId}`, grupoId);
 
     if (aAgregar.length > 0) {
       await avisarConvocatoria(
         aAgregar.filter((p) => p.jugadorId !== userId),
         partido,
         pedir,
-        urlConGrupo(`/partidos/${partidoId}`, grupoId),
-        nombresInterno
+        url,
+        nombresInterno,
+        equiposArmados
       );
     }
 
@@ -403,8 +501,30 @@ export async function actualizarConvocados({ partidoId, participantes, equipos }
       await enviarPush(aBorrar.filter((id) => id !== userId), {
         title: "Ya no estás convocado",
         body: `Te bajaron del partido ${nombresInterno ? `${nombresInterno[0]} vs ${nombresInterno[1]}` : `vs ${partido.rival}`} del ${fechaFormateada}${horaFormateada}.`,
-        url: urlConGrupo(`/partidos/${partidoId}`, grupoId),
+        url,
       });
+    }
+
+    // Entre ellos: a los que ya estaban y les tocó (o les cambió) el equipo, en cuál juegan.
+    if (nombresInterno && equiposArmados && aActualizar.length > 0) {
+      const sinArmarAntes = !actuales.some((a) => a.equipo === 2);
+      for (const mio of [1, 2] as const) {
+        const ids = aActualizar.filter((p) => p.equipo === mio && p.jugadorId !== userId).map((p) => p.jugadorId);
+        // Al armar los equipos por primera vez se avisa a todos los del primero (no cambiaron, pero recién ahora se sabe).
+        if (sinArmarAntes && mio === 1) {
+          for (const a of actuales) {
+            if (a.equipo === 1 && nuevosIds.has(a.jugador_id) && a.jugador_id !== userId && !ids.includes(a.jugador_id)) {
+              const sigue = participantes.find((p) => p.jugadorId === a.jugador_id);
+              if (sigue?.equipo === 1) ids.push(a.jugador_id);
+            }
+          }
+        }
+        await enviarPush(ids, {
+          title: sinArmarAntes ? "Ya están los equipos" : "Te cambiaron de equipo",
+          body: `${nombresInterno[0]} vs ${nombresInterno[1]} del ${fechaFormateada}${horaFormateada}: jugás en ${nombresInterno[mio - 1]}.`,
+          url,
+        });
+      }
     }
   }
 
@@ -442,10 +562,13 @@ export async function guardarGolesPartido({ partidoId, goles, golesOtros, golesR
 
   const { data: partido } = await supabase
     .from("partidos")
-    .select("rival, fecha, hora, jugado, con_votacion, con_mvp, con_peor, votacion_abierta_notificada, desafio_id")
+    .select(
+      "rival, nombre_equipo, fecha, hora, jugado, con_votacion, con_mvp, con_peor, votacion_abierta_notificada, desafio_id, cancelado_en"
+    )
     .eq("id", partidoId)
     .single();
   if (!partido) return { error: "Partido no encontrado." };
+  if (partido.cancelado_en) return { error: "El partido está cancelado: volvé a programarlo para cargar el resultado." };
   // El resultado se carga una hora después de la hora del partido. Uno ya
   // jugado se puede corregir siempre, salvo un desafío: cargarle el
   // resultado hace que ninguno de los dos grupos lo pueda cancelar.
@@ -464,7 +587,7 @@ export async function guardarGolesPartido({ partidoId, goles, golesOtros, golesR
     // Los goles se cargan contra la versión del resultado de este grupo (la
     // confirmada o su última propuesta), sin esperar a que el otro responda.
     // Si después el resultado cambia, aplicar_marcador_desafio recalcula
-    // "otros" y el rival, y si los goles quedan de más se avisa y se frena
+    // "otros" y el rival, y si los goles quedan de más se le avisa al admin
     // (ver goles-por-corregir.ts).
     if (!desafio || desafio.marcador_mios === null || desafio.marcador_rival === null) {
       return { error: "Primero cargá el resultado del desafío (arriba)." };
@@ -502,6 +625,18 @@ export async function guardarGolesPartido({ partidoId, goles, golesOtros, golesR
       .eq("respuesta", "pendiente");
     if (pendientes) {
       return { error: "Antes de cargar el resultado, definí si jugaron los que no respondieron." };
+    }
+    // Entre ellos con los equipos sin armar (se convocó primero): se arman antes del resultado.
+    if (partido.nombre_equipo && !partido.desafio_id) {
+      const { count: enEquipo2 } = await supabase
+        .from("partido_jugadores")
+        .select("id", { count: "exact", head: true })
+        .eq("partido_id", partidoId)
+        .eq("equipo", 2)
+        .neq("respuesta", "no_juega");
+      if (!enEquipo2) {
+        return { error: "Antes de cargar el resultado, armá los dos equipos (podés sortearlos en Convocatoria → Editar)." };
+      }
     }
     const { error: bajaError } = await supabase
       .from("partido_jugadores")
@@ -558,7 +693,7 @@ export async function guardarGolesPartido({ partidoId, goles, golesOtros, golesR
     const golesDe = (equipo: number) =>
       participantes.filter((p) => p.equipo === equipo).reduce((total, p) => total + p.goles, 0);
     // Entre ellos, con el nombre del primer equipo del grupo; contra otro equipo, "Nosotros".
-    const interno = esPartidoInterno(participantes.filter((p) => p.equipo === 2).length, partido.desafio_id);
+    const interno = esPartidoInterno(participantes.filter((p) => p.equipo === 2).length, partido.desafio_id, partido.nombre_equipo);
     const { nosotros } = nombresDelPartido(partido, interno, await getConfig(supabase, grupoId));
     const resultado = `${nosotros} ${golesDe(1) + golesOtros} – ${golesDe(2) + golesRival} ${partido.rival}`;
 
@@ -586,6 +721,115 @@ export async function guardarGolesPartido({ partidoId, goles, golesOtros, golesR
   }
 
   revalidatePath(`/partidos/${partidoId}`);
+  revalidatePath("/estadisticas");
+  return { success: true };
+}
+
+/**
+ * Corrige quiénes jugaron un partido que ya tiene resultado (alguien faltó, o
+ * se olvidaron de alguien). Se puede mientras la votación esté abierta (o si
+ * el partido no tiene votación): a quien se saca se le borran los goles y los
+ * votos que dio y recibió en el partido; quien se suma entra con 0 goles y,
+ * si se vota, ya puede votar. Lo que se vota no se reevalúa (ver guardarGolesPartido).
+ */
+export async function corregirJugaron({ partidoId, participantes }: Omit<ConvocadosInput, "equipos">) {
+  if (!partidoId) return { error: "Partido inválido." };
+  const { supabase, userId, isAdmin, grupoId } = await requireAdminDePartido(partidoId);
+  if (!isAdmin || !grupoId) return { error: "Solo el admin puede corregir quiénes jugaron." };
+
+  const { data: partido } = await supabase
+    .from("partidos")
+    .select("rival, nombre_equipo, jugado, desafio_id, con_votacion, votacion_cierra_en, votacion_cerrada_notificada")
+    .eq("id", partidoId)
+    .single();
+  if (!partido) return { error: "Partido no encontrado." };
+  if (!partido.jugado) return { error: "El partido todavía no tiene resultado: editá la convocatoria." };
+  if (partido.con_votacion && (partido.votacion_cerrada_notificada || votacionVencida(partido.votacion_cierra_en))) {
+    return { error: "La votación ya se cerró: ya no se puede cambiar quiénes jugaron." };
+  }
+  if (!participantes.some((p) => p.equipo === 1)) {
+    return { error: "Tiene que haber al menos un jugador en el primer equipo." };
+  }
+  const { data: actualesRaw } = await supabase
+    .from("partido_jugadores")
+    .select("jugador_id, equipo")
+    .eq("partido_id", partidoId);
+  const actuales = actualesRaw ?? [];
+
+  const interno = esPartidoInterno(
+    actuales.filter((a) => a.equipo === 2).length,
+    partido.desafio_id,
+    partido.nombre_equipo
+  );
+  if (!interno && participantes.some((p) => p.equipo === 2)) {
+    return { error: "En este partido todos los del grupo juegan en el mismo equipo." };
+  }
+  if (interno && !participantes.some((p) => p.equipo === 2)) {
+    return { error: "Tiene que haber al menos uno en cada equipo." };
+  }
+  const actualesPorId = new Map(actuales.map((a) => [a.jugador_id, a.equipo]));
+  const nuevosIds = new Set(participantes.map((p) => p.jugadorId));
+  const aBorrar = actuales.filter((a) => !nuevosIds.has(a.jugador_id)).map((a) => a.jugador_id);
+  const aAgregar = participantes.filter((p) => !actualesPorId.has(p.jugadorId));
+  const aActualizar = participantes.filter(
+    (p) => actualesPorId.has(p.jugadorId) && actualesPorId.get(p.jugadorId) !== p.equipo
+  );
+  if (aBorrar.length === 0 && aAgregar.length === 0 && aActualizar.length === 0) return { success: true };
+
+  if (aBorrar.length > 0) {
+    const lista = aBorrar.join(",");
+    // Los votos son privados (cada uno ve solo los suyos) y la base no deja
+    // borrar lo que no se ve: van con el cliente de servicio, ya chequeado
+    // arriba que es admin del grupo del partido.
+    const { error: votosError } = await createAdminClient()
+      .from("votos")
+      .delete()
+      .eq("partido_id", partidoId)
+      .or(`jugador_votado_id.in.(${lista}),jugador_que_vota_id.in.(${lista})`);
+    if (votosError) return { error: votosError.message };
+    const { error } = await supabase
+      .from("partido_jugadores")
+      .delete()
+      .eq("partido_id", partidoId)
+      .in("jugador_id", aBorrar);
+    if (error) return { error: error.message };
+  }
+  if (aAgregar.length > 0) {
+    const { error } = await supabase.from("partido_jugadores").insert(
+      aAgregar.map(({ jugadorId, equipo }) => ({
+        partido_id: partidoId,
+        jugador_id: jugadorId,
+        equipo,
+        goles: 0,
+        respuesta: "juega",
+      }))
+    );
+    if (error) return { error: error.message };
+  }
+  for (const { jugadorId, equipo } of aActualizar) {
+    const { error } = await supabase
+      .from("partido_jugadores")
+      .update({ equipo })
+      .eq("partido_id", partidoId)
+      .eq("jugador_id", jugadorId);
+    if (error) return { error: error.message };
+  }
+
+  if (partido.con_votacion) {
+    const nuevos = aAgregar.map((p) => p.jugadorId).filter((id) => id !== userId);
+    if (nuevos.length > 0) {
+      await enviarPush(nuevos, {
+        title: "Te sumaron al partido",
+        body: `Quedaste entre los que jugaron vs ${partido.rival}: ya podés votar.`,
+        url: urlConGrupo(`/partidos/${partidoId}`, grupoId),
+      });
+    }
+    // Si se sacó a alguien que faltaba votar, puede que ya hayan votado todos.
+    await cerrarVotacionSiCorresponde(partidoId);
+  }
+
+  revalidatePath(`/partidos/${partidoId}`);
+  revalidatePath("/partidos");
   revalidatePath("/estadisticas");
   return { success: true };
 }
@@ -647,9 +891,10 @@ export async function fijarRespuesta(partidoId: string, jugadorId: string, respu
   const { supabase, isAdmin } = await requireAdminDePartido(partidoId);
   if (!isAdmin) return { error: "Solo el admin puede cambiar la respuesta de otro." };
 
-  const { data: partido } = await supabase.from("partidos").select("jugado").eq("id", partidoId).single();
+  const { data: partido } = await supabase.from("partidos").select("jugado, cancelado_en").eq("id", partidoId).single();
   if (!partido) return { error: "Partido no encontrado." };
   if (partido.jugado) return { error: "El partido ya se jugó, no se puede cambiar." };
+  if (partido.cancelado_en) return { error: "El partido está cancelado." };
 
   const { error } = await supabase
     .from("partido_jugadores")

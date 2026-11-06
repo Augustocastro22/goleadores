@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { calcularEmpate, cierreDesempate, ganadorDesempate } from "./desempate";
+import {
+  calcularEmpate,
+  cierreDesempate,
+  ganadorDesempate,
+  ganadoresDeEmpate,
+  MAX_CO_GANADORES,
+  textoEmpateSinDefinir,
+} from "./desempate";
 
 const participantes7 = ["a", "b", "c", "d", "e", "f", "g"];
 
@@ -148,5 +155,22 @@ describe("ganadorDesempate", () => {
 describe("cierreDesempate", () => {
   it("cierra 24 h después de abrirse", () => {
     expect(cierreDesempate("2026-10-14T19:00:00Z").toISOString()).toBe("2026-10-15T19:00:00.000Z");
+  });
+});
+
+describe("ganadoresDeEmpate", () => {
+  it("hasta el tope ganan todos los empatados", () => {
+    expect(ganadoresDeEmpate(["a", "b"])).toEqual(["a", "b"]);
+    expect(ganadoresDeEmpate(["a", "b", "c"])).toEqual(["a", "b", "c"]);
+  });
+
+  it("con más empatados que el tope no gana nadie", () => {
+    expect(ganadoresDeEmpate(["a", "b", "c", "d"])).toEqual([]);
+  });
+
+  it("el texto dice cómo termina", () => {
+    expect(textoEmpateSinDefinir(2)).toBe("cuentan los dos");
+    expect(textoEmpateSinDefinir(3)).toBe("cuentan todos");
+    expect(textoEmpateSinDefinir(MAX_CO_GANADORES + 1)).toContain("no gana nadie");
   });
 });

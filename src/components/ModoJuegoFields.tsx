@@ -77,7 +77,10 @@ export default function ModoJuegoFields({
             <span className="shrink-0 text-xs text-zinc-500">vs</span>
             <Input name="nombre_equipo_2" defaultValue={inicial.nombre_equipo_2} maxLength={30} placeholder="Negros" />
           </div>
-          <span className="text-xs text-zinc-500">Los ves en cada partido. Ej.: Blancos y Negros, Pecheras y Sin pecheras.</span>
+          <span className="text-xs text-zinc-500">
+            Con los que arranca cada partido nuevo (en un partido se pueden cambiar solo para ese). Ej.: Blancos
+            y Negros, Pecheras y Sin pecheras.
+          </span>
         </div>
       ) : (
         // Se mantienen al cambiar de modo, para no perderlos si vuelven a "Entre nosotros".

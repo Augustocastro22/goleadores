@@ -7,14 +7,13 @@ import { cierreDesempate } from "@/lib/desempate";
 import { cerrarVotacionSiCorresponde, resolverDesempateSiCorresponde } from "@/lib/votaciones";
 import type { Desempate, EstadoVotacion } from "@/lib/types";
 
-export async function votar(formData: FormData) {
-  const partidoId = String(formData.get("partido_id") ?? "");
-  const jugadorVotadoId = String(formData.get("jugador_votado_id") ?? "");
-  const tipo = String(formData.get("tipo") ?? "");
-
-  if (!partidoId || !jugadorVotadoId || (tipo !== "MVP" && tipo !== "PEOR")) {
-    return { error: "Voto inválido." };
-  }
+/**
+ * Mejor y/o Peor en un solo envío, y todo o nada: primero se valida todo y
+ * después se guardan los dos votos juntos (antes podía quedar guardado el de
+ * Mejor y fallar el de Peor). El voto no se cambia: votado, queda.
+ */
+async function guardarVotos(partidoId: string, votos: { tipo: "MVP" | "PEOR"; jugadorId: string }[]) {
+  if (!partidoId || votos.length === 0) return { error: "Voto inválido." };
 
   const supabase = await createClient();
   const {
@@ -29,17 +28,16 @@ export async function votar(formData: FormData) {
     .single();
   if (!partido) return { error: "Partido no encontrado." };
   if (!partido.jugado) return { error: "Todavía no se cargaron los resultados de este partido." };
-  if (!partido.con_votacion) {
-    return { error: "Este partido no tiene votación: jugaron menos jugadores que el mínimo." };
-  }
-  if ((tipo === "MVP" && !partido.con_mvp) || (tipo === "PEOR" && !partido.con_peor)) {
-    return { error: "En este partido no se vota esa categoría." };
+  if (!partido.con_votacion) return { error: "Este partido no tiene votación." };
+  for (const { tipo } of votos) {
+    if ((tipo === "MVP" && !partido.con_mvp) || (tipo === "PEOR" && !partido.con_peor)) {
+      return { error: "En este partido no se vota esa categoría." };
+    }
   }
 
   const { data: estado } = await supabase
     .rpc("get_estado_votacion", { p_partido_id: partidoId })
     .single<EstadoVotacion>();
-
   if (
     estado &&
     votacionCerrada({
@@ -54,30 +52,35 @@ export async function votar(formData: FormData) {
     return { error: "La votación de este partido ya está cerrada." };
   }
 
-  // El mismo jugador no puede ser Mejor y Peor en el mismo voto.
-  const { data: votoOtraCategoria } = await supabase
+  // Ya votó esa categoría, o el mismo jugador quedaría como Mejor y Peor
+  // (contra lo que se manda y contra el voto que ya tenía en la otra).
+  const { data: anteriores } = await supabase
     .from("votos")
-    .select("id")
+    .select("tipo, jugador_votado_id")
     .eq("partido_id", partidoId)
-    .eq("jugador_que_vota_id", user.id)
-    .eq("jugador_votado_id", jugadorVotadoId)
-    .neq("tipo", tipo)
-    .maybeSingle();
-  if (votoOtraCategoria) {
+    .eq("jugador_que_vota_id", user.id);
+  const finales = new Map<string, string>((anteriores ?? []).map((v) => [v.tipo, v.jugador_votado_id]));
+  if (votos.some(({ tipo }) => finales.has(tipo))) {
+    return { error: "Ya votaste en esta categoría para este partido." };
+  }
+  for (const { tipo, jugadorId } of votos) finales.set(tipo, jugadorId);
+  if (finales.get("MVP") && finales.get("MVP") === finales.get("PEOR")) {
     return { error: "No podés votar al mismo jugador como Mejor y Peor." };
   }
 
-  const { error } = await supabase.from("votos").insert({
-    partido_id: partidoId,
-    jugador_votado_id: jugadorVotadoId,
-    jugador_que_vota_id: user.id,
-    tipo,
-  });
-
+  // Un solo insert con los dos: o se guardan los dos, o ninguno.
+  const { error } = await supabase.from("votos").insert(
+    votos.map(({ tipo, jugadorId }) => ({
+      partido_id: partidoId,
+      jugador_votado_id: jugadorId,
+      jugador_que_vota_id: user.id,
+      tipo,
+    }))
+  );
   if (error) {
-    if (error.code === "23505") {
-      return { error: "Ya votaste en esta categoría para este partido." };
-    }
+    if (error.code === "23505") return { error: "Ya votaste en esta categoría para este partido." };
+    // La base no lo dejó (RLS): la votación se cerró en el medio o ese jugador no jugó.
+    if (error.code === "42501") return { error: "No se pudo guardar el voto: puede que la votación ya se haya cerrado." };
     return { error: error.message };
   }
 
@@ -126,26 +129,10 @@ export async function votarPartido(formData: FormData) {
   if (!mvpId && !peorId) return { error: "Elegí a quién votar." };
   if (mvpId && mvpId === peorId) return { error: "No podés votar al mismo jugador como Mejor y Peor." };
 
-  for (const [tipo, jugadorId] of [
-    ["MVP", mvpId],
-    ["PEOR", peorId],
-  ] as const) {
-    if (!jugadorId) continue;
-    const voto = new FormData();
-    voto.set("partido_id", partidoId);
-    voto.set("tipo", tipo);
-    voto.set("jugador_votado_id", jugadorId);
-    const resultado = await votar(voto);
-    if (resultado.error) {
-      return {
-        error:
-          tipo === "PEOR" && mvpId
-            ? `Se guardó tu voto de Mejor Jugador, pero no el de Peor: ${resultado.error}`
-            : resultado.error,
-      };
-    }
-  }
-  return { success: true };
+  const votos: { tipo: "MVP" | "PEOR"; jugadorId: string }[] = [];
+  if (mvpId) votos.push({ tipo: "MVP", jugadorId: mvpId });
+  if (peorId) votos.push({ tipo: "PEOR", jugadorId: peorId });
+  return guardarVotos(partidoId, votos);
 }
 
 /** Vota en la revotación de desempate (solo para quien es elegible). */

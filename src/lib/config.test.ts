@@ -144,3 +144,11 @@ describe("esPartidoInterno", () => {
     expect(esPartidoInterno(3, "desafio-1")).toBe(false);
   });
 });
+
+describe("esPartidoInterno con equipos sin armar", () => {
+  it("con nombre del primer equipo es entre ellos aunque no haya nadie en el segundo", () => {
+    expect(esPartidoInterno(0, null, "Blancos")).toBe(true);
+    expect(esPartidoInterno(0, null, null)).toBe(false);
+    expect(esPartidoInterno(0, "desafio-1", "Blancos")).toBe(false);
+  });
+});

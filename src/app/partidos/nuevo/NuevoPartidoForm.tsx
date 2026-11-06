@@ -19,6 +19,7 @@ import VotacionPartidoFields, { type VotarEnPartido } from "@/components/Votacio
 import type { AppConfig } from "@/lib/config";
 import EquipoPicker, { type EquipoElegido } from "./EquipoPicker";
 import NombresEquipos from "@/components/NombresEquipos";
+import { sortearEquipos } from "@/lib/sorteo";
 
 type Modo = "programar" | "jugado";
 
@@ -62,6 +63,9 @@ export default function NuevoPartidoForm({
   ]);
   const [votar, setVotar] = useState<VotarEnPartido>({ mvp: true, peor: true });
   const jugado = modo === "jugado";
+  // Entre ellos, al programar: convocar ahora y armar los equipos después (con los que confirmen).
+  const [equiposDespues, setEquiposDespues] = useState(true);
+  const sinEquipos = interno && !jugado && equiposDespues;
   // Fecha y hora del partido, para avisar a quién convocás que dijo que no puede (solo al programar).
   const [fecha, setFecha] = useState("");
   const [hora, setHora] = useState("");
@@ -107,6 +111,7 @@ export default function NuevoPartidoForm({
     <ActionForm action={createPartido} className="flex flex-col gap-4">
       <input type="hidden" name="modo" value={modo} />
       <input type="hidden" name="interno" value={interno ? "1" : "0"} />
+      <input type="hidden" name="equipos_despues" value={sinEquipos ? "1" : "0"} />
       <div className="grid grid-cols-2 gap-1 rounded-xl border border-border bg-white/5 p-1">
         {(
           [
@@ -196,15 +201,61 @@ export default function NuevoPartidoForm({
         ) : (
           <p className="mb-1 text-sm font-medium text-zinc-300">{jugado ? "Quiénes jugaron" : "Convocados"}</p>
         )}
-        <p className="mb-2 text-xs text-zinc-500">
-          {interno
-            ? jugado
-              ? "Marcá en qué equipo jugó cada uno; los que no jugaron, dejalos sin marcar."
-              : "Marcá a quién convocás y en qué equipo."
-            : jugado
-              ? "Marcá quiénes jugaron."
-              : "Marcá a quién convocás."}
-        </p>
+        {interno && !jugado && (
+          <div className="mb-2 grid grid-cols-2 gap-1 rounded-xl border border-border bg-white/5 p-1">
+            {(
+              [
+                [true, "Equipos después"],
+                [false, "Armar equipos ya"],
+              ] as const
+            ).map(([valor, texto]) => (
+              <button
+                key={texto}
+                type="button"
+                onClick={() => setEquiposDespues(valor)}
+                aria-pressed={equiposDespues === valor}
+                className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
+                  equiposDespues === valor ? "bg-white/10 text-white shadow" : "text-zinc-500 hover:text-zinc-300"
+                }`}
+              >
+                {texto}
+              </button>
+            ))}
+          </div>
+        )}
+        <div className="mb-2 flex items-start justify-between gap-3">
+          <p className="text-xs text-zinc-500">
+            {interno
+              ? jugado
+                ? "Marcá en qué equipo jugó cada uno; los que no jugaron, dejalos sin marcar."
+                : sinEquipos
+                  ? "Marcá a quién convocás. Los equipos los armás (o sorteás) desde el partido, cuando sepas quiénes van."
+                  : "Marcá a quién convocás y en qué equipo, o marcalos y sorteá."
+              : jugado
+                ? "Marcá quiénes jugaron."
+                : "Marcá a quién convocás."}
+          </p>
+          {interno && !sinEquipos && (
+            <button
+              type="button"
+              disabled={Object.values(equipos).filter(Boolean).length < 2}
+              onClick={() =>
+                setEquipos((prev) => ({
+                  ...prev,
+                  ...Object.fromEntries(
+                    Object.entries(sortearEquipos(Object.keys(prev).filter((id) => prev[id]))).map(([id, e]) => [
+                      id,
+                      String(e) as EquipoElegido,
+                    ])
+                  ),
+                }))
+              }
+              className="shrink-0 text-xs font-semibold text-gold-400 hover:text-gold-300 disabled:opacity-40"
+            >
+              Sortear
+            </button>
+          )}
+        </div>
         <div className="flex flex-col gap-2">
           {jugadores.map((jugador) => (
             <div
@@ -228,8 +279,8 @@ export default function NuevoPartidoForm({
               <EquipoPicker
                 jugadorId={jugador.id}
                 apodo={jugador.apodo}
-                equipo={equipos[jugador.id] ?? ""}
-                soloUno={!interno}
+                equipo={sinEquipos && equipos[jugador.id] ? "1" : (equipos[jugador.id] ?? "")}
+                soloUno={!interno || sinEquipos}
                 etiquetaSolo={jugado ? "Jugó" : pideConfirmacion ? "Convocado" : "Juega"}
                 nombres={nombres}
                 onChange={(equipo) =>

@@ -6,7 +6,6 @@ import {
   aceptarSolicitud,
   borrarCancha,
   cambiarRol,
-  editarPartido,
   guardarConfig,
   guardarGrupo,
   rechazarSolicitud,
@@ -32,8 +31,7 @@ import ActionForm from "@/components/ActionForm";
 import ReglasFields from "@/components/ReglasFields";
 import InvitacionLink from "./InvitacionLink";
 import LogoUploader from "./LogoUploader";
-import HoraSelect from "@/components/HoraSelect";
-import CanchaInput from "@/components/CanchaInput";
+import EditarPartidoForm from "@/components/EditarPartidoForm";
 import { getCanchas } from "@/lib/canchas";
 
 type Tab = "grupo" | "config" | "partidos" | "usuarios";
@@ -189,8 +187,9 @@ async function ConfigTab({ grupoId }: { grupoId: string }) {
       <ActionForm action={guardarConfig} soloConCambios grupoId={grupoId} className="flex flex-col gap-4">
         <ReglasFields inicial={config} />
         <p className="text-xs text-zinc-500">
-          Los cambios aplican a los partidos a los que todavía no se les cargaron los goles; los
-          que ya tienen resultado (y sus votos) no cambian.
+          La votación y el mínimo se aplican al cargar el resultado de cada partido: los que ya tienen
+          resultado (y sus votos) no cambian. Pedir confirmación vale para los que convoques de acá en
+          adelante.
         </p>
         <SubmitButton pendingText="Guardando..." size="sm" className="self-start">
           Guardar
@@ -211,7 +210,7 @@ async function PartidosTab({ grupoId }: { grupoId: string }) {
     .order("fecha", { ascending: false })
     .returns<PartidoConCantidad[]>();
   const partidos = data ?? [];
-  const canchas = await getCanchas(supabase, grupoId);
+  const [canchas, config] = await Promise.all([getCanchas(supabase, grupoId), getConfig(supabase, grupoId)]);
 
   if (partidos.length === 0) {
     return <Card className="px-4 py-3 text-sm text-zinc-500">Todavía no hay partidos.</Card>;
@@ -219,7 +218,7 @@ async function PartidosTab({ grupoId }: { grupoId: string }) {
 
   return (
     <div className="flex flex-col gap-2">
-      <p className="text-xs text-zinc-500">Tocá un partido para editar fecha, hora, lugar o rival.</p>
+      <p className="text-xs text-zinc-500">Tocá un partido para editar fecha, hora o lugar. También se puede desde el propio partido.</p>
       {partidos.map((p) => {
         const cantidad = p.partido_jugadores[0]?.count ?? 0;
         const fecha = new Date(p.fecha + "T00:00:00").toLocaleDateString("es-AR", {
@@ -239,12 +238,12 @@ async function PartidosTab({ grupoId }: { grupoId: string }) {
                     {cantidad === 1 ? "jugador" : "jugadores"}
                   </p>
                 </div>
-                {!p.jugado ? (
+                {p.cancelado_en ? (
+                  <Badge variant="danger">Cancelado</Badge>
+                ) : !p.jugado ? (
                   <Badge>Programado</Badge>
-                ) : p.con_votacion ? (
-                  <Badge variant="primary">Jugado</Badge>
                 ) : (
-                  <Badge variant="gold">Sin votación</Badge>
+                  <Badge variant="primary">Jugado</Badge>
                 )}
                 <IconChevronRight className="h-4 w-4 shrink-0 text-zinc-500 transition group-open:rotate-90" />
               </summary>
@@ -261,44 +260,15 @@ async function PartidosTab({ grupoId }: { grupoId: string }) {
                   </Link>
                 </div>
               ) : (
-                <ActionForm action={editarPartido} soloConCambios grupoId={grupoId} className="flex flex-col gap-3 border-t border-border px-4 py-4">
-                  <input type="hidden" name="partido_id" value={p.id} />
-                  <div className="flex gap-3">
-                    <Label className="flex-1">
-                      Fecha
-                      <Input type="date" name="fecha" required defaultValue={p.fecha} />
-                    </Label>
-                    <Label className="w-28 shrink-0">
-                      Hora
-                      <HoraSelect defaultValue={p.hora?.slice(0, 5) ?? ""} />
-                    </Label>
-                  </div>
-                  <Label>
-                    Lugar
-                    <CanchaInput canchas={canchas} defaultValue={p.lugar} required />
-                  </Label>
-                  <Label>
-                    Rival / nombre del Equipo 2
-                    <Input type="text" name="rival" required defaultValue={p.rival} />
-                  </Label>
-                  {!p.jugado && (
-                    <label className="flex items-center gap-2 text-sm text-zinc-300">
-                      <input type="checkbox" name="avisar" defaultChecked className="h-4 w-4 accent-primary-500" />
-                      Avisar a los convocados si cambia la fecha o la hora
-                    </label>
-                  )}
-                  <div className="flex items-center gap-3">
-                    <SubmitButton pendingText="Guardando..." size="sm">
-                      Guardar
-                    </SubmitButton>
-                    <Link
-                      href={`/partidos/${p.id}`}
-                      className="text-sm font-medium text-zinc-400 transition hover:text-white"
-                    >
-                      Ver partido
-                    </Link>
-                  </div>
-                </ActionForm>
+                <EditarPartidoForm
+                  partido={p}
+                  grupoId={grupoId}
+                  canchas={canchas}
+                  interno={!!p.nombre_equipo}
+                  pideConfirmacion={config.pedir_confirmacion}
+                  verPartido
+                  className="border-t border-border px-4 py-4"
+                />
               )}
             </details>
           </Card>

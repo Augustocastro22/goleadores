@@ -8,7 +8,7 @@ import { recordarVotaciones } from "@/lib/recordatorios-votacion";
 /**
  * Corre una vez por día (ver vercel.json). Cierra por vencimiento las
  * votaciones de partidos donde no votó todo el mundo: el cierre "por
- * completar todos los votos" ya se notifica al toque desde votar() en
+ * completar todos los votos" ya se notifica al toque desde votarPartido() en
  * src/lib/actions/votos.ts, y el vencido también se cierra apenas alguien
  * abre el partido. Esto cubre los que nadie abrió (y lo mismo con los
  * desempates, que vencen a las 24 h). También manda los recordatorios de las

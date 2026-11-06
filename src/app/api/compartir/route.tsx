@@ -99,7 +99,7 @@ async function imagenDePartido(request: NextRequest, formato: Formato) {
   const equipo2 = delEquipo(2);
   const suma = (lista: JugadorPartido[]) => lista.reduce((t, j) => t + j.goles, 0);
 
-  const interno = esPartidoInterno(equipo2.length, partido.desafio_id);
+  const interno = esPartidoInterno(equipo2.length, partido.desafio_id, partido.nombre_equipo);
   // Contra otro equipo, "nosotros" es el nombre del grupo; entre ellos, el del equipo de ese día.
   const nombres = nombresDelPartido(partido, interno, config);
   const nosotros = interno ? nombres.nosotros : grupo.nombre;

@@ -1,3 +1,4 @@
+import AvisoGolesPorCorregir from "@/components/AvisoGolesPorCorregir";
 import Link from "next/link";
 import { requireGrupo } from "@/lib/grupo";
 import type { Partido } from "@/lib/types";
@@ -79,7 +80,7 @@ export default async function PartidosPage() {
         golesEquipo1,
         golesEquipo2,
         resultado: calcularResultado(golesEquipo1, golesEquipo2),
-        interno: esPartidoInterno(acc.jugadores2, partido.desafio_id),
+        interno: esPartidoInterno(acc.jugadores2, partido.desafio_id, partido.nombre_equipo),
       });
     }
   }
@@ -125,6 +126,14 @@ export default async function PartidosPage() {
         </div>
       </div>
 
+      {grupo.rol === "admin" && conGolesDeMas.size > 0 && (
+        <AvisoGolesPorCorregir
+          pendientes={desafios
+            .filter((d) => d.partido_id && conGolesDeMas.has(d.partido_id))
+            .map((d) => ({ partidoId: d.partido_id!, rival: d.rival_nombre }))}
+        />
+      )}
+
       {!partidos || partidos.length === 0 ? (
         <Card className="flex flex-col items-center gap-4 px-5 py-10 text-center">
           {grupo.rol === "admin" ? (
@@ -163,7 +172,7 @@ export default async function PartidosPage() {
               const fecha = new Date(partido.fecha + "T00:00:00");
               const resumen = resumenPorPartido.get(partido.id);
               // Entre ellos (también uno programado, si ya tiene los dos equipos armados).
-              const interno = esPartidoInterno(golesPorEquipo.get(partido.id)?.jugadores2 ?? 0, partido.desafio_id);
+              const interno = esPartidoInterno(golesPorEquipo.get(partido.id)?.jugadores2 ?? 0, partido.desafio_id, partido.nombre_equipo);
               return (
                 <Link key={partido.id} href={`/partidos/${partido.id}`} className="block">
                   <Card className="flex items-center justify-between gap-4 px-4 py-4 transition hover:border-border-strong hover:bg-surface-2/80">
@@ -175,7 +184,9 @@ export default async function PartidosPage() {
                         <span className="text-lg font-bold text-white">{fecha.getDate()}</span>
                       </div>
                       <div className="min-w-0">
-                        <p className="truncate font-semibold text-white">
+                        <p
+                          className={`truncate font-semibold ${partido.cancelado_en ? "text-zinc-500 line-through" : "text-white"}`}
+                        >
                           {interno ? `${nombresDelPartido(partido, true, config).nosotros} vs ${partido.rival}` : `vs ${partido.rival}`}
                         </p>
                         <p className="truncate text-sm text-zinc-500">
@@ -220,6 +231,8 @@ export default async function PartidosPage() {
                           {desafioPorPartido.get(partido.id)!.marcador_mios}-
                           {desafioPorPartido.get(partido.id)!.marcador_rival}
                         </span>
+                      ) : partido.cancelado_en ? (
+                        <Badge variant="danger">Cancelado</Badge>
                       ) : desafioPorPartido.get(partido.id)?.estado === "suspendido" ? (
                         <Badge variant="gold">Suspendido</Badge>
                       ) : (

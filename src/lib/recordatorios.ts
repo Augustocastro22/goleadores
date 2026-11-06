@@ -46,6 +46,7 @@ export async function recordarConfirmaciones(ahora: Date = new Date()) {
     .from("partidos")
     .select("id, grupo_id, fecha, hora, rival, lugar")
     .eq("jugado", false)
+    .is("cancelado_en", null)
     .in("fecha", [hoy, manana]);
 
   let recordados = 0;

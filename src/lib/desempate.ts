@@ -69,7 +69,8 @@ export function cierreDesempate(abiertoEn: string): Date {
 
 /**
  * Resultado de un desempate con los votos que hay: gana el que tiene más; si
- * siguen parejos (o nadie votó) no hay ganador y cuentan todos los empatados.
+ * siguen parejos (o nadie votó) no hay ganador y cuentan los empatados (hasta
+ * MAX_CO_GANADORES, ver ganadoresDeEmpate).
  * Así, no votar no le saca nada a nadie: es lo mismo que abstenerse.
  */
 export function ganadorDesempate(votados: string[]): string | null {
@@ -79,4 +80,23 @@ export function ganadorDesempate(votados: string[]): string | null {
   const max = Math.max(...conteo.values());
   const primeros = [...conteo.entries()].filter(([, n]) => n === max);
   return primeros.length === 1 ? primeros[0][0] : null;
+}
+
+/**
+ * Cuántos empatados pueden ganar juntos un empate que no se definió. Con más
+ * (por ejemplo, 10 votos a 10 jugadores distintos) la categoría queda sin
+ * ganador en ese partido. Mismo número que get_ranking_votos y
+ * get_ganadores_votacion (0040_cancelar_partido_tope_empates.sql).
+ */
+export const MAX_CO_GANADORES = 3;
+
+/** Los ganadores de un empate sin definir: todos los empatados, o nadie si pasan el tope. */
+export function ganadoresDeEmpate<T>(empatados: T[]): T[] {
+  return empatados.length <= MAX_CO_GANADORES ? empatados : [];
+}
+
+/** "cuentan los dos", "cuentan todos" o "no gana nadie": cómo termina un empate que no se definió. */
+export function textoEmpateSinDefinir(cantidad: number): string {
+  if (cantidad > MAX_CO_GANADORES) return `como son más de ${MAX_CO_GANADORES}, no gana nadie`;
+  return cantidad === 2 ? "cuentan los dos" : "cuentan todos";
 }

@@ -61,7 +61,8 @@ export default function ReglasFields({
             className="max-w-28"
           />
           <span className="text-xs font-normal text-zinc-500">
-            Si en un partido juegan menos, ese partido no tiene votación. Cuentan los dos equipos.
+            Si en un partido juegan menos, ese partido no tiene votación. Cuentan los del grupo de los dos
+            equipos; los invitados sin cuenta no.
             0 = sin mínimo.
           </span>
         </label>
@@ -75,7 +76,7 @@ export default function ReglasFields({
           checked={pedirConfirmacion}
           onChange={setPedirConfirmacion}
           titulo="Pedir confirmación a los convocados"
-          detalle="Cada convocado tiene que decir si juega. Los que dicen que no quedan afuera; los que no respondan los definís vos al cargar el resultado."
+          detalle="Cada convocado tiene que decir si juega. Los que dicen que no quedan afuera; los que no respondan los definís vos al cargar el resultado. Vale para los que convoques de acá en adelante."
         />
       </div>
     </div>

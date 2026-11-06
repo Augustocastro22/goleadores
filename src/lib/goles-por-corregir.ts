@@ -3,8 +3,9 @@ import { desafiosConGolesDeMas, type DesafioVista } from "@/lib/desafios";
 
 /**
  * Partidos de desafío del grupo con goles de jugadores de más (ver
- * desafiosConGolesDeMas). Mientras haya alguno, el grupo no carga partidos
- * nuevos ni arma desafíos: así no se pierde la corrección.
+ * desafiosConGolesDeMas): el otro grupo corrigió el resultado y los goles
+ * cargados ya no cierran. Se avisa al admin (en Partidos y al cargar uno
+ * nuevo) para que no se pierda la corrección, sin frenar nada más.
  */
 export async function golesPorCorregir(
   supabase: SupabaseClient,
@@ -28,7 +29,7 @@ export async function golesPorCorregir(
   return desafiosConGolesDeMas(conResultado, goles).map((d) => ({ partidoId: d.partido_id!, rival: d.rival_nombre }));
 }
 
-/** El error para cuando se quiere cargar un partido con goles por corregir. */
-export function errorGolesPorCorregir(pendientes: { rival: string }[]): string {
-  return `Antes de cargar otro partido corregí los goles del partido contra ${pendientes[0].rival}: suman más que el resultado del desafío.`;
+/** El aviso para el admin cuando hay goles de un desafío por corregir. */
+export function avisoGolesPorCorregir(pendientes: { rival: string }[]): string {
+  return `Corregí los goles del partido contra ${pendientes[0].rival}: suman más que el resultado del desafío.`;
 }

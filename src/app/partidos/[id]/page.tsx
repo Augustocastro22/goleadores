@@ -2,14 +2,16 @@ import { notFound, redirect } from "next/navigation";
 import { getContexto, getMiembros, rolEn } from "@/lib/grupo";
 import { esPartidoInterno, getConfig, grupoVota as votaAlgo, nombresDelPartido } from "@/lib/config";
 import Link from "next/link";
-import { deletePartido } from "@/lib/actions/partidos";
+import { cancelarPartido, deletePartido, reprogramarPartido } from "@/lib/actions/partidos";
+import EditarPartidoForm from "@/components/EditarPartidoForm";
 import { urlConGrupo } from "@/lib/grupo-cookie";
-import { cerrarVotacion, votarDesempate, votarPartido } from "@/lib/actions/votos";
+import { cerrarVotacion, votarDesempate } from "@/lib/actions/votos";
 import {
   formatearCierreVotacion,
   puedeCerrarVotacionAMano,
   VOTACION_CIERRE_MANUAL_HORAS,
   votacionCerrada,
+  votacionVencida,
 } from "@/lib/votacion";
 import { cerrarDesempatesVencidos, cerrarVotacionSiCorresponde } from "@/lib/votaciones";
 import { formatearMomento, partidoYaPaso, puedeCargarResultado, resultadoHabilitadoDesde } from "@/lib/confirmacion";
@@ -22,6 +24,7 @@ import { BotonCompartir } from "@/components/Compartir";
 import { OPCION_COLOR, OPCION_DISENO, OPCION_NOMBRES } from "@/lib/compartir/opciones";
 import { IconChevronRight } from "@/components/icons";
 import type { DesafioVista } from "@/lib/desafios";
+import { ganadoresDeEmpate, MAX_CO_GANADORES, textoEmpateSinDefinir } from "@/lib/desempate";
 import { getCanchas, parecidas } from "@/lib/canchas";
 import { unificarCanchas } from "@/lib/actions/admin";
 import ActionForm from "@/components/ActionForm";
@@ -31,7 +34,7 @@ import DesafioPanel, { type PropuestaResultado } from "./DesafioPanel";
 import type { Ocupado } from "./ConvocadosEditor";
 import ConvocadosEditor from "./ConvocadosEditor";
 import SobreResultado, { type GanadorSobre } from "@/components/SobreResultado";
-import VotoSelects, { type Candidato } from "./VotoSelects";
+import VotacionForm from "./VotoSelects";
 import { PendientesCard, RespuestaBadge, RespuestaCard, ResumenRespuestas } from "./Confirmacion";
 
 interface ParticipanteRow {
@@ -63,6 +66,12 @@ export default async function PartidoDetailPage({
   const isAdmin = rolEn(ctx, partido.grupo_id) === "admin";
   const conMvp = partido.con_votacion && partido.con_mvp;
   const conPeor = partido.con_votacion && partido.con_peor;
+  const cancelado = !!partido.cancelado_en && !partido.jugado;
+  // Con el resultado cargado, el admin puede corregir quiénes jugaron mientras la votación siga abierta.
+  const puedeCorregirJugaron =
+    isAdmin &&
+    partido.jugado &&
+    (!partido.con_votacion || !(partido.votacion_cerrada_notificada || votacionVencida(partido.votacion_cierra_en)));
 
   // Lo que no depende entre sí se pide todo junto.
   const [config, { data: participantesRaw }, { data: misVotos }, todosLosJugadores, { data: desafioRaw }, canchas] =
@@ -73,17 +82,21 @@ export default async function PartidoDetailPage({
         .select("jugador_id, goles, equipo, respuesta, profiles(*)")
         .eq("partido_id", id),
       supabase.from("votos").select("tipo, jugador_votado_id").eq("partido_id", id).eq("jugador_que_vota_id", user.id),
-      isAdmin && !partido.jugado ? getMiembros(supabase, partido.grupo_id) : Promise.resolve([] as Profile[]),
+      isAdmin && (!partido.jugado || puedeCorregirJugaron)
+        ? getMiembros(supabase, partido.grupo_id)
+        : Promise.resolve([] as Profile[]),
       partido.desafio_id
         ? supabase.rpc("get_desafios", { p_grupo_id: partido.grupo_id, p_desafio_id: partido.desafio_id })
         : Promise.resolve({ data: [] }),
-      // Para proponer otro lugar en un desafío.
-      isAdmin && partido.desafio_id ? getCanchas(supabase, partido.grupo_id) : Promise.resolve([]),
+      // Para proponer otro lugar en un desafío, o para editar el lugar.
+      isAdmin ? getCanchas(supabase, partido.grupo_id) : Promise.resolve([]),
     ]);
   const desafio = ((desafioRaw ?? []) as DesafioVista[])[0] ?? null;
   // En un desafío el lugar lo escribió el otro grupo: si quedó en una cancha
   // nueva parecida a una que el grupo ya tenía ("Gren Park"), se ofrece unificarlas.
-  const canchaNueva = canchas.find((c) => c.id === partido.cancha_id && c.partidos === 1);
+  const canchaNueva = partido.desafio_id
+    ? canchas.find((c) => c.id === partido.cancha_id && c.partidos === 1)
+    : undefined;
   const canchaExistente = canchaNueva && canchas.find((c) => c.id !== canchaNueva.id && parecidas(c.nombre, canchaNueva.nombre));
   const canchaParecida = canchaNueva && canchaExistente ? { nueva: canchaNueva, existente: canchaExistente } : null;
   const grupoVota = votaAlgo(config);
@@ -91,7 +104,7 @@ export default async function PartidoDetailPage({
   const equipo1 = participantes.filter((p) => p.equipo === 1);
   const equipo2 = participantes.filter((p) => p.equipo === 2);
   // Entre ellos (dos equipos del grupo) o contra otro equipo, y cómo se llama cada lado.
-  const interno = esPartidoInterno(equipo2.length, partido.desafio_id);
+  const interno = esPartidoInterno(equipo2.length, partido.desafio_id, partido.nombre_equipo);
   const { nosotros } = nombresDelPartido(partido, interno, config);
 
   // Confirmación de los convocados (ver 0020_confirmacion.sql). Solo antes de
@@ -116,7 +129,7 @@ export default async function PartidoDetailPage({
   // partidos pendientes (0029_votacion_24h.sql): el admin los tiene que ver para sacarlos.
   const idsMiembros = new Set(todosLosJugadores.map((j) => j.id));
   const exMiembrosConvocados =
-    isAdmin && !partido.jugado
+    isAdmin && (!partido.jugado || puedeCorregirJugaron)
       ? participantes.filter((p) => !idsMiembros.has(p.jugador_id)).map((p) => p.profiles)
       : [];
   const resultadoHabilitado = puedeCargarResultado(partido.fecha, partido.hora);
@@ -257,6 +270,45 @@ export default async function PartidoDetailPage({
         }
       : null;
 
+  // Opciones del admin al pie: editar fecha/hora/lugar, cancelar (si no se jugó) y eliminar.
+  const opcionesAdmin =
+    isAdmin && !partido.desafio_id ? (
+      <OpcionesPartido
+        partido={partido}
+        grupoId={partido.grupo_id}
+        canchas={canchas}
+        interno={interno}
+        pideConfirmacion={config.pedir_confirmacion}
+        cancelado={cancelado}
+      />
+    ) : null;
+
+  if (cancelado) {
+    return (
+      <div className="flex flex-col gap-8">
+        <PartidoProgramadoCard
+          rival={partido.rival}
+          nosotros={interno ? nosotros : undefined}
+          fecha={fecha}
+          lugar={partido.lugar}
+          respuestas={null}
+          cancelado
+          aviso="Este partido se canceló: no se juega."
+        />
+        {participantes.length > 0 && (
+          <ConvocadosProgramados
+            nosotros={nosotros}
+            rival={partido.rival}
+            equipo1={equipo1}
+            equipo2={equipo2}
+            conConfirmacion={false}
+          />
+        )}
+        {opcionesAdmin}
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col gap-8">
       {compartir && (
@@ -367,6 +419,8 @@ export default async function PartidoDetailPage({
 
       {!programado ? (
         <GolesEditor
+          // Si cambian quiénes jugaron (corregirJugaron), arranca de nuevo con la lista nueva.
+          key={participantes.map((p) => `${p.jugador_id}:${p.equipo}`).join(",")}
           partidoId={id}
           rival={partido.rival}
           fecha={fecha}
@@ -400,6 +454,24 @@ export default async function PartidoDetailPage({
             conConfirmacion={conConfirmacion}
           />
         )
+      )}
+
+      {puedeCorregirJugaron && (
+        <ConvocadosEditor
+          modo="jugaron"
+          partidoId={id}
+          jugadores={[...todosLosJugadores, ...exMiembrosConvocados]}
+          exMiembroIds={exMiembrosConvocados.map((j) => j.id)}
+          equipo1IdsInit={equipo1.map((p) => p.jugador_id)}
+          equipo2IdsInit={equipo2.map((p) => p.jugador_id)}
+          partidoFecha={partido.fecha}
+          partidoHora={partido.hora}
+          bloqueos={[]}
+          unSoloEquipo={!interno}
+          nombresEquipos={interno ? [nosotros, partido.rival] : undefined}
+          rival={partido.rival}
+          mostrarResumen={false}
+        />
       )}
 
       {/* Un partido sin votación de un grupo que ya no vota no muestra nada de votación.
@@ -492,7 +564,8 @@ export default async function PartidoDetailPage({
               </ActionForm>
             ) : (
               <p className="text-xs text-zinc-500">
-                Podés cerrarla a mano desde el{" "}
+                Para que todos tengan tiempo de votar, se puede cerrar a mano recién {VOTACION_CIERRE_MANUAL_HORAS} horas
+                después de cargar el resultado: desde el{" "}
                 {formatearCierreVotacion(
                   new Date(
                     new Date(partido.votacion_cierra_en).getTime() - VOTACION_CIERRE_MANUAL_HORAS * 60 * 60 * 1000
@@ -505,22 +578,89 @@ export default async function PartidoDetailPage({
         </section>
       )}
 
-      {/* Un partido de desafío no se borra: se cancela el desafío, desde su panel (arriba). */}
-      {isAdmin && !partido.desafio_id && (
-        <section>
-          <ActionForm action={deletePartido} className="flex flex-col gap-2">
-            <input type="hidden" name="partido_id" value={id} />
+      {/* Un partido de desafío no se edita ni se borra: se cancela el desafío, desde su panel (arriba). */}
+      {opcionesAdmin}
+    </div>
+  );
+}
+
+/**
+ * Al pie del partido, para el admin: editar fecha/hora/lugar, cancelarlo (si
+ * todavía no se jugó: queda en el historial y se avisa) o volver a
+ * programarlo, y eliminarlo (para un partido cargado por error).
+ */
+function OpcionesPartido({
+  partido,
+  grupoId,
+  canchas,
+  interno,
+  pideConfirmacion,
+  cancelado,
+}: {
+  partido: { id: string; fecha: string; hora: string | null; lugar: string; rival: string; jugado: boolean };
+  grupoId: string;
+  canchas: { nombre: string }[];
+  interno: boolean;
+  pideConfirmacion: boolean;
+  cancelado: boolean;
+}) {
+  return (
+    <section className="flex flex-col gap-3">
+      <Card className="overflow-hidden">
+        <details className="group">
+          <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-semibold text-white [&::-webkit-details-marker]:hidden">
+            Editar fecha, hora o lugar
+            <IconChevronRight className="h-4 w-4 shrink-0 text-zinc-500 transition group-open:rotate-90" />
+          </summary>
+          <EditarPartidoForm
+            partido={partido}
+            grupoId={grupoId}
+            canchas={canchas}
+            interno={interno}
+            pideConfirmacion={pideConfirmacion && !cancelado}
+            className="border-t border-border px-4 py-4"
+          />
+        </details>
+      </Card>
+
+      {cancelado ? (
+        <ActionForm action={reprogramarPartido} className="flex flex-col gap-2">
+          <input type="hidden" name="partido_id" value={partido.id} />
+          <SubmitButton pendingText="Guardando..." className="w-full">
+            Volver a programarlo
+          </SubmitButton>
+          <p className="text-xs text-zinc-500">Vuelve con la misma convocatoria y se les avisa a los convocados.</p>
+        </ActionForm>
+      ) : (
+        !partido.jugado && (
+          <ActionForm action={cancelarPartido} className="flex flex-col gap-2">
+            <input type="hidden" name="partido_id" value={partido.id} />
             <ConfirmSubmitButton
-              confirmMessage="¿Seguro que querés borrar este partido? Se pierden los goles y los votos cargados."
-              confirmLabel="Eliminar"
-              className="w-full rounded-xl border border-danger-500/20 bg-danger-500/10 px-4 py-2.5 text-sm font-semibold text-danger-400 transition hover:bg-danger-500/20"
+              confirmMessage="El partido queda cancelado (no se borra) y les llega un aviso a los convocados. Lo podés volver a programar después. ¿Cancelar el partido?"
+              confirmLabel="Cancelar partido"
+              className="w-full rounded-xl border border-gold-500/20 bg-gold-500/10 px-4 py-2.5 text-sm font-semibold text-gold-400 transition hover:bg-gold-500/20"
             >
-              Eliminar partido
+              Cancelar partido (no se juega)
             </ConfirmSubmitButton>
           </ActionForm>
-        </section>
+        )
       )}
-    </div>
+
+      <ActionForm action={deletePartido} className="flex flex-col gap-2">
+        <input type="hidden" name="partido_id" value={partido.id} />
+        <ConfirmSubmitButton
+          confirmMessage={
+            partido.jugado
+              ? "¿Seguro que querés borrar este partido? Se pierden los goles y los votos cargados. No se puede deshacer."
+              : "Eliminar es para un partido cargado por error: se borra sin avisar a nadie y no se puede deshacer. Si no se juega, mejor cancelalo. ¿Eliminar igual?"
+          }
+          confirmLabel="Eliminar"
+          className="w-full rounded-xl border border-danger-500/20 bg-danger-500/10 px-4 py-2.5 text-sm font-semibold text-danger-400 transition hover:bg-danger-500/20"
+        >
+          Eliminar partido
+        </ConfirmSubmitButton>
+      </ActionForm>
+    </section>
   );
 }
 
@@ -532,7 +672,9 @@ function PartidoProgramadoCard({
   lugar,
   respuestas,
   aviso,
+  cancelado = false,
 }: {
+  cancelado?: boolean;
   rival: string;
   /** Entre ellos, el nombre del primer equipo ("Titulares vs Suplentes"); si no, "vs Rival". */
   nosotros?: string;
@@ -550,8 +692,10 @@ function PartidoProgramadoCard({
         <span className="truncate">{lugar}</span>
       </div>
       <div className="mt-4 flex flex-col items-center gap-2">
-        <Badge>Partido programado</Badge>
-        <p className="text-lg font-bold text-white">{nosotros ? `${nosotros} vs ${rival}` : `vs ${rival}`}</p>
+        {cancelado ? <Badge variant="danger">Cancelado</Badge> : <Badge>Partido programado</Badge>}
+        <p className={`text-lg font-bold ${cancelado ? "text-zinc-500 line-through" : "text-white"}`}>
+          {nosotros ? `${nosotros} vs ${rival}` : `vs ${rival}`}
+        </p>
         {respuestas && <ResumenRespuestas respuestas={respuestas} />}
         {aviso && <p className="mt-1 text-center text-xs text-zinc-500">{aviso}</p>}
       </div>
@@ -630,7 +774,8 @@ function ConvocadosList({
  * Cómo quedó una categoría. Si hubo empate por el primer puesto:
  * - mientras se define (desempate pendiente) no hay ganador, y se dice clarito;
  * - si se definió, gana solo el elegido;
- * - si no había cómo definirlo (o volvió a empatar), cuentan todos los empatados.
+ * - si no había cómo definirlo (o volvió a empatar), cuentan los empatados, si
+ *   no son más de MAX_CO_GANADORES (si son más, no gana nadie).
  */
 function ResultadoVotacion({
   partidoId,
@@ -664,7 +809,7 @@ function ResultadoVotacion({
     ? []
     : desempate?.ganador_id
       ? [desempate.ganador_id]
-      : empatados.map((f) => f.jugador_id);
+      : ganadoresDeEmpate(empatados.map((f) => f.jugador_id));
   const nombresEmpatados = (desempate?.candidatos_apodos ?? empatados.map((f) => f.apodo)).join(" y ");
   const apodoDe = (id: string) => filas.find((f) => f.jugador_id === id)?.apodo ?? "?";
 
@@ -708,7 +853,8 @@ function ResultadoVotacion({
             Empataron {nombresEmpatados}. Todavía <span className="font-semibold text-white">no hay ganador</span>:
             lo definen con un voto extra los que no votaron a ninguno de los empatados
             {plazos.get(desempate.id) ? `, hasta el ${formatearCierreVotacion(plazos.get(desempate.id)!)}` : ""}.
-            Ya se les envió una notificación para que voten. Si sigue parejo, cuentan todos.
+            Ya se les envió una notificación para que voten. Si sigue parejo,{" "}
+            {textoEmpateSinDefinir(desempate.candidatos.length)}.
           </p>
         )
       ) : desempate?.ganador_id ? (
@@ -719,8 +865,9 @@ function ResultadoVotacion({
       ) : (
         empatados.length > 1 && (
           <p className="border-t border-border pt-3 text-sm text-zinc-400">
-            Empataron {nombresEmpatados} y no se pudo definir, así que cuentan{" "}
-            {empatados.length === 2 ? "los dos" : "todos"}.
+            {empatados.length > MAX_CO_GANADORES
+              ? `Empataron ${empatados.length} jugadores con ${maxVotos} ${maxVotos === 1 ? "voto" : "votos"} y no se pudo definir: como son más de ${MAX_CO_GANADORES}, en este partido no gana nadie.`
+              : `Empataron ${nombresEmpatados} y no se pudo definir, así que ${textoEmpateSinDefinir(empatados.length)}.`}
           </p>
         )
       )}
@@ -796,49 +943,5 @@ function DefinirDesempate({ desempate, plazo }: { desempate: DesempatePartido; p
         </div>
       </ActionForm>
     </div>
-  );
-}
-
-function VotacionForm({
-  partidoId,
-  candidatos,
-  conMvp,
-  conPeor,
-  votoMvpId,
-  votoPeorId,
-}: {
-  partidoId: string;
-  candidatos: Candidato[];
-  conMvp: boolean;
-  conPeor: boolean;
-  votoMvpId: string | null;
-  votoPeorId: string | null;
-}) {
-  if ((!conMvp || votoMvpId) && (!conPeor || votoPeorId)) {
-    return (
-      <Card className="px-4 py-3 text-sm text-zinc-500">Ya votaste en este partido.</Card>
-    );
-  }
-
-  if (candidatos.length === 0) {
-    return null;
-  }
-
-  return (
-    <Card className="flex flex-col gap-4 p-4">
-      <ActionForm action={votarPartido} className="flex flex-col gap-4">
-        <input type="hidden" name="partido_id" value={partidoId} />
-        <VotoSelects
-          candidatos={candidatos}
-          conMvp={conMvp}
-          conPeor={conPeor}
-          votoMvpId={votoMvpId}
-          votoPeorId={votoPeorId}
-        />
-        <SubmitButton pendingText="Votando..." size="sm" className="self-start">
-          Votar
-        </SubmitButton>
-      </ActionForm>
-    </Card>
   );
 }

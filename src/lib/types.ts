@@ -58,6 +58,8 @@ export interface Partido {
   desafio_id: string | null;
   /** Cuando juegan entre ellos, el nombre del primer equipo ese día (el segundo es `rival`, ver 0032_modo_juego.sql). */
   nombre_equipo: string | null;
+  /** Si se canceló (no se juega): cuándo. Queda en el historial; ver 0040_cancelar_partido_tope_empates.sql. */
+  cancelado_en: string | null;
 }
 
 export type Equipo = 1 | 2;

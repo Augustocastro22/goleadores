@@ -134,6 +134,18 @@ export default function DisponibilidadEditor({
   const bloqueosDetalle = diaDetalle ? bloqueos.filter((b) => fechaCoincide(b, diaDetalle)) : [];
 
   async function elegirModo(nuevo: ModoDisponibilidad) {
+    // Cambiar de modo invierte cómo cuenta todo lo que no marcó: se avisa antes, con el efecto concreto.
+    if (
+      modoDisp !== null &&
+      modoDisp !== nuevo &&
+      !window.confirm(
+        nuevo === "puedo"
+          ? "Todas las horas que no marcaste van a pasar a contar como que NO podés (para el grupo, en los mejores horarios). Lo que ya marcaste queda igual. ¿Cambiar?"
+          : "Todas las horas que no marcaste van a pasar a contar como que SÍ podés (para el grupo, en los mejores horarios). Lo que ya marcaste queda igual. ¿Cambiar?"
+      )
+    ) {
+      return;
+    }
     setGuardandoModo(true);
     setErrorModo(null);
     const result = await guardarModoDisponibilidad(nuevo);
