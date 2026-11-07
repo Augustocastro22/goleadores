@@ -4,6 +4,8 @@ import { esPartidoInterno, getConfig, grupoVota as votaAlgo, nombresDelPartido }
 import Link from "next/link";
 import { cancelarPartido, deletePartido, reprogramarPartido } from "@/lib/actions/partidos";
 import EditarPartidoForm from "@/components/EditarPartidoForm";
+import Volver from "@/components/Volver";
+import AccesoCancha from "@/components/cancha/AccesoCancha";
 import { urlConGrupo } from "@/lib/grupo-cookie";
 import { cerrarVotacion, votarDesempate } from "@/lib/actions/votos";
 import {
@@ -286,6 +288,9 @@ export default async function PartidoDetailPage({
   if (cancelado) {
     return (
       <div className="flex flex-col gap-8">
+        <div className="-mb-4">
+          <Volver href="/partidos">Partidos</Volver>
+        </div>
         <PartidoProgramadoCard
           rival={partido.rival}
           nosotros={interno ? nosotros : undefined}
@@ -311,11 +316,10 @@ export default async function PartidoDetailPage({
 
   return (
     <div className="flex flex-col gap-8">
-      {compartir && (
-        <div className="-mb-4 flex justify-end">
-          <BotonCompartir {...compartir} etiqueta="Compartir" />
-        </div>
-      )}
+      <div className="-mb-4 flex items-center justify-between gap-2">
+        <Volver href="/partidos">Partidos</Volver>
+        {compartir && <BotonCompartir {...compartir} etiqueta="Compartir" />}
+      </div>
 
       {desafio && (
         <DesafioPanel
@@ -454,6 +458,19 @@ export default async function PartidoDetailPage({
             conConfirmacion={conConfirmacion}
           />
         )
+      )}
+
+      {participantes.length > 0 && (
+        <AccesoCancha
+          href={`/partidos/${id}/cancha`}
+          detalle={
+            interno && equipo2.length > 0
+              ? `${nosotros} vs ${partido.rival}, cada uno en su mitad`
+              : partido.jugado
+                ? "Cómo formaron los que jugaron"
+                : "Los convocados ubicados en la cancha"
+          }
+        />
       )}
 
       {puedeCorregirJugaron && (

@@ -126,3 +126,10 @@ El pago de la cancha con "Ya pagué" ya está diseñado en `plan-pro.md`: convie
 - **Pedir aprobación:** está en la tab "Grupo" en vez de "Reglas". Al rechazar a alguien no se le avisa.
 - **Defaults distintos** entre grupos viejos y nuevos (Peor y Confirmación).
 - **Terminología mezclada:** convocados / jugadores / quiénes jugaron, y "Nosotros" en lugar del nombre del grupo.
+
+---
+
+## D. Anotado para después (2026-11-06)
+
+- **Sugerir corrección de goles:** que un jugador pueda avisar "cargaron mal los goles" (por ejemplo, "hice 2, no 1") y al admin le llegue la sugerencia para aceptarla o no. Reemplaza la idea de que el jugador cargue sus goles, que se descartó.
+- **Carta de jugador tipo figurita:** pendiente de definir.

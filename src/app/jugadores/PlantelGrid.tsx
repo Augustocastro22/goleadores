@@ -39,8 +39,14 @@ export default function PlantelGrid({
 
   return (
     <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
-      {jugadores.map((j) => (
-        <Link key={j.id} href={`/jugadores/${j.id}`} className="block">
+      {jugadores.map((j, indice) => (
+        <Link
+          key={j.id}
+          href={`/jugadores/${j.id}`}
+          transitionTypes={["adelante"]}
+          className="entrada presionable block"
+          style={{ "--i": indice } as React.CSSProperties}
+        >
           <Card className="flex min-w-0 flex-col items-center gap-3 p-5 text-center transition hover:border-border-strong hover:bg-surface-2/80">
             <Avatar src={j.foto_url} alt={j.apodo} size={72} />
             <div className="w-full min-w-0">

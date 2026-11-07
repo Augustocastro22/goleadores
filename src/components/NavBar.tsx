@@ -28,7 +28,10 @@ export default async function NavBar() {
 
   return (
     <>
-      <header className="sticky top-0 z-20 border-b border-border bg-background/80 backdrop-blur-lg">
+      <header
+        className="sticky top-0 z-20 border-b border-border bg-background/80 backdrop-blur-lg"
+        style={{ viewTransitionName: "barra-superior" }}
+      >
         {/* Más ancha que el contenido (max-w-3xl) para que entren el nombre del grupo y los links. */}
         <nav className="mx-auto flex max-w-5xl items-center justify-between gap-3 px-4 py-3">
           <div className="flex min-w-0 items-center gap-6">

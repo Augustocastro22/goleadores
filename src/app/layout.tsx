@@ -4,6 +4,7 @@ import "./globals.css";
 import NavBar from "@/components/NavBar";
 import RegisterServiceWorker from "@/components/RegisterServiceWorker";
 import PullToRefresh from "@/components/PullToRefresh";
+import TransicionPantalla from "@/components/TransicionPantalla";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -58,7 +59,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         <PullToRefresh />
         <NavBar />
         <main className="mx-auto w-full max-w-3xl flex-1 px-4 pt-6 pb-28 md:pb-10">
-          {children}
+          <TransicionPantalla>{children}</TransicionPantalla>
         </main>
       </body>
     </html>

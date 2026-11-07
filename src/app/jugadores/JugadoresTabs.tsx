@@ -3,7 +3,7 @@
 import { useState } from "react";
 import type { Miembro, RankingRow } from "@/lib/types";
 import PlantelGrid from "./PlantelGrid";
-import FormacionBuilder from "./FormacionBuilder";
+import ArmadorCancha from "@/components/cancha/ArmadorCancha";
 
 type Tab = "plantel" | "formacion";
 
@@ -36,7 +36,7 @@ export default function JugadoresTabs({
       <p className="mb-4 text-sm text-zinc-500">
         {tab === "plantel"
           ? "El plantel completo del grupo."
-          : "Elegí cuántos juegan, la formación, ubicá al plantel y descargá la imagen para mandar por el grupo."}
+          : "Elegí cuántos juegan y la formación, ubicá al plantel y compartí la imagen. Para un partido, entrá al partido y tocá La cancha."}
       </p>
 
       <div className="mb-5 inline-flex rounded-xl border border-border bg-white/5 p-1">
@@ -70,7 +70,7 @@ export default function JugadoresTabs({
           votaPeor={votaPeor}
         />
       ) : (
-        <FormacionBuilder jugadores={jugadores} />
+        <ArmadorCancha equipos={[{ nombre: "Plantel", jugadores }]} archivo="formacion" />
       )}
     </div>
   );

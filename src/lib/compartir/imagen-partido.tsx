@@ -13,6 +13,10 @@ import {
   type NombresJugador,
 } from "./imagenes";
 import { TEMA_BASE, type Tema } from "./temas";
+import { CanchaAfiche, ubicarEnCancha, type JugadorCancha } from "./cancha-afiche";
+
+const ORO = "#fbbf24";
+const VERDE = "#34d399";
 
 /*
  * Imagen de un partido para compartir (ver imagenes.tsx y /api/compartir),
@@ -48,6 +52,8 @@ export interface DatosPartido {
   /** Goles de cada lado que no son de ningún jugador del grupo (invitados). */
   otros1: number;
   otros2: number;
+  /** El o los MVP, si la votación ya cerró (va en una tarjeta dorada en el resultado). */
+  mvp?: JugadorPartido[];
 }
 
 interface Columna {
@@ -122,7 +128,7 @@ export async function imagenPartido({
   const etiqueta = (j: JugadorPartido) => (completos && j.nombre ? j.nombre : j.apodo);
 
   // Cómo salió: cambia el título y el color (la derrota no usa el acento festivo).
-  let titulo = resultado ? "Resultado final" : "Lista de convocados";
+  let titulo = resultado ? "Resultado final" : historia ? "Convocados" : "Lista de convocados";
   let colorTitulo = acento;
   if (hayMarcador) {
     const a = partido.golesNosotros as number;
@@ -246,27 +252,98 @@ export async function imagenPartido({
     </div>
   );
 
-  // Goles: el nombre y una pelota por gol, centrados, sin tarjetas.
-  const golesColumna = (c: Columna) => (
-    <div style={{ display: "flex", flexDirection: "column", gap: historia ? 16 : 8 }}>
+  // Goles: cada goleador en su renglón, con foto, nombre y una pelota por gol.
+  const golesColumna = (c: Columna, ci: number) => (
+    <div style={{ display: "flex", flexDirection: "column", gap: historia ? 14 : 8 }}>
       {c.filas.map((j, i) => (
         <div
           key={`${j.apodo}-${i}`}
           style={{
             display: "flex",
             alignItems: "center",
-            justifyContent: "center",
-            gap: 18,
-            fontSize: (historia ? 54 : 38) * escala,
+            gap: historia ? 22 : 14,
+            padding: historia ? "12px 24px 12px 14px" : "6px 18px 6px 8px",
+            borderRadius: historia ? 28 : 20,
+            background: SUPERFICIE,
+            border: `2px solid ${BORDE}`,
+            fontSize: (historia ? (columnas.length > 1 ? 44 : 54) : 34) * escala,
             textTransform: "uppercase",
           }}
         >
-          <span>{etiqueta(j)}</span>
-          <Pelotas cantidad={j.goles} size={historia ? 50 : 36} acento={acento} />
+          <Foto src={fotos[ci][i]} apodo={j.apodo} size={historia ? 76 : 48} acento={acento} />
+          <span
+            style={{ display: "flex", flex: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}
+          >
+            {etiqueta(j)}
+          </span>
+          <Pelotas cantidad={j.goles} size={historia ? (columnas.length > 1 ? 36 : 46) : 30} acento={acento} />
         </div>
       ))}
     </div>
   );
+
+  // El MVP: tarjeta dorada con la foto grande (solo si la votación ya cerró).
+  const mvps = resultado ? (partido.mvp ?? []) : [];
+  const fotosMvp = await Promise.all(mvps.map((j) => comoDataUrl(j.fotoUrl)));
+  const tarjetaMvp =
+    mvps.length > 0 ? (
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          gap: historia ? 28 : 18,
+          padding: historia ? "22px 34px" : "12px 22px",
+          borderRadius: historia ? 36 : 24,
+          border: `${historia ? 5 : 4}px solid ${ORO}`,
+          background: "rgba(251,191,36,0.10)",
+        }}
+      >
+        {mvps.slice(0, 3).map((j, i) => (
+          <div key={i} style={{ display: "flex", padding: historia ? 6 : 4, borderRadius: 999, background: ORO }}>
+            <Foto src={fotosMvp[i]} apodo={j.apodo} size={historia ? (mvps.length > 1 ? 100 : 130) : 70} acento={ORO} />
+          </div>
+        ))}
+        <div style={{ display: "flex", flexDirection: "column" }}>
+          <span style={{ display: "flex", fontSize: historia ? 34 : 24, color: ORO, letterSpacing: 3, textTransform: "uppercase" }}>
+            {mvps.length > 1 ? "MVP compartido" : "MVP del partido"}
+          </span>
+          <span style={{ display: "flex", fontSize: historia ? 66 : 44, textTransform: "uppercase", lineHeight: 1.05 }}>
+            {mvps.map(etiqueta).join(" · ")}
+          </span>
+        </div>
+      </div>
+    ) : null;
+
+  // Convocados en historia: los jugadores ubicados en la cancha (dos equipos, uno en cada mitad).
+  const enCancha = !resultado && historia && (partido.equipo1.length > 0 || partido.equipo2.length > 0);
+  const aCancha = async (lista: JugadorPartido[]): Promise<JugadorCancha[]> =>
+    Promise.all(
+      alfabetico(lista).map(async (j) => ({ etiqueta: etiqueta(j), apodo: j.apodo, foto: await comoDataUrl(j.fotoUrl) }))
+    );
+  const equiposCancha = enCancha
+    ? dosEquipos
+      ? [await aCancha(partido.equipo1), await aCancha(partido.equipo2)]
+      : [await aCancha(partido.equipo1)]
+    : [];
+  const suplentes = enCancha ? ubicarEnCancha(equiposCancha).afuera : [];
+  const nombreEnCancha = (texto: string, color: string) => (
+    <div style={{ display: "flex", justifyContent: "center", fontSize: 40, color, letterSpacing: 3, textTransform: "uppercase" }}>
+      {texto}
+    </div>
+  );
+  const vistaCancha = enCancha ? (
+    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 14 }}>
+      {dosEquipos && nombreEnCancha(partido.rival, ORO)}
+      <CanchaAfiche equipos={equiposCancha} ancho={640} alto={dosEquipos ? 790 : 760} />
+      {dosEquipos && nombreEnCancha(partido.nosotros, VERDE)}
+      {suplentes.length > 0 && (
+        <div style={{ display: "flex", fontSize: 30, color: GRIS, textTransform: "uppercase", letterSpacing: 1 }}>
+          Suplentes: {suplentes.map((s) => s.etiqueta).join(", ")}
+        </div>
+      )}
+    </div>
+  ) : null;
 
   // Convocados: renglones con foto y nombre grande, separados por líneas finas.
   const convocadosColumna = (c: Columna, ci: number) => (
@@ -308,8 +385,28 @@ export async function imagenPartido({
       formato,
       tema,
       encabezado: { grupoNombre: grupo.nombre, grupoLogoUrl: grupo.logoUrl, titulo, color: colorTitulo },
-      children: (
-        <div style={{ display: "flex", flexDirection: "column", gap: historia ? 56 : 24 }}>
+      children: vistaCancha ? (
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 18 }}>
+          {/* Con dos equipos los nombres ya van arriba y abajo de la cancha: acá solo cuándo y dónde. */}
+          {dosEquipos ? (
+            <div style={{ display: "flex", fontSize: 32, color: GRIS, textTransform: "uppercase", letterSpacing: 2 }}>
+              {partido.fecha} · {partido.lugar}
+            </div>
+          ) : (
+            cabecera
+          )}
+          {vistaCancha}
+        </div>
+      ) : (
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            gap: historia ? 48 : 20,
+            // En historia el resultado ocupa toda la altura: marcador arriba, goles al medio, MVP abajo.
+            ...(historia && resultado ? { flex: 1, justifyContent: "space-around" as const } : {}),
+          }}
+        >
           {cabecera}
           {columnas.length > 0 ? (
             <div style={{ display: "flex", gap: 28, justifyContent: "center" }}>
@@ -325,7 +422,7 @@ export async function imagenPartido({
                 >
                   {resultado && subtitulo(columnas.length > 1 && c.titulo ? c.titulo : "Goleadores")}
                   {!resultado && c.titulo && subtitulo(c.titulo)}
-                  {resultado ? golesColumna(c) : convocadosColumna(c, ci)}
+                  {resultado ? golesColumna(c, ci) : convocadosColumna(c, ci)}
                   {c.otros > 0 && (
                     <div
                       style={{
@@ -353,6 +450,7 @@ export async function imagenPartido({
               {resultado ? "Sin goles de jugadores cargados." : "Todavía no hay convocados."}
             </div>
           )}
+          {tarjetaMvp}
         </div>
       ),
     }),

@@ -49,6 +49,7 @@ export default async function DesafiosPage() {
     <div className="flex flex-col gap-6">
       <Link
         href="/partidos"
+        transitionTypes={["atras"]}
         className="inline-flex w-fit items-center gap-1 text-sm text-zinc-500 hover:text-white"
       >
         <IconChevronRight className="h-4 w-4 rotate-180" /> Partidos

@@ -13,6 +13,8 @@ import RepartoGoles from "@/components/RepartoGoles";
 import { guardarGolesPartido } from "@/lib/actions/partidos";
 import VotacionPartidoFields, { type VotarEnPartido } from "@/components/VotacionPartidoFields";
 import type { AppConfig } from "@/lib/config";
+import { error, exito } from "@/lib/haptics";
+import { lanzarConfetti } from "@/lib/confetti";
 
 interface Jugador {
   jugadorId: string;
@@ -142,8 +144,15 @@ export default function GolesEditor({
     });
     setSaving(false);
     if (result.error) {
+      error();
       setMessage({ type: "error", text: result.error });
     } else {
+      // La primera vez que se carga el resultado, si ganaron (o entre ellos, si no fue empate): festejo.
+      const [mios, suyos] = esDesafio
+        ? [marcadorDesafio?.mios ?? 0, marcadorDesafio?.rival ?? 0]
+        : [resultado1, resultado2];
+      if (!jugado && (interno ? mios !== suyos : mios > suyos)) lanzarConfetti();
+      exito();
       setMessage({ type: "ok", text: "Goles guardados." });
       setGuardado({ goles: golesActuales, resultado1, resultado2 });
       if (jugado) setEditando(false);
@@ -215,8 +224,8 @@ export default function GolesEditor({
         )}
         {golesDeMas && (
           <p className="mt-2 text-sm text-danger-400">
-            Suman {golesDeJugadores} goles, pero en el resultado del desafío hicieron {marcadorDesafio?.mios}. Hasta
-            que los corrijas no se pueden cargar otros partidos.
+            Suman {golesDeJugadores} goles, pero en el resultado del desafío hicieron {marcadorDesafio?.mios}.
+            Corregilos para que cierren con el resultado.
           </p>
         )}
       </div>
@@ -315,7 +324,7 @@ function JugadorRow({
         </span>
       </div>
       {editable ? (
-        <GolesInput value={value} onChange={onChange} />
+        <GolesInput value={value} onChange={onChange} etiqueta={`goles de ${jugador.apodo}`} />
       ) : (
         <GolesLectura goles={value} />
       )}

@@ -238,6 +238,7 @@ export default async function JugadorDetallePage({
     <div className="flex flex-col gap-6">
       <Link
         href="/jugadores"
+        transitionTypes={["atras"]}
         className="inline-flex w-fit items-center gap-1 text-sm text-zinc-500 hover:text-white"
       >
         <IconChevronRight className="h-4 w-4 rotate-180" /> Jugadores
@@ -321,6 +322,7 @@ export default async function JugadorDetallePage({
                 <Link
                   key={mp.partido_id}
                   href={`/partidos/${mp.partido_id}`}
+                  transitionTypes={["adelante"]}
                   className="flex items-center justify-between gap-3 px-4 py-3 transition hover:bg-white/5"
                 >
                   <div className="min-w-0">

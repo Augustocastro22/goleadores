@@ -109,6 +109,21 @@ async function imagenDePartido(request: NextRequest, formato: Formato) {
   const golesRival = desafio ? desafio.marcador_rival : partido.goles_rival + suma(equipo2);
   const vista: VistaPartido = params.get("vista") === "convocados" || !partido.jugado ? "convocados" : "resultado";
 
+  // El MVP, si la votación ya cerró (la RPC no devuelve nada mientras está abierta).
+  let mvp: JugadorPartido[] = [];
+  if (vista === "resultado" && partido.con_votacion && partido.con_mvp) {
+    const { data: ganadores } = await ctx.supabase.rpc("get_ganadores_votacion", {
+      p_partido_id: partido.id,
+      p_tipo: "MVP",
+    });
+    mvp = ((ganadores ?? []) as RankingRow[]).map((g) => ({
+      apodo: g.apodo,
+      nombre: `${g.nombre} ${g.apellido}`.trim(),
+      fotoUrl: g.foto_url,
+      goles: 0,
+    }));
+  }
+
   const imagen = await imagenPartido({
     formato,
     grupo: { nombre: grupo.nombre, logoUrl: grupo.logo_url },
@@ -126,6 +141,7 @@ async function imagenDePartido(request: NextRequest, formato: Formato) {
       equipo2: interno ? equipo2 : [],
       otros1: desafio ? Math.max(0, (golesNosotros ?? 0) - suma(equipo1)) : partido.goles_otros,
       otros2: interno ? partido.goles_rival : 0,
+      mvp,
     },
   });
   imagen.headers.set("Cache-Control", "private, no-store");

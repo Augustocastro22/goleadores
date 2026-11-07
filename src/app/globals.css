@@ -153,3 +153,224 @@ input::-webkit-date-and-time-value {
   -ms-overflow-style: none;
   scrollbar-width: none;
 }
+
+/* ─────────────────────────────────────────────────────────────────────────
+ * Movimiento. Una sola escala para toda la app:
+ * - rápido (microinteracciones: tocar, sumar un gol),
+ * - base (entradas de pantallas y listas),
+ * - festejo (gol, MVP, victoria: lo único que usa confetti).
+ * Todo se apaga con prefers-reduced-motion (al final).
+ * ───────────────────────────────────────────────────────────────────────── */
+:root {
+  --ease-pop: cubic-bezier(0.2, 0.9, 0.3, 1.2);
+  --ease-salida: cubic-bezier(0.4, 0, 1, 1);
+  --ease-entrada: cubic-bezier(0, 0, 0.2, 1);
+  --dur-rapida: 150ms;
+  --dur-base: 260ms;
+  --dur-mover: 380ms;
+}
+
+/* Transiciones entre pantallas (ver TransicionPantalla y BottomNav). */
+::view-transition {
+  pointer-events: none;
+}
+/* Barra de arriba y de abajo quietas: se mueve el contenido, no la pantalla entera. */
+::view-transition-group(barra-superior),
+::view-transition-group(barra-inferior) {
+  animation: none;
+  z-index: 100;
+}
+::view-transition-old(barra-superior),
+::view-transition-old(barra-inferior) {
+  display: none;
+}
+::view-transition-new(barra-superior),
+::view-transition-new(barra-inferior) {
+  animation: none;
+}
+
+/* Cualquier navegación sin tipo: la pantalla nueva aparece subiendo apenas. */
+::view-transition-old(.pantalla) {
+  animation: var(--dur-rapida) var(--ease-salida) both vt-fade reverse;
+}
+::view-transition-new(.pantalla) {
+  animation:
+    var(--dur-base) var(--ease-entrada) 60ms both vt-fade,
+    var(--dur-mover) var(--ease-entrada) both vt-sube;
+}
+
+/* Hacia adentro (de la lista al partido) y de vuelta. */
+::view-transition-old(.adelante) {
+  --vt-x: -48px;
+  animation:
+    var(--dur-rapida) var(--ease-salida) both vt-fade reverse,
+    var(--dur-mover) ease-in-out both vt-desliza reverse;
+}
+::view-transition-new(.adelante) {
+  --vt-x: 48px;
+  animation:
+    var(--dur-base) var(--ease-entrada) var(--dur-rapida) both vt-fade,
+    var(--dur-mover) ease-in-out both vt-desliza;
+}
+::view-transition-old(.atras) {
+  --vt-x: 48px;
+  animation:
+    var(--dur-rapida) var(--ease-salida) both vt-fade reverse,
+    var(--dur-mover) ease-in-out both vt-desliza reverse;
+}
+::view-transition-new(.atras) {
+  --vt-x: -48px;
+  animation:
+    var(--dur-base) var(--ease-entrada) var(--dur-rapida) both vt-fade,
+    var(--dur-mover) ease-in-out both vt-desliza;
+}
+
+/* Entre pestañas de la barra de abajo: corrimiento corto hacia el lado de la pestaña. */
+::view-transition-old(.tab-der) {
+  --vt-x: -24px;
+  animation:
+    var(--dur-rapida) var(--ease-salida) both vt-fade reverse,
+    var(--dur-base) var(--ease-entrada) both vt-desliza reverse;
+}
+::view-transition-new(.tab-der) {
+  --vt-x: 24px;
+  animation:
+    var(--dur-base) var(--ease-entrada) 80ms both vt-fade,
+    var(--dur-base) var(--ease-entrada) both vt-desliza;
+}
+::view-transition-old(.tab-izq) {
+  --vt-x: 24px;
+  animation:
+    var(--dur-rapida) var(--ease-salida) both vt-fade reverse,
+    var(--dur-base) var(--ease-entrada) both vt-desliza reverse;
+}
+::view-transition-new(.tab-izq) {
+  --vt-x: -24px;
+  animation:
+    var(--dur-base) var(--ease-entrada) 80ms both vt-fade,
+    var(--dur-base) var(--ease-entrada) both vt-desliza;
+}
+
+/* El esqueleto de carga se va rápido y deja ver el contenido real. */
+::view-transition-old(.esqueleto-sale) {
+  animation: var(--dur-rapida) var(--ease-salida) both vt-fade reverse;
+}
+
+@keyframes vt-fade {
+  from {
+    opacity: 0;
+    filter: blur(2px);
+  }
+  to {
+    opacity: 1;
+    filter: blur(0);
+  }
+}
+@keyframes vt-sube {
+  from {
+    transform: translateY(10px);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+@keyframes vt-desliza {
+  from {
+    translate: var(--vt-x) 0;
+  }
+  to {
+    translate: 0 0;
+  }
+}
+
+/* Listas: cada ítem entra un poquito después del anterior (style={{ "--i": índice }}). */
+@keyframes entra {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.entrada {
+  animation: entra var(--dur-base) var(--ease-entrada) both;
+  animation-delay: calc(min(var(--i, 0), 12) * 35ms);
+}
+
+/* Tocar algo que se aprieta (cards con link, botones grandes). */
+.presionable {
+  transition: transform var(--dur-rapida) var(--ease-entrada);
+}
+.presionable:active {
+  transform: scale(0.98);
+}
+
+/* Un número que cambia (goles): salta un poco. */
+@keyframes salta {
+  0% {
+    transform: scale(1);
+  }
+  40% {
+    transform: scale(1.25);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+.salta {
+  animation: salta 280ms var(--ease-pop);
+}
+
+/* Esqueletos de carga: brillo que pasa. */
+@keyframes brillo {
+  from {
+    background-position: 150% 0;
+  }
+  to {
+    background-position: -50% 0;
+  }
+}
+.esqueleto {
+  background-color: rgba(255, 255, 255, 0.05);
+  background-image: linear-gradient(100deg, transparent 30%, rgba(255, 255, 255, 0.07) 50%, transparent 70%);
+  background-size: 200% 100%;
+  animation: brillo 1.4s ease-in-out infinite;
+}
+
+/* Confetti (ver lib/confetti.ts): cada papelito cae girando con su propio recorrido. */
+@keyframes confetti-cae {
+  0% {
+    opacity: 1;
+    transform: translate(0, 0) rotate(0);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(var(--cx), var(--cy)) rotate(var(--cr));
+  }
+}
+.confetti-papel {
+  position: fixed;
+  z-index: 200;
+  pointer-events: none;
+  border-radius: 2px;
+  animation: confetti-cae var(--cd, 1.4s) cubic-bezier(0.15, 0.6, 0.4, 1) forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-old(*),
+  ::view-transition-new(*),
+  ::view-transition-group(*) {
+    animation-duration: 0s !important;
+    animation-delay: 0s !important;
+  }
+  .entrada,
+  .salta,
+  .esqueleto {
+    animation: none;
+  }
+  .presionable:active {
+    transform: none;
+  }
+}

@@ -2,6 +2,8 @@
 
 import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import Image from "next/image";
+import { lanzarConfetti } from "@/lib/confetti";
+import { exito } from "@/lib/haptics";
 import Card from "@/components/ui/Card";
 
 export interface GanadorSobre {
@@ -349,7 +351,12 @@ export default function SobreResultado({
                 revelado={actual === "abierto"}
                 onFin={() => {
                   terminadas.current += 1;
-                  if (terminadas.current === n) timer.current = setTimeout(terminar, 900);
+                  if (terminadas.current === n) {
+                    // Frenó la última carta: festejo para el mejor (el peor, solo la vibración).
+                    if (!peor) lanzarConfetti({ paleta: "oro" });
+                    exito();
+                    timer.current = setTimeout(terminar, 900);
+                  }
                 }}
               />
             ))}

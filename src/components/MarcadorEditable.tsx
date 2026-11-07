@@ -30,9 +30,9 @@ export default function MarcadorEditable({
           {nosotros}
         </p>
         <div className="flex shrink-0 items-center gap-2 sm:gap-3">
-          <GolesInput value={golesNosotros} onChange={onChangeNosotros} />
+          <GolesInput variante="marcador" etiqueta={`goles de ${nosotros}`} value={golesNosotros} onChange={onChangeNosotros} />
           <span className="text-lg font-bold text-zinc-600">–</span>
-          <GolesInput value={golesRival} onChange={onChangeRival} />
+          <GolesInput variante="marcador" etiqueta={`goles de ${rival}`} value={golesRival} onChange={onChangeRival} />
         </div>
         <p className="line-clamp-2 min-w-0 flex-1 text-left break-words text-xs font-semibold text-zinc-300 sm:text-base">
           {rival}

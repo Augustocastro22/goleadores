@@ -110,7 +110,7 @@ export default async function PartidosPage() {
       <div className="mb-6 flex items-center justify-between">
         <h1 className="text-2xl font-extrabold tracking-tight text-white">Partidos</h1>
         <div className="flex items-center gap-2">
-          <Link href="/partidos/desafios" className={buttonClass("secondary", "sm")}>
+          <Link href="/partidos/desafios" transitionTypes={["adelante"]} className={buttonClass("secondary", "sm")}>
             Desafíos
             {desafiosParaResponder > 0 && (
               <span className="rounded-full bg-gold-500/20 px-1.5 py-0.5 text-[11px] text-gold-400">
@@ -119,7 +119,7 @@ export default async function PartidosPage() {
             )}
           </Link>
           {grupo.rol === "admin" && (
-            <Link href="/partidos/nuevo" className={buttonClass("primary", "sm")}>
+            <Link href="/partidos/nuevo" transitionTypes={["adelante"]} className={buttonClass("primary", "sm")}>
               <IconPlus className="h-4 w-4" /> Nuevo
             </Link>
           )}
@@ -168,13 +168,19 @@ export default async function PartidosPage() {
           )}
 
           <div className="flex flex-col gap-3">
-            {partidos.map((partido) => {
+            {partidos.map((partido, indice) => {
               const fecha = new Date(partido.fecha + "T00:00:00");
               const resumen = resumenPorPartido.get(partido.id);
               // Entre ellos (también uno programado, si ya tiene los dos equipos armados).
               const interno = esPartidoInterno(golesPorEquipo.get(partido.id)?.jugadores2 ?? 0, partido.desafio_id, partido.nombre_equipo);
               return (
-                <Link key={partido.id} href={`/partidos/${partido.id}`} className="block">
+                <Link
+                  key={partido.id}
+                  href={`/partidos/${partido.id}`}
+                  transitionTypes={["adelante"]}
+                  className="entrada presionable block"
+                  style={{ "--i": indice } as React.CSSProperties}
+                >
                   <Card className="flex items-center justify-between gap-4 px-4 py-4 transition hover:border-border-strong hover:bg-surface-2/80">
                     <div className="flex min-w-0 items-center gap-4">
                       <div className="flex w-14 shrink-0 flex-col items-center justify-center rounded-xl bg-white/5 py-2">
