@@ -20,6 +20,7 @@ import {
 import { tap } from "@/lib/haptics";
 import LineasCancha from "./LineasCancha";
 import { exportarCancha } from "./exportar";
+import { Pelotita } from "@/components/Compartir";
 
 export interface EquipoCancha {
   nombre: string;
@@ -479,7 +480,7 @@ export default function ArmadorCancha({
       })}
 
       <Button type="button" onClick={compartir} disabled={exportando} className="w-full">
-        <IconDownload className="h-4 w-4" /> {exportando ? "Armando la imagen..." : "Compartir imagen"}
+        {exportando ? <Pelotita /> : <IconDownload className="h-4 w-4" />} {exportando ? "Armando la imagen…" : "Compartir imagen"}
       </Button>
 
       {arrastrado && arrastre?.tipo === "banco" && (

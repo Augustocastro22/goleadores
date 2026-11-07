@@ -15,6 +15,8 @@ import { desafiosConGolesDeMas, esperaMiRespuesta, type DesafioVista } from "@/l
 import { esPartidoInterno, getConfig, nombresDelPartido } from "@/lib/config";
 import { sugerirModoJuego } from "@/lib/modo-juego";
 import PreguntaModoJuego from "@/components/PreguntaModoJuego";
+import ContadorAnimado from "@/components/ContadorAnimado";
+import HeroProximoPartido, { type ConvocadoHero } from "@/components/partido/HeroProximoPartido";
 
 export default async function PartidosPage() {
   const { supabase, grupo, user } = await requireGrupo();
@@ -92,6 +94,48 @@ export default async function PartidosPage() {
     ).map((d) => d.partido_id)
   );
 
+  // El próximo partido (el más cercano que no se jugó ni se canceló), para destacarlo arriba.
+  const proximo = (partidos ?? [])
+    .filter((p) => !p.jugado && !p.cancelado_en && p.fecha >= hoy)
+    .sort((a, b) => (a.fecha + (a.hora ?? "99")).localeCompare(b.fecha + (b.hora ?? "99")))[0];
+  let hero: React.ReactNode = null;
+  if (proximo) {
+    const { data: convocadosRaw } = await supabase
+      .from("partido_jugadores")
+      .select("jugador_id, respuesta, profiles(apodo, foto_url)")
+      .eq("partido_id", proximo.id);
+    const convocados = ((convocadosRaw ?? []) as unknown as {
+      jugador_id: string;
+      respuesta: ConvocadoHero["respuesta"];
+      profiles: ConvocadoHero["perfil"];
+    }[]).map((c) => ({ jugadorId: c.jugador_id, respuesta: c.respuesta, perfil: c.profiles }));
+    const internoProximo = esPartidoInterno(
+      golesPorEquipo.get(proximo.id)?.jugadores2 ?? 0,
+      proximo.desafio_id,
+      proximo.nombre_equipo
+    );
+    hero = (
+      <HeroProximoPartido
+        href={`/partidos/${proximo.id}`}
+        titulo={
+          internoProximo ? `${nombresDelPartido(proximo, true, config).nosotros} vs ${proximo.rival}` : `vs ${proximo.rival}`
+        }
+        fecha={proximo.fecha}
+        hora={proximo.hora}
+        diaTexto={new Date(proximo.fecha + "T00:00:00").toLocaleDateString("es-AR", {
+          weekday: "short",
+          day: "numeric",
+          month: "numeric",
+        })}
+        lugar={proximo.lugar}
+        convocados={convocados}
+        miId={user.id}
+        conConfirmacion={config.pedir_confirmacion || convocados.some((c) => c.respuesta !== "juega")}
+        esHoy={proximo.fecha === hoy}
+      />
+    );
+  }
+
   // Ganados/empatados/perdidos solo contra otros equipos: entre ellos siempre gana uno del grupo.
   const contraOtros = [...resumenPorPartido.values()].filter((r) => !r.interno);
   const resultados = contraOtros.map((r) => r.resultado);
@@ -159,11 +203,31 @@ export default async function PartidosPage() {
         </Card>
       ) : (
         <>
+          {hero}
+
           {mostrarResumen && (
-            <Card className="mb-4 grid grid-cols-3 divide-x divide-border p-4 text-center">
-              <ResumenStat value={ganados} label="Ganados" className="text-primary-400" />
-              <ResumenStat value={empatados} label="Empatados" className="text-zinc-300" />
-              <ResumenStat value={perdidos} label="Perdidos" className="text-danger-400" />
+            <Card className="entrada mb-4 p-4" style={{ "--i": 1 } as React.CSSProperties}>
+              <div className="grid grid-cols-3 divide-x divide-border text-center">
+                <ResumenStat value={ganados} label="Ganados" className="text-primary-400" />
+                <ResumenStat value={empatados} label="Empatados" className="text-zinc-300" />
+                <ResumenStat value={perdidos} label="Perdidos" className="text-danger-400" />
+              </div>
+              {/* La racha: los últimos resultados, del más viejo (izquierda) al último. */}
+              <div className="mt-3 flex items-center justify-center gap-1.5 border-t border-border pt-3">
+                <span className="mr-1 text-[10px] font-semibold tracking-wide text-zinc-500 uppercase">Racha</span>
+                {resultados
+                  .slice(0, 8)
+                  .reverse()
+                  .map((r, i) => (
+                    <span
+                      key={i}
+                      className={`entrada flex h-6 w-6 items-center justify-center rounded-md text-[11px] font-bold ${RESULTADO_CLASS[r]}`}
+                      style={{ "--i": i + 2 } as React.CSSProperties}
+                    >
+                      {r}
+                    </span>
+                  ))}
+              </div>
             </Card>
           )}
 
@@ -268,7 +332,9 @@ function ResumenStat({
 }) {
   return (
     <div className="flex flex-col items-center gap-0.5 px-2">
-      <span className={`text-2xl font-extrabold tabular-nums ${className}`}>{value}</span>
+      <span className={`font-mono text-3xl font-extrabold tabular-nums ${className}`}>
+        <ContadorAnimado valor={value} />
+      </span>
       <span className="text-[11px] text-zinc-500">{label}</span>
     </div>
   );

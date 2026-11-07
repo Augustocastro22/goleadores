@@ -287,11 +287,11 @@ input::-webkit-date-and-time-value {
 @keyframes entra {
   from {
     opacity: 0;
-    transform: translateY(8px);
+    translate: 0 8px;
   }
   to {
     opacity: 1;
-    transform: none;
+    translate: 0 0;
   }
 }
 .entrada {
@@ -372,5 +372,112 @@ input::-webkit-date-and-time-value {
   }
   .presionable:active {
     transform: none;
+  }
+}
+
+/* Hojas de abajo (compartir): el fondo se oscurece y la hoja sube. */
+@keyframes hoja-sube {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: none;
+  }
+}
+@keyframes fondo-aparece {
+  from {
+    opacity: 0;
+  }
+}
+.hoja-sube {
+  animation: hoja-sube var(--dur-mover) var(--ease-entrada) both;
+}
+.fondo-aparece {
+  animation: fondo-aparece var(--dur-base) ease both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .hoja-sube,
+  .fondo-aparece {
+    animation: none;
+  }
+}
+
+/* Aro que se llena (cuántos confirmaron): --objetivo entre 0 y 1. */
+@property --aro {
+  syntax: "<number>";
+  inherits: false;
+  initial-value: 0;
+}
+.aro {
+  --aro: var(--objetivo, 0);
+  background: conic-gradient(var(--color-primary-400) calc(var(--aro) * 1turn), rgba(255, 255, 255, 0.08) 0);
+  animation: aro-llena 1s var(--ease-entrada) 0.15s both;
+}
+@keyframes aro-llena {
+  from {
+    --aro: 0;
+  }
+}
+
+/* El día del partido: el borde respira. */
+@keyframes respira {
+  0%,
+  100% {
+    box-shadow: 0 0 0 1px rgba(52, 211, 153, 0.25), 0 0 24px -8px rgba(52, 211, 153, 0.35);
+  }
+  50% {
+    box-shadow: 0 0 0 1px rgba(52, 211, 153, 0.5), 0 0 36px -6px rgba(52, 211, 153, 0.55);
+  }
+}
+.match-day {
+  animation: respira 2.6s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .aro,
+  .match-day {
+    animation: none;
+  }
+}
+
+/* Podio: los escalones suben de a uno; la corona flota. */
+@keyframes podio-sube {
+  from {
+    transform: scaleY(0);
+  }
+}
+.podio-escalon {
+  transform-origin: bottom;
+  animation: podio-sube 650ms var(--ease-pop) both;
+  animation-delay: calc(var(--i, 0) * 120ms + 100ms);
+}
+@keyframes corona {
+  0%,
+  100% {
+    transform: translateY(0) rotate(-6deg);
+  }
+  50% {
+    transform: translateY(-3px) rotate(6deg);
+  }
+}
+.corona {
+  animation: corona 2.8s ease-in-out infinite;
+}
+
+/* Barras de ranking: se llenan de izquierda a derecha al entrar. */
+@keyframes barra-crece {
+  from {
+    transform: scaleX(0);
+  }
+}
+.barra-crece {
+  transform-origin: left;
+  animation: barra-crece 800ms var(--ease-entrada) both;
+  animation-delay: calc(min(var(--i, 0), 12) * 40ms + 250ms);
+}
+@media (prefers-reduced-motion: reduce) {
+  .podio-escalon,
+  .corona,
+  .barra-crece {
+    animation: none;
   }
 }

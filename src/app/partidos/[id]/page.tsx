@@ -6,6 +6,7 @@ import { cancelarPartido, deletePartido, reprogramarPartido } from "@/lib/action
 import EditarPartidoForm from "@/components/EditarPartidoForm";
 import Volver from "@/components/Volver";
 import AccesoCancha from "@/components/cancha/AccesoCancha";
+import CuentaRegresiva from "@/components/partido/CuentaRegresiva";
 import { urlConGrupo } from "@/lib/grupo-cookie";
 import { cerrarVotacion, votarDesempate } from "@/lib/actions/votos";
 import {
@@ -359,6 +360,7 @@ export default async function PartidoDetailPage({
           fecha={fecha}
           lugar={partido.lugar}
           respuestas={conConfirmacion ? participantes.map((p) => p.respuesta) : null}
+          cuenta={{ fecha: partido.fecha, hora: partido.hora, esHoy: partido.fecha === hoy }}
           aviso={
             isAdmin
               ? `El resultado lo vas a poder cargar desde el ${formatearMomento(
@@ -546,7 +548,10 @@ export default async function PartidoDetailPage({
               partidoId={id}
               candidatos={candidatos.map((c) => ({
                 id: c.jugador_id,
-                nombre: `${c.profiles.nombre} ${c.profiles.apellido} (${c.profiles.apodo})`,
+                nombre: `${c.profiles.nombre} ${c.profiles.apellido}`.trim(),
+                apodo: c.profiles.apodo,
+                fotoUrl: c.profiles.foto_url,
+                goles: c.goles,
               }))}
               conMvp={conMvp}
               conPeor={conPeor}
@@ -690,8 +695,11 @@ function PartidoProgramadoCard({
   respuestas,
   aviso,
   cancelado = false,
+  cuenta,
 }: {
   cancelado?: boolean;
+  /** Para la cuenta regresiva y el modo "Match day" (el día del partido). */
+  cuenta?: { fecha: string; hora: string | null; esHoy: boolean };
   rival: string;
   /** Entre ellos, el nombre del primer equipo ("Titulares vs Suplentes"); si no, "vs Rival". */
   nosotros?: string;
@@ -702,21 +710,51 @@ function PartidoProgramadoCard({
   /** Para el admin: desde cuándo puede cargar el resultado. */
   aviso?: string;
 }) {
+  const matchDay = !cancelado && cuenta?.esHoy;
   return (
-    <Card className="p-6">
-      <div className="flex items-center justify-between gap-2 text-xs font-medium text-zinc-500">
+    <div
+      className={`relative overflow-hidden rounded-3xl border p-6 ${matchDay ? "match-day border-primary-400/50" : "border-border"}`}
+      style={{
+        background: cancelado
+          ? "#131418"
+          : "linear-gradient(170deg, rgba(16,185,129,0.14), rgba(19,20,24,0.94) 60%), repeating-linear-gradient(90deg, rgba(255,255,255,0.025) 0 28px, transparent 28px 56px), #131418",
+      }}
+    >
+      {/* El círculo central, apenas marcado. */}
+      {!cancelado && (
+        <span aria-hidden className="pointer-events-none absolute top-1/2 left-1/2 h-48 w-48 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white/[0.05]" />
+      )}
+      <div className="relative flex items-center justify-between gap-2 text-xs font-medium text-zinc-400">
         <span className="truncate">{fecha}</span>
         <span className="truncate">{lugar}</span>
       </div>
-      <div className="mt-4 flex flex-col items-center gap-2">
-        {cancelado ? <Badge variant="danger">Cancelado</Badge> : <Badge>Partido programado</Badge>}
-        <p className={`text-lg font-bold ${cancelado ? "text-zinc-500 line-through" : "text-white"}`}>
+      <div className="relative mt-4 flex flex-col items-center gap-2">
+        {cancelado ? (
+          <Badge variant="danger">Cancelado</Badge>
+        ) : matchDay ? (
+          <span className="flex items-center gap-2 rounded-full bg-primary-500/15 px-2.5 py-1 text-[11px] font-bold tracking-widest text-primary-400 uppercase">
+            <span className="relative flex h-2 w-2">
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary-400 opacity-75" />
+              <span className="relative inline-flex h-2 w-2 rounded-full bg-primary-400" />
+            </span>
+            Hoy · Match day
+          </span>
+        ) : (
+          <Badge>Partido programado</Badge>
+        )}
+        <p className={`text-center text-2xl font-extrabold tracking-tight ${cancelado ? "text-zinc-500 line-through" : "text-white"}`}>
           {nosotros ? `${nosotros} vs ${rival}` : `vs ${rival}`}
         </p>
+        {cuenta && !cancelado && (
+          <div className="flex flex-col items-center gap-0.5">
+            <span className="text-[11px] font-semibold tracking-wide text-zinc-500 uppercase">Faltan</span>
+            <CuentaRegresiva fecha={cuenta.fecha} hora={cuenta.hora} />
+          </div>
+        )}
         {respuestas && <ResumenRespuestas respuestas={respuestas} />}
         {aviso && <p className="mt-1 text-center text-xs text-zinc-500">{aviso}</p>}
       </div>
-    </Card>
+    </div>
   );
 }
 

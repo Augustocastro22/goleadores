@@ -3,6 +3,7 @@ import { requireGrupo } from "@/lib/grupo";
 import { getConfig, grupoVota } from "@/lib/config";
 import { votacionCerrada } from "@/lib/votacion";
 import type { DesempatePartido, EstadoVotacion, RankingRow } from "@/lib/types";
+import Podio from "@/components/Podio";
 import Card from "@/components/ui/Card";
 import Avatar from "@/components/ui/Avatar";
 import { IconGoal, IconThumbsDown, IconTrophy } from "@/components/icons";
@@ -310,9 +311,26 @@ function RankingList({
       {filas.length === 0 ? (
         <Card className="px-5 py-8 text-center text-sm text-zinc-500">Todavía no hay datos.</Card>
       ) : (
-        <Card className="divide-y divide-border overflow-hidden py-1">
-          {filas.map(({ row, puesto }) => (
-            <div key={row.jugador_id} className="flex items-center gap-3 px-4 py-3">
+        <Card className="overflow-hidden">
+          {/* Los tres primeros en el podio; el resto abajo, con una barra del tamaño de lo que hizo. */}
+          <Podio
+            unidad={valueLabel.toLowerCase()}
+            puestos={filas.slice(0, 3).map(({ row, puesto }) => ({
+              jugadorId: row.jugador_id,
+              apodo: row.apodo,
+              fotoUrl: row.foto_url,
+              valor: row[valueKey] ?? 0,
+              puesto,
+            }))}
+          />
+          <div className="divide-y divide-border border-t border-border">
+          {filas.slice(3).map(({ row, puesto }, i) => (
+            <div key={row.jugador_id} className="relative isolate flex items-center gap-3 px-4 py-3">
+              <span
+                aria-hidden
+                className="barra-crece absolute inset-y-1 left-0 -z-10 rounded-r-lg bg-primary-500/[0.13]"
+                style={{ width: `${((row[valueKey] ?? 0) / (filas[0].row[valueKey] || 1)) * 100}%`, "--i": i } as React.CSSProperties}
+              />
               <span
                 className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold ${
                   rankBadge[puesto - 1] ?? "text-zinc-600"
@@ -342,6 +360,7 @@ function RankingList({
               </div>
             </div>
           ))}
+          </div>
         </Card>
       )}
     </section>

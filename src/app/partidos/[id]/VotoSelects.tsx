@@ -1,20 +1,46 @@
 "use client";
 
 import { useState } from "react";
-import { IconChevronRight } from "@/components/icons";
 import ActionForm from "@/components/ActionForm";
 import SubmitButton from "@/components/SubmitButton";
 import Card from "@/components/ui/Card";
+import Avatar from "@/components/ui/Avatar";
+import { IconGoal } from "@/components/icons";
 import { votarPartido } from "@/lib/actions/votos";
+import { tap } from "@/lib/haptics";
 
 export interface Candidato {
   id: string;
   nombre: string;
+  apodo: string;
+  fotoUrl: string | null;
+  goles: number;
 }
 
+type Categoria = "mvp" | "peor";
+
+const TEMA: Record<Categoria, { titulo: string; aro: string; fondo: string; texto: string; marca: string }> = {
+  mvp: {
+    titulo: "Mejor jugador",
+    aro: "bg-gold-400",
+    fondo: "bg-gold-500/10 border-gold-500/40",
+    texto: "text-gold-400",
+    marca: "★",
+  },
+  peor: {
+    titulo: "Peor jugador",
+    aro: "bg-danger-400",
+    fondo: "bg-danger-500/10 border-danger-500/40",
+    texto: "text-danger-400",
+    marca: "✕",
+  },
+};
+
 /**
- * La votación de un partido abierto. Si ya votó todo lo que se vota, muestra
- * a quién votó (el voto no se cambia: votado, queda).
+ * La votación de un partido abierto, con figuritas: se toca la cara del
+ * jugador. Primero el Mejor y, si se vota, después el Peor (el que elegiste
+ * como Mejor no se puede elegir como Peor). Arriba se ve lo elegido; se puede
+ * volver a tocar para cambiar antes de mandar. Una vez votado, queda.
  */
 export default function VotacionForm({
   partidoId,
@@ -31,140 +57,135 @@ export default function VotacionForm({
   votoMvpId: string | null;
   votoPeorId: string | null;
 }) {
-  const yaVoto = (!conMvp || votoMvpId !== null) && (!conPeor || votoPeorId !== null);
-  const nombreDe = (id: string | null) => candidatos.find((c) => c.id === id)?.nombre ?? "?";
+  const faltan: Categoria[] = [
+    ...(conMvp && !votoMvpId ? (["mvp"] as const) : []),
+    ...(conPeor && !votoPeorId ? (["peor"] as const) : []),
+  ];
+  const [elegidos, setElegidos] = useState<Record<Categoria, string | null>>({ mvp: null, peor: null });
+  const [actual, setActual] = useState<Categoria>(faltan[0] ?? "mvp");
+  const porId = new Map(candidatos.map((c) => [c.id, c]));
 
-  if (yaVoto) {
+  if (faltan.length === 0) {
+    const fila = (cat: Categoria, id: string | null) => {
+      const c = id ? porId.get(id) : undefined;
+      return (
+        <div className="flex items-center gap-3">
+          {c && (
+            <span className={`rounded-full p-[2px] ${TEMA[cat].aro}`}>
+              <Avatar src={c.fotoUrl} alt={c.apodo} size={32} className="ring-0" />
+            </span>
+          )}
+          <span className="text-sm text-zinc-400">
+            {TEMA[cat].titulo}: <span className="font-semibold text-white">{c?.apodo ?? "?"}</span>
+          </span>
+        </div>
+      );
+    };
     return (
-      <Card className="flex flex-col gap-2 px-4 py-3 text-sm">
-        <p className="text-zinc-400">Ya votaste en este partido:</p>
-        {conMvp && (
-          <p className="text-zinc-300">
-            Mejor Jugador: <span className="font-semibold text-white">{nombreDe(votoMvpId)}</span>
-          </p>
-        )}
-        {conPeor && (
-          <p className="text-zinc-300">
-            Peor Jugador: <span className="font-semibold text-white">{nombreDe(votoPeorId)}</span>
-          </p>
-        )}
+      <Card className="flex flex-col gap-3 px-4 py-3">
+        <p className="text-sm text-zinc-400">Ya votaste en este partido.</p>
+        {conMvp && fila("mvp", votoMvpId)}
+        {conPeor && fila("peor", votoPeorId)}
       </Card>
     );
   }
   if (candidatos.length === 0) return null;
 
+  // El que ya está elegido (o votado antes) en la otra categoría no se puede elegir en esta.
+  const otro = (cat: Categoria) => (cat === "mvp" ? (elegidos.peor ?? votoPeorId) : (elegidos.mvp ?? votoMvpId));
+
+  function elegir(id: string) {
+    tap();
+    setElegidos((prev) => ({ ...prev, [actual]: prev[actual] === id ? null : id }));
+    // Elegido el primero, pasa solo al siguiente que falte.
+    const siguiente = faltan.find((c) => c !== actual && !elegidos[c]);
+    if (siguiente && elegidos[actual] !== id) setTimeout(() => setActual(siguiente), 280);
+  }
+
+  const listo = faltan.every((c) => elegidos[c]);
+
   return (
     <Card className="flex flex-col gap-4 p-4">
       <ActionForm action={votarPartido} className="flex flex-col gap-4">
         <input type="hidden" name="partido_id" value={partidoId} />
-        <VotoSelects
-          candidatos={candidatos}
-          conMvp={conMvp}
-          conPeor={conPeor}
-          votoMvpId={votoMvpId}
-          votoPeorId={votoPeorId}
-        />
-        <SubmitButton pendingText="Votando..." size="sm" className="self-start">
-          Votar
+        {faltan.includes("mvp") && <input type="hidden" name="mvp_jugador_id" value={elegidos.mvp ?? ""} />}
+        {faltan.includes("peor") && <input type="hidden" name="peor_jugador_id" value={elegidos.peor ?? ""} />}
+
+        {/* Lo elegido en cada categoría; tocar una la vuelve a abrir. */}
+        <div className={`grid gap-2 ${faltan.length > 1 ? "grid-cols-2" : "grid-cols-1"}`}>
+          {faltan.map((cat) => {
+            const c = elegidos[cat] ? porId.get(elegidos[cat]!) : undefined;
+            return (
+              <button
+                key={cat}
+                type="button"
+                onClick={() => setActual(cat)}
+                className={`flex items-center gap-2.5 rounded-xl border px-3 py-2 text-left transition ${
+                  actual === cat ? TEMA[cat].fondo : "border-border bg-white/5"
+                }`}
+              >
+                {c ? (
+                  <span key={c.id} className={`carta-pop rounded-full p-[2px] ${TEMA[cat].aro}`}>
+                    <Avatar src={c.fotoUrl} alt={c.apodo} size={30} className="ring-0" />
+                  </span>
+                ) : (
+                  <span className={`flex h-[30px] w-[30px] items-center justify-center rounded-full border border-dashed border-white/25 text-sm ${TEMA[cat].texto}`}>
+                    {TEMA[cat].marca}
+                  </span>
+                )}
+                <span className="min-w-0">
+                  <span className={`block text-[10px] font-bold tracking-wide uppercase ${TEMA[cat].texto}`}>{TEMA[cat].titulo}</span>
+                  <span className="block truncate text-sm font-semibold text-white">{c?.apodo ?? "Elegí"}</span>
+                </span>
+              </button>
+            );
+          })}
+        </div>
+
+        <p className="-mb-1 text-xs text-zinc-500">
+          Tocá al <span className={`font-semibold ${TEMA[actual].texto}`}>{TEMA[actual].titulo.toLowerCase()}</span> del partido:
+        </p>
+
+        {/* Las figuritas. */}
+        <div key={actual} className="grid grid-cols-3 gap-2 sm:grid-cols-4">
+          {candidatos.map((c, i) => {
+            const elegido = elegidos[actual] === c.id;
+            const bloqueado = otro(actual) === c.id;
+            return (
+              <button
+                key={c.id}
+                type="button"
+                disabled={bloqueado}
+                onClick={() => elegir(c.id)}
+                aria-pressed={elegido}
+                aria-label={`${c.apodo}${bloqueado ? " (ya lo elegiste en la otra categoría)" : ""}`}
+                className={`entrada presionable relative flex flex-col items-center gap-1.5 rounded-2xl border px-1.5 pt-3 pb-2 transition disabled:cursor-not-allowed disabled:*:opacity-30 disabled:*:grayscale ${
+                  elegido ? TEMA[actual].fondo : "border-border bg-white/[0.03] hover:border-border-strong"
+                }`}
+                style={{ "--i": i } as React.CSSProperties}
+              >
+                {elegido && (
+                  <span className={`carta-pop absolute top-1.5 right-2 text-sm font-bold ${TEMA[actual].texto}`}>{TEMA[actual].marca}</span>
+                )}
+                <span className={`rounded-full p-[3px] transition ${elegido ? `${TEMA[actual].aro} scale-105` : "bg-white/10"}`}>
+                  <Avatar src={c.fotoUrl} alt={c.apodo} size={52} className="ring-0" />
+                </span>
+                <span className="w-full truncate text-center text-xs font-semibold text-white">{c.apodo}</span>
+                {c.goles > 0 && (
+                  <span className="flex items-center gap-0.5 text-[10px] font-semibold text-zinc-400">
+                    <IconGoal className="h-3 w-3 text-primary-400" /> {c.goles}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+
+        <SubmitButton pendingText="Votando..." disabled={!listo} className="w-full">
+          {listo ? "Votar" : faltan.length > 1 ? "Elegí los dos para votar" : "Elegí a uno para votar"}
         </SubmitButton>
-        <p className="text-xs text-zinc-500">Una vez que votás, el voto queda.</p>
+        <p className="-mt-2 text-center text-xs text-zinc-500">Una vez que votás, el voto queda.</p>
       </ActionForm>
     </Card>
-  );
-}
-
-/**
- * Los selects de Mejor y Peor Jugador. Una categoría ya votada no se vuelve a
- * votar. A quien elegiste en una categoría no lo podés elegir en la otra.
- */
-function VotoSelects({
-  candidatos,
-  conMvp,
-  conPeor,
-  votoMvpId,
-  votoPeorId,
-}: {
-  candidatos: Candidato[];
-  conMvp: boolean;
-  conPeor: boolean;
-  votoMvpId: string | null;
-  votoPeorId: string | null;
-}) {
-  const [mvp, setMvp] = useState(votoMvpId ?? "");
-  const [peor, setPeor] = useState(votoPeorId ?? "");
-
-  return (
-    <>
-      {conMvp &&
-        (votoMvpId ? (
-          <p className="text-sm text-zinc-500">Ya votaste Mejor Jugador en este partido.</p>
-        ) : (
-          <VotoSelect
-            label="Mejor Jugador"
-            name="mvp_jugador_id"
-            candidatos={candidatos}
-            value={mvp}
-            onChange={setMvp}
-            excluido={peor}
-          />
-        ))}
-      {conPeor &&
-        (votoPeorId ? (
-          <p className="text-sm text-zinc-500">Ya votaste Peor Jugador en este partido.</p>
-        ) : (
-          <VotoSelect
-            label="Peor Jugador"
-            name="peor_jugador_id"
-            candidatos={candidatos}
-            value={peor}
-            onChange={setPeor}
-            excluido={mvp}
-          />
-        ))}
-    </>
-  );
-}
-
-function VotoSelect({
-  label,
-  name,
-  candidatos,
-  value,
-  onChange,
-  excluido,
-}: {
-  label: string;
-  name: string;
-  candidatos: Candidato[];
-  value: string;
-  onChange: (v: string) => void;
-  /** El elegido en la otra categoría. */
-  excluido: string;
-}) {
-  return (
-    <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:gap-3">
-      <label className="text-sm font-semibold text-zinc-300 sm:w-32 sm:shrink-0">{label}</label>
-      <div className="relative flex-1">
-        <select
-          name={name}
-          required
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          className="w-full appearance-none rounded-xl border border-border bg-white/5 py-2.5 pr-9 pl-3.5 text-sm text-white outline-none focus:border-primary-400/60 focus:ring-2 focus:ring-primary-400/20"
-        >
-          <option value="" disabled className="bg-surface">
-            Elegí un jugador...
-          </option>
-          {candidatos
-            .filter((c) => c.id !== excluido)
-            .map((c) => (
-              <option key={c.id} value={c.id} className="bg-surface">
-                {c.nombre}
-              </option>
-            ))}
-        </select>
-        <IconChevronRight className="pointer-events-none absolute top-1/2 right-3 h-4 w-4 -translate-y-1/2 rotate-90 text-zinc-500" />
-      </div>
-    </div>
   );
 }

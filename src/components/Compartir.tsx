@@ -188,14 +188,14 @@ export function HojaCompartir({ ruta, titulo, archivo, opciones, onCerrar }: Ima
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-end justify-center bg-black/60"
+      className="fondo-aparece fixed inset-0 z-50 flex items-end justify-center bg-black/60"
       onClick={onCerrar}
       role="dialog"
       aria-modal="true"
       aria-label={titulo}
     >
       <div
-        className="max-h-[96dvh] w-full max-w-md overflow-y-auto rounded-t-3xl border border-border bg-surface px-4 pt-3 pb-[max(1rem,env(safe-area-inset-bottom))]"
+        className="hoja-sube max-h-[96dvh] w-full max-w-md overflow-y-auto rounded-t-3xl border border-border bg-surface px-4 pt-3 pb-[max(1rem,env(safe-area-inset-bottom))]"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mb-3 flex items-center justify-between gap-2">
@@ -210,21 +210,29 @@ export function HojaCompartir({ ruta, titulo, archivo, opciones, onCerrar }: Ima
           </button>
         </div>
 
-        <div className="flex h-[34vh] items-center justify-center">
+        <div className="relative flex h-[34vh] items-center justify-center">
           {imagen && !error ? (
-            // Mientras se arma la nueva se sigue viendo la anterior, apagada: así no se vacía la vista en cada cambio.
-            // eslint-disable-next-line @next/next/no-img-element -- es un blob recién generado, no una imagen del sitio
-            <img
-              src={imagen.url}
-              alt="Vista previa"
-              className={`max-h-full max-w-full rounded-xl border border-border transition ${lista ? "" : "opacity-40"}`}
-            />
+            <>
+              {/* Mientras se arma la nueva se sigue viendo la anterior, apagada y con el aviso encima. */}
+              {/* eslint-disable-next-line @next/next/no-img-element -- es un blob recién generado, no una imagen del sitio */}
+              <img
+                key={imagen.url}
+                src={imagen.url}
+                alt="Vista previa"
+                className={`entrada max-h-full max-w-full rounded-xl border border-border transition duration-300 ${
+                  lista ? "" : "scale-[0.97] opacity-30 blur-[1px]"
+                }`}
+              />
+              {!lista && (
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <AvisoCargando texto="Actualizando la imagen…" />
+                </div>
+              )}
+            </>
           ) : error ? (
             <p className="text-center text-sm text-danger-400">{error}</p>
           ) : (
-            <div
-              className={`animate-pulse rounded-xl bg-white/5 ${formato === "historia" ? "aspect-[9/16] h-full" : "aspect-square w-3/4"}`}
-            />
+            <CargandoImagen formato={formato} />
           )}
         </div>
 
@@ -305,15 +313,78 @@ export function HojaCompartir({ ruta, titulo, archivo, opciones, onCerrar }: Ima
 
         {lista && error && <p className="mb-2 text-center text-sm text-danger-400">{error}</p>}
         <div className="flex flex-col gap-2">
-          {puedeCompartir && (
-            <Button type="button" onClick={compartir} disabled={!lista}>
-              <IconShare className="h-4 w-4" /> Compartir
+          {!lista && !error ? (
+            // Mientras se arma, el botón dice qué pasa (no queda apagado sin explicación).
+            <Button type="button" disabled>
+              <Pelotita /> Armando la imagen…
             </Button>
+          ) : (
+            <>
+              {puedeCompartir && (
+                <Button type="button" onClick={compartir} disabled={!lista}>
+                  <IconShare className="h-4 w-4" /> Compartir
+                </Button>
+              )}
+              <Button type="button" variant={puedeCompartir ? "secondary" : "primary"} onClick={descargar} disabled={!lista}>
+                <IconDownload className="h-4 w-4" /> Descargar imagen
+              </Button>
+            </>
           )}
-          <Button type="button" variant={puedeCompartir ? "secondary" : "primary"} onClick={descargar} disabled={!lista}>
-            <IconDownload className="h-4 w-4" /> Descargar imagen
-          </Button>
         </div>
+      </div>
+    </div>
+  );
+}
+
+/** Una pelota que gira: lo que se muestra mientras se arma una imagen. */
+export function Pelotita({ className = "h-4 w-4" }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden className={`animate-spin [animation-duration:1.1s] ${className}`}>
+      <circle cx="12" cy="12" r="10.5" fill="white" stroke="currentColor" strokeWidth="1.5" opacity="0.95" />
+      <polygon points="12,7 16.6,10.3 14.8,15.7 9.2,15.7 7.4,10.3" fill="#18181b" />
+      <path
+        d="M12 7V2.5M16.6 10.3l4.4-1.4M14.8 15.7l2.7 3.8M9.2 15.7l-2.7 3.8M7.4 10.3L3 8.9"
+        stroke="#18181b"
+        strokeWidth="1.4"
+        strokeLinecap="round"
+        fill="none"
+      />
+    </svg>
+  );
+}
+
+function AvisoCargando({ texto }: { texto: string }) {
+  return (
+    <div className="flex items-center gap-2 rounded-full border border-border bg-surface/90 px-3.5 py-2 text-sm font-medium text-zinc-200 shadow-lg shadow-black/40 backdrop-blur">
+      <Pelotita />
+      {texto}
+    </div>
+  );
+}
+
+/** Lo que va mientras se arma la primera imagen (tarda unos segundos: baja las fotos). */
+const PASOS = ["Bajando las fotos…", "Pintando la cancha…", "Acomodando a los jugadores…", "Dándole los últimos toques…"];
+
+function CargandoImagen({ formato }: { formato: Formato }) {
+  const [paso, setPaso] = useState(0);
+  useEffect(() => {
+    const t = setInterval(() => setPaso((p) => Math.min(p + 1, PASOS.length - 1)), 1400);
+    return () => clearInterval(t);
+  }, []);
+  return (
+    <div
+      role="status"
+      className={`esqueleto relative flex flex-col items-center justify-center gap-3 overflow-hidden rounded-xl border border-border ${
+        formato === "historia" ? "aspect-[9/16] h-full" : "aspect-square h-full"
+      }`}
+    >
+      <Pelotita className="h-9 w-9 text-zinc-700" />
+      <p key={paso} className="entrada px-3 text-center text-xs font-medium text-zinc-300">
+        {PASOS[paso]}
+      </p>
+      {/* Barra que avanza sola: no sabemos cuánto falta, pero se nota que avanza. */}
+      <div className="absolute inset-x-4 bottom-4 h-1 overflow-hidden rounded-full bg-white/10">
+        <div className="h-full rounded-full bg-primary-400 transition-[width] duration-[1400ms] ease-out" style={{ width: `${((paso + 1) / (PASOS.length + 1)) * 100}%` }} />
       </div>
     </div>
   );
