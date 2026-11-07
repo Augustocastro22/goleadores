@@ -3,9 +3,8 @@ import { requireGrupo } from "@/lib/grupo";
 import { getConfig, grupoVota } from "@/lib/config";
 import { votacionCerrada } from "@/lib/votacion";
 import type { DesempatePartido, EstadoVotacion, RankingRow } from "@/lib/types";
-import Podio from "@/components/Podio";
+import TablaRanking from "@/components/TablaRanking";
 import Card from "@/components/ui/Card";
-import Avatar from "@/components/ui/Avatar";
 import { IconGoal, IconThumbsDown, IconTrophy } from "@/components/icons";
 import { ComponentType, SVGProps } from "react";
 import GrupoLogo from "@/components/ui/GrupoLogo";
@@ -226,12 +225,6 @@ function HistorialDesafios({ filas }: { filas: HistorialRival[] }) {
   );
 }
 
-const rankBadge = [
-  "bg-gold-500/20 text-gold-400",
-  "bg-white/10 text-zinc-300",
-  "bg-orange-500/15 text-orange-400",
-];
-
 function RankingList({
   titulo,
   icon: Icon,
@@ -312,55 +305,22 @@ function RankingList({
         <Card className="px-5 py-8 text-center text-sm text-zinc-500">Todavía no hay datos.</Card>
       ) : (
         <Card className="overflow-hidden">
-          {/* Los tres primeros en el podio; el resto abajo, con una barra del tamaño de lo que hizo. */}
-          <Podio
+          {/* En podio o en lista (se elige arriba); tocar a cualquiera abre su perfil. */}
+          <TablaRanking
             unidad={valueLabel.toLowerCase()}
-            puestos={filas.slice(0, 3).map(({ row, puesto }) => ({
+            etiquetaValor={valueLabel}
+            filas={filas.map(({ row, puesto }) => ({
               jugadorId: row.jugador_id,
+              nombre: row.nombre,
+              apellido: row.apellido,
               apodo: row.apodo,
               fotoUrl: row.foto_url,
               valor: row[valueKey] ?? 0,
               puesto,
+              partidosJugados: row.partidos_jugados ?? 0,
+              sigueEnGrupo: row.sigue_en_grupo !== false,
             }))}
           />
-          <div className="divide-y divide-border border-t border-border">
-          {filas.slice(3).map(({ row, puesto }, i) => (
-            <div key={row.jugador_id} className="relative isolate flex items-center gap-3 px-4 py-3">
-              <span
-                aria-hidden
-                className="barra-crece absolute inset-y-1 left-0 -z-10 rounded-r-lg bg-primary-500/[0.13]"
-                style={{ width: `${((row[valueKey] ?? 0) / (filas[0].row[valueKey] || 1)) * 100}%`, "--i": i } as React.CSSProperties}
-              />
-              <span
-                className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold ${
-                  rankBadge[puesto - 1] ?? "text-zinc-600"
-                }`}
-              >
-                {puesto}
-              </span>
-              <Avatar
-                src={row.foto_url}
-                alt={row.apodo}
-                size={36}
-                className={row.sigue_en_grupo === false ? "opacity-50 grayscale" : ""}
-              />
-              <div className="min-w-0 flex-1">
-                <p className="truncate font-medium text-white">
-                  {row.nombre} {row.apellido}
-                </p>
-                <p className="truncate text-xs text-zinc-500">
-                  {row.apodo} · {row.partidos_jugados ?? 0}{" "}
-                  {row.partidos_jugados === 1 ? "partido" : "partidos"}
-                  {row.sigue_en_grupo === false && " · ya no está en el grupo"}
-                </p>
-              </div>
-              <div className="flex shrink-0 items-center gap-1">
-                <span className="text-lg font-bold tabular-nums text-white">{row[valueKey]}</span>
-                <span className="hidden text-xs text-zinc-600 sm:inline">{valueLabel}</span>
-              </div>
-            </div>
-          ))}
-          </div>
         </Card>
       )}
     </section>

@@ -87,6 +87,7 @@ export default async function DesafiosPage() {
                   hoy={hoy}
                   esAdmin={esAdmin}
                   grupoId={grupo.id}
+                  miGrupo={{ nombre: grupo.nombre, logoUrl: grupo.logo_url }}
                 />
               ))}
             </div>

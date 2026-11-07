@@ -73,12 +73,15 @@ export default function DesafioCard({
   hoy,
   esAdmin,
   grupoId,
+  miGrupo,
 }: {
   desafio: DesafioVista;
   hoy: string;
   esAdmin: boolean;
   /** El grupo desde el que se mira. */
   grupoId: string;
+  /** Para el cara a cara: el escudo y el nombre del grupo propio. */
+  miGrupo: { nombre: string; logoUrl: string | null };
 }) {
   const estado = estadoVisible(d, hoy);
   const responder = esAdmin && puedeResponder(d, hoy);
@@ -97,41 +100,68 @@ export default function DesafioCard({
       : null;
   const novedades = novedadesDesafio(d).filter((linea) => !resultado || !linea.startsWith(RESULTADO_LABEL[resultado]));
 
+  const conMarcador = d.marcador_mios !== null && d.marcador_rival !== null && d.resultado_estado !== "sin_cargar";
   return (
-    <Card className="flex flex-col gap-3 p-4">
-      <div className="flex items-start gap-3">
-        <GrupoLogo src={d.rival_logo_url} nombre={d.rival_nombre} size={40} />
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center justify-between gap-2">
-            <p className="truncate font-semibold text-white">vs {d.rival_nombre}</p>
-            {resultado ? (
-              <Badge variant={RESULTADO_VARIANT[resultado]} className="shrink-0 !px-2 !py-0.5 tabular-nums">
-                {RESULTADO_LABEL[resultado]} {d.marcador_mios}-{d.marcador_rival}
-              </Badge>
-            ) : (
-              <Badge variant={ESTADO_VARIANT[estado]} className="shrink-0 !px-2 !py-0.5">
-                {ESTADO_DESAFIO_LABEL[estado]}
-              </Badge>
-            )}
-          </div>
-          <p className="text-sm text-zinc-500">
-            {fechaDesafio(d.fecha, d.hora)} · {d.lugar}
-          </p>
-          <p className="truncate text-xs text-zinc-600">{detalle}</p>
-          {novedades.map((linea) => (
-            <p key={linea} className="mt-1 text-xs text-gold-400">
-              {linea}
-            </p>
-          ))}
+    <Card className="flex flex-col gap-3 overflow-hidden p-0">
+      {/* Cara a cara: los dos escudos enfrentados, cada uno con su color, y el VS (o el resultado) al medio. */}
+      <div
+        className="relative grid grid-cols-[1fr_auto_1fr] items-center gap-2 px-4 pt-4 pb-3"
+        style={{
+          background:
+            "linear-gradient(115deg, rgba(16,185,129,0.20) 0%, rgba(16,185,129,0.04) 46%, rgba(251,191,36,0.04) 54%, rgba(251,191,36,0.18) 100%)",
+        }}
+      >
+        <span aria-hidden className="pointer-events-none absolute inset-y-0 left-1/2 w-px -translate-x-1/2 rotate-12 bg-white/10" />
+        <div className="vs-izq flex min-w-0 flex-col items-center gap-1.5">
+          <GrupoLogo src={miGrupo.logoUrl} nombre={miGrupo.nombre} size={48} />
+          <span className="max-w-full truncate text-xs font-bold text-white">{miGrupo.nombre}</span>
         </div>
+        <div className="vs-centro relative flex flex-col items-center">
+          {conMarcador ? (
+            <span className="font-mono text-3xl font-extrabold tabular-nums text-white">
+              {d.marcador_mios}
+              <span className="mx-1 text-zinc-500">-</span>
+              {d.marcador_rival}
+            </span>
+          ) : (
+            <span className="text-3xl font-black tracking-tighter text-white italic">
+              V<span className="text-gold-400">S</span>
+            </span>
+          )}
+          {resultado ? (
+            <Badge variant={RESULTADO_VARIANT[resultado]} className="mt-1 !px-2 !py-0.5">
+              {RESULTADO_LABEL[resultado]}
+            </Badge>
+          ) : (
+            <Badge variant={ESTADO_VARIANT[estado]} className="mt-1 !px-2 !py-0.5">
+              {ESTADO_DESAFIO_LABEL[estado]}
+            </Badge>
+          )}
+        </div>
+        <div className="vs-der flex min-w-0 flex-col items-center gap-1.5">
+          <GrupoLogo src={d.rival_logo_url} nombre={d.rival_nombre} size={48} />
+          <span className="max-w-full truncate text-xs font-bold text-white">{d.rival_nombre}</span>
+        </div>
+      </div>
+      <div className="px-4">
+        <p className="text-sm text-zinc-400">
+          {fechaDesafio(d.fecha, d.hora)} · {d.lugar}
+        </p>
+        <p className="truncate text-xs text-zinc-600">{detalle}</p>
+        {novedades.map((linea) => (
+          <p key={linea} className="mt-1 text-xs text-gold-400">
+            {linea}
+          </p>
+        ))}
       </div>
 
       {(responder || cancelar || d.partido_id) && (
-        <div className="flex flex-wrap items-start gap-2">
+        <div className="flex flex-wrap items-start gap-2 px-4">
           {responder && <ResponderDesafio desafioId={d.id} rival={d.rival_nombre} />}
           {d.partido_id && (
             <Link
               href={`/partidos/${d.partido_id}`}
+              transitionTypes={["adelante"]}
               className={buttonClass(responderEnPartido ? "primary" : "secondary", "sm")}
             >
               {responderEnPartido ? "Responder" : "Ver partido"}
@@ -142,6 +172,7 @@ export default function DesafioCard({
           )}
         </div>
       )}
+      <div className="h-1" />
     </Card>
   );
 }

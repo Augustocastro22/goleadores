@@ -115,6 +115,10 @@ export default function EquipoDisponibilidad({
   }, [grilla, dias, necesarios, hoy]);
 
   const total = jugadores.length;
+  // El máximo de la semana (sin los días que ya pasaron): esas casillas llevan la estrella.
+  const valoresSemana = dias.filter((f) => f >= hoy).flatMap((f) => HORAS.map((h) => grilla.get(`${f}|${h}`) ?? 0));
+  const maximoSemana = Math.max(0, ...valoresSemana);
+  const hayDiferencias = valoresSemana.some((v) => v !== maximoSemana);
   const detalleNo = sel ? noPueden(sel.fecha, sel.hora) : [];
   const detalleSi = sel ? jugadores.filter((j) => !detalleNo.includes(j)) : [];
 
@@ -215,34 +219,51 @@ export default function EquipoDisponibilidad({
           {HORAS.map((h) => (
             <div key={h} className="contents">
               <span className="pr-1 text-right text-[10px] leading-6 tabular-nums text-zinc-500">{h}</span>
-              {dias.map((f) => {
+              {dias.map((f, d) => {
                 const pueden = grilla.get(`${f}|${h}`) ?? 0;
                 const pasado = f < hoy;
                 const activo = sel?.fecha === f && sel.hora === h;
                 const ok = pueden >= necesarios;
+                // Mapa de calor: más verde cuantos más pueden; los que llegan al mínimo, fuertes.
+                const proporcion = total > 0 ? pueden / total : 0;
+                const alfa = ok ? 0.55 + proporcion * 0.45 : 0.04 + proporcion * 0.3;
+                // La estrella: el mejor horario de la semana (si no son todos iguales).
+                const mejor = !pasado && maximoSemana > 0 && pueden === maximoSemana && hayDiferencias;
                 return (
                   <button
                     key={f}
                     type="button"
                     disabled={pasado}
                     onClick={() => setSel({ fecha: f, hora: h })}
-                    aria-label={`${etiquetaDia(f)} ${h} hs: pueden ${pueden} de ${total}`}
-                    className={`h-6 rounded transition ${
-                      pasado ? "bg-transparent" : ok ? "bg-primary-500" : "bg-white/[0.06]"
-                    } ${activo ? "ring-2 ring-white" : ""}`}
-                  />
+                    aria-label={`${etiquetaDia(f)} ${h} hs: pueden ${pueden} de ${total}${mejor ? " (de los mejores horarios)" : ""}`}
+                    className={`celda-aparece relative flex h-6 items-center justify-center rounded text-[10px] font-bold tabular-nums transition ${
+                      activo ? "z-10 scale-110 ring-2 ring-white" : ""
+                    } ${pasado ? "text-transparent" : ok ? "text-[#04342C]" : "text-zinc-500"}`}
+                    style={{
+                      background: pasado ? "transparent" : `rgba(16, 185, 129, ${alfa.toFixed(2)})`,
+                      "--i": d + HORAS.indexOf(h),
+                    } as React.CSSProperties}
+                  >
+                    {!pasado && (mejor ? <span className="text-[11px] text-[#412402]">★</span> : pueden > 0 ? pueden : "")}
+                  </button>
                 );
               })}
             </div>
           ))}
         </div>
 
-        <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-zinc-500">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-zinc-500">
           <span className="flex items-center gap-1.5">
-            <span className="h-2.5 w-2.5 rounded-sm bg-primary-500" /> Llegan a {necesarios}
+            {/* Escala del mapa de calor: de pocos a todos. */}
+            <span className="flex overflow-hidden rounded-sm">
+              {[0.06, 0.2, 0.34, 0.6, 0.8, 1].map((a) => (
+                <span key={a} className="h-2.5 w-2.5" style={{ background: `rgba(16, 185, 129, ${a})` }} />
+              ))}
+            </span>
+            De pocos a todos · fuerte = llegan a {necesarios}
           </span>
-          <span className="flex items-center gap-1.5">
-            <span className="h-2.5 w-2.5 rounded-sm bg-white/[0.06]" /> No llegan
+          <span className="flex items-center gap-1">
+            <span className="text-gold-400">★</span> El mejor horario
           </span>
           <span>Tocá una casilla para ver quiénes pueden.</span>
         </div>

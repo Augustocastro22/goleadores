@@ -39,11 +39,6 @@ export default function Podio({ puestos, unidad }: { puestos: PuestoPodio[]; uni
             className="presionable flex w-1/3 max-w-[128px] flex-col items-center"
           >
             <div className="entrada relative flex flex-col items-center" style={{ "--i": k + 3 } as React.CSSProperties}>
-              {primero && (
-                <span aria-hidden className="corona absolute -top-6 text-2xl">
-                  👑
-                </span>
-              )}
               <span className="rounded-full p-[3px]" style={{ background: medalla.aro }}>
                 <Avatar src={p.fotoUrl} alt={p.apodo} size={primero ? 72 : 56} className="ring-0" />
               </span>

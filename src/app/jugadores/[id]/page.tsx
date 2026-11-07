@@ -1,6 +1,5 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ComponentType, SVGProps } from "react";
 import { requireGrupo } from "@/lib/grupo";
 import { getConfig, nombresDelPartido } from "@/lib/config";
 import type { Profile, RankingRow, Rol } from "@/lib/types";
@@ -8,7 +7,8 @@ import { calcularResultado, RESULTADO_CLASS, RESULTADO_PLURAL, type Resultado } 
 import Card from "@/components/ui/Card";
 import Avatar from "@/components/ui/Avatar";
 import Badge from "@/components/ui/Badge";
-import { IconChevronRight, IconGoal, IconThumbsDown, IconTrophy, IconUsers } from "@/components/icons";
+import Insignias, { type Insignia } from "@/components/Insignias";
+import { IconChevronRight } from "@/components/icons";
 import { leerFiltroPartidos, type FiltroPartidos } from "@/lib/tipos-partido";
 
 interface PartidoJugadoRow {
@@ -32,12 +32,6 @@ interface PartidoJugadoRow {
 
 /** Clases completas (Tailwind no ve clases armadas con template strings). */
 const COLS: Record<number, string> = { 2: "grid-cols-2", 3: "grid-cols-3", 4: "grid-cols-4" };
-
-interface Logro {
-  icon: ComponentType<SVGProps<SVGSVGElement>>;
-  titulo: string;
-  detalle: string;
-}
 
 export default async function JugadorDetallePage({
   params,
@@ -184,55 +178,91 @@ export default async function JugadorDetallePage({
   const maxGolesGrupo = Math.max(0, ...goleadores.map((r) => r.goles ?? 0));
   const esGoleadorDelGrupo = golesTotales > 0 && golesTotales === maxGolesGrupo;
 
-  const logrosCandidatos: (Logro | null)[] = [
-    esGoleadorDelGrupo
-      ? { icon: IconGoal, titulo: "Goleador del grupo", detalle: `Máximo goleador del grupo, con ${golesTotales} goles.` }
-      : null,
-    hatTricks > 0
-      ? {
-          icon: IconGoal,
-          titulo: "Hat-trick",
-          detalle:
-            hatTricks === 1
-              ? `Metió ${maxGolesEnUnPartido} goles en un partido.`
-              : `${hatTricks} partidos con 3 goles o más (récord: ${maxGolesEnUnPartido}).`,
-        }
-      : null,
-    nivelVeterano > 0
-      ? { icon: IconUsers, titulo: "Veterano", detalle: `Jugó ${nivelVeterano} partidos o más con el grupo.` }
-      : null,
-    votaPeor && partidosTotales > 0 && vecesPeor === 0
-      ? { icon: IconThumbsDown, titulo: "Nunca la remó", detalle: "Nunca fue elegido Peor Jugador." }
-      : null,
-    rachaGolMax >= 3
-      ? {
-          icon: IconGoal,
-          titulo: "Mejor racha goleadora",
-          detalle: `${rachaGolMax} partidos seguidos convirtiendo gol.`,
-        }
-      : null,
-    presenciaPerfecta
-      ? {
-          icon: IconUsers,
-          titulo: "Presencia perfecta",
-          detalle: `Jugó los ${totalPartidosGrupo} partidos del grupo.`,
-        }
-      : rachaPresenciaMax >= 5
-        ? {
-            icon: IconUsers,
-            titulo: "Siempre presente",
-            detalle: `${rachaPresenciaMax} partidos seguidos sin faltar.`,
-          }
-        : null,
-    nivelMvp > 0
-      ? {
-          icon: IconTrophy,
-          titulo: nivelMvp >= 10 ? "Crack del grupo" : "Figura",
-          detalle: `Elegido Mejor Jugador ${nivelMvp} veces o más.`,
-        }
-      : null,
+  // Todas las insignias: las conseguidas y las que faltan (con el requisito y cuánto falta).
+  const siguienteVeterano = [25, 50, 100].find((n) => partidosTotales < n);
+  const insignias: Insignia[] = [
+    {
+      id: "goleador",
+      icono: "gol",
+      titulo: "Goleador del grupo",
+      detalle: `Máximo goleador del grupo, con ${golesTotales} goles.`,
+      requisito: "Ser el máximo goleador del grupo.",
+      desbloqueada: esGoleadorDelGrupo,
+      progreso: maxGolesGrupo > 0 ? golesTotales / maxGolesGrupo : 0,
+      textoProgreso: `${golesTotales} de ${maxGolesGrupo} goles`,
+    },
+    {
+      id: "hat-trick",
+      icono: "gol",
+      titulo: "Hat-trick",
+      detalle:
+        hatTricks === 1
+          ? `Metió ${maxGolesEnUnPartido} goles en un partido.`
+          : `${hatTricks} partidos con 3 goles o más (récord: ${maxGolesEnUnPartido}).`,
+      requisito: "Meter 3 goles en un mismo partido.",
+      desbloqueada: hatTricks > 0,
+      progreso: maxGolesEnUnPartido / 3,
+      textoProgreso: `Récord: ${maxGolesEnUnPartido} en un partido`,
+    },
+    {
+      id: "racha-gol",
+      icono: "gol",
+      titulo: "Racha goleadora",
+      detalle: `${rachaGolMax} partidos seguidos convirtiendo gol.`,
+      requisito: "Hacer goles en 3 partidos seguidos.",
+      desbloqueada: rachaGolMax >= 3,
+      progreso: rachaGolMax / 3,
+      textoProgreso: `Mejor racha: ${rachaGolMax}`,
+    },
+    {
+      id: "presente",
+      icono: "presencia",
+      titulo: presenciaPerfecta ? "Presencia perfecta" : "Siempre presente",
+      detalle: presenciaPerfecta
+        ? `Jugó los ${totalPartidosGrupo} partidos del grupo.`
+        : `${rachaPresenciaMax} partidos seguidos sin faltar.`,
+      requisito: "Jugar 5 partidos seguidos sin faltar.",
+      desbloqueada: presenciaPerfecta || rachaPresenciaMax >= 5,
+      progreso: rachaPresenciaMax / 5,
+      textoProgreso: `Mejor racha: ${rachaPresenciaMax}`,
+    },
+    {
+      id: "veterano",
+      icono: "presencia",
+      titulo: nivelVeterano >= 100 ? "Leyenda" : "Veterano",
+      detalle: `Jugó ${nivelVeterano} partidos o más con el grupo.`,
+      requisito: `Jugar ${siguienteVeterano ?? 25} partidos con el grupo.`,
+      desbloqueada: nivelVeterano > 0,
+      progreso: partidosTotales / (siguienteVeterano ?? 25),
+      textoProgreso: `${partidosTotales} de ${siguienteVeterano ?? 25}`,
+    },
+    ...(votaMvp
+      ? [
+          {
+            id: "figura",
+            icono: "trofeo" as const,
+            titulo: nivelMvp >= 10 ? "Crack del grupo" : "Figura",
+            detalle: `Elegido Mejor Jugador ${nivelMvp} veces o más.`,
+            requisito: "Ser elegido Mejor Jugador 5 veces.",
+            desbloqueada: nivelMvp > 0,
+            progreso: vecesMvp / 5,
+            textoProgreso: `${vecesMvp} de 5`,
+          },
+        ]
+      : []),
+    ...(votaPeor
+      ? [
+          {
+            id: "nunca-la-remo",
+            icono: "pulgar" as const,
+            titulo: "Nunca la remó",
+            detalle: "Nunca fue elegido Peor Jugador.",
+            requisito: vecesPeor > 0 ? `Lo eligieron Peor Jugador ${vecesPeor} ${vecesPeor === 1 ? "vez" : "veces"}.` : "Jugar sin que nunca lo elijan Peor Jugador.",
+            desbloqueada: partidosTotales > 0 && vecesPeor === 0,
+          },
+        ]
+      : []),
   ];
-  const logros = logrosCandidatos.filter((l): l is Logro => l !== null);
 
   return (
     <div className="flex flex-col gap-6">
@@ -285,24 +315,7 @@ export default async function JugadorDetallePage({
         )}
       </Card>
 
-      {logros.length > 0 && (
-        <section>
-          <h2 className="mb-3 text-lg font-bold text-white">Logros</h2>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            {logros.map((logro) => (
-              <Card key={logro.titulo} className="flex items-center gap-3 p-4">
-                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-gold-500/15 text-gold-400">
-                  <logro.icon className="h-5 w-5" />
-                </span>
-                <div className="min-w-0">
-                  <p className="truncate font-semibold text-white">{logro.titulo}</p>
-                  <p className="truncate text-xs text-zinc-500">{logro.detalle}</p>
-                </div>
-              </Card>
-            ))}
-          </div>
-        </section>
-      )}
+      <Insignias jugadorId={id} insignias={insignias} />
 
       <section>
         <h2 className="mb-3 text-lg font-bold text-white">Historial de partidos</h2>
