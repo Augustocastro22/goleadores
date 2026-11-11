@@ -10,8 +10,11 @@ const DISMISSED_KEY = "push-banner-dismissed-at";
 /** Si lo dejan para más tarde, vuelve a aparecer pasado este tiempo. */
 const REAPARECE_MS = 3 * 24 * 60 * 60 * 1000;
 
-/** Los casos en que se puede hacer algo para recibirlas (los demás, en Perfil). */
-const ESTADOS_VISIBLES: PushEstado[] = ["inactivo", "requiere-instalar", "navegador-app"];
+/**
+ * Los casos en que se puede hacer algo para recibirlas, incluido quien las
+ * bloqueó (se le explica cómo desbloquearlas). "No soportado" queda en Perfil.
+ */
+const ESTADOS_VISIBLES: PushEstado[] = ["inactivo", "requiere-instalar", "navegador-app", "denegado"];
 
 /** Cartel para activar notificaciones desde el inicio, para quien nunca entra a Perfil. */
 export default function PushBanner() {
