@@ -1,5 +1,6 @@
 import { notFound, redirect } from "next/navigation";
-import { getContexto } from "@/lib/grupo";
+import { getContexto, rolEn } from "@/lib/grupo";
+import type { FormacionGuardada } from "@/lib/formacion";
 import { esPartidoInterno, getConfig, nombresDelPartido } from "@/lib/config";
 import type { Profile, Respuesta } from "@/lib/types";
 import Card from "@/components/ui/Card";
@@ -9,8 +10,8 @@ import ArmadorCancha, { type EquipoCancha } from "@/components/cancha/ArmadorCan
 /**
  * "La cancha" de un partido: los convocados (menos los que dijeron que no)
  * ubicados en una cancha, para mirar cómo forman y compartirlo. Entre ellos,
- * los dos equipos, cada uno en su mitad. La ven todos los del grupo; no se
- * guarda nada.
+ * los dos equipos, cada uno en su mitad. La ven todos los del grupo; si el
+ * admin guardó la formación, todos ven esa (ver lib/formacion.ts).
  */
 export default async function CanchaPartidoPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -33,6 +34,23 @@ export default async function CanchaPartidoPage({ params }: { params: Promise<{ 
   const interno = esPartidoInterno(equipo2.length, partido.desafio_id, partido.nombre_equipo);
   const { nosotros } = nombresDelPartido(partido, interno, config);
   const nombreGrupo = ctx.grupos.find((g) => g.id === partido.grupo_id)?.nombre ?? nosotros;
+  const esAdmin = rolEn(ctx, partido.grupo_id) === "admin";
+  // La formación que guardó el admin (0041_formacion_partido.sql); sin guardar, se arma sola.
+  const guardada = (partido.formacion ?? null) as FormacionGuardada | null;
+  // Para el admin que todavía no la guardó: la del último partido del grupo que tenga una, para repetirla.
+  const { data: previa } =
+    esAdmin && !guardada
+      ? await supabase
+          .from("partidos")
+          .select("fecha, formacion")
+          .eq("grupo_id", partido.grupo_id)
+          .neq("id", id)
+          .not("formacion", "is", null)
+          .lte("fecha", partido.fecha)
+          .order("fecha", { ascending: false })
+          .limit(1)
+          .maybeSingle()
+      : { data: null };
 
   // Entre ellos con los equipos armados: uno en cada mitad. Si no, todos juntos.
   const dosEquipos = interno && equipo2.length > 0;
@@ -69,7 +87,17 @@ export default async function CanchaPartidoPage({ params }: { params: Promise<{ 
       {participantes.length === 0 ? (
         <Card className="px-4 py-3 text-sm text-zinc-500">Todavía no hay nadie convocado.</Card>
       ) : (
-        <ArmadorCancha equipos={equipos} titulo={titulo} subtitulo={subtitulo} autoUbicar archivo="la-cancha" />
+        <ArmadorCancha
+          equipos={equipos}
+          titulo={titulo}
+          subtitulo={subtitulo}
+          autoUbicar
+          archivo="la-cancha"
+          partidoId={id}
+          guardada={guardada}
+          previa={previa ? { formacion: previa.formacion as FormacionGuardada, fecha: previa.fecha } : null}
+          esAdmin={esAdmin}
+        />
       )}
     </div>
   );

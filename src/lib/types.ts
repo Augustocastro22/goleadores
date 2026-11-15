@@ -60,6 +60,8 @@ export interface Partido {
   nombre_equipo: string | null;
   /** Si se canceló (no se juega): cuándo. Queda en el historial; ver 0040_cancelar_partido_tope_empates.sql. */
   cancelado_en: string | null;
+  /** La formación que guardó el admin (ver 0041_formacion_partido.sql y lib/formacion.ts). */
+  formacion?: import("@/lib/formacion").FormacionGuardada | null;
 }
 
 export type Equipo = 1 | 2;

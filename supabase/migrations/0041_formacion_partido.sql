@@ -1,0 +1,20 @@
+-- ─────────────────────────────────────────────────────────────────────────
+-- La formación guardada de un partido ("La cancha"):
+--
+--   partidos.formacion (jsonb, opcional): la arma y la guarda el admin; si
+--   está, todos la ven igual (si no, La cancha se arma sola con los
+--   convocados, como antes). Forma (la valida la app, src/lib/formacion.ts):
+--     {
+--       "futbol": 7,                         -- de cuánto se juega
+--       "formacion": "3-2-1",
+--       "lugares": { "<posición>": { "jugador": "<uuid>" } | { "invitado": "Nombre" } },
+--       "posiciones": { "<posición>": { "x": 50, "y": 80 } },   -- movidas a mano
+--       "guardada_en": "2026-11-07T21:00:00Z"
+--     }
+--   Los invitados son gente que no es del grupo: solo un nombre, no cuentan
+--   para nada más.
+--
+-- No hacen falta permisos nuevos: los admins del grupo ya pueden modificar
+-- los partidos de su grupo (y los jugadores no).
+-- ─────────────────────────────────────────────────────────────────────────
+alter table public.partidos add column if not exists formacion jsonb;

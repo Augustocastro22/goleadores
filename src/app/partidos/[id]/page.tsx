@@ -466,7 +466,9 @@ export default async function PartidoDetailPage({
         <AccesoCancha
           href={`/partidos/${id}/cancha`}
           detalle={
-            interno && equipo2.length > 0
+            partido.formacion
+              ? `Formación lista: fútbol ${partido.formacion.futbol}, ${partido.formacion.formacion}`
+              : interno && equipo2.length > 0
               ? `${nosotros} vs ${partido.rival}, cada uno en su mitad`
               : partido.jugado
                 ? "Cómo formaron los que jugaron"

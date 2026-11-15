@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import type { Profile } from "@/lib/types";
 import Avatar from "@/components/ui/Avatar";
 import Button from "@/components/ui/Button";
@@ -17,7 +18,9 @@ import {
   type Equipo,
   type Slot,
 } from "@/lib/cancha";
-import { tap } from "@/lib/haptics";
+import { exito, tap } from "@/lib/haptics";
+import { MAX_NOMBRE_INVITADO, type FormacionGuardada } from "@/lib/formacion";
+import { borrarFormacion, guardarFormacion } from "@/lib/actions/formacion";
 import LineasCancha from "./LineasCancha";
 import { exportarCancha } from "./exportar";
 import { Pelotita } from "@/components/Compartir";
@@ -49,7 +52,8 @@ export const COLOR_EQUIPO: Record<Equipo, { marco: string; texto: string }> = {
  * cambiar de formación, cada uno va a su nuevo lugar con una animación (las
  * fichas son por jugador, no por posición). Al final se comparte como imagen.
  *
- * Es solo para mirar y compartir: no se guarda.
+ * En un partido, el admin la puede guardar (con invitados con nombre en los
+ * lugares libres) y avisar a los convocados; guardada, los demás la ven fija.
  */
 export default function ArmadorCancha({
   equipos,
@@ -57,6 +61,10 @@ export default function ArmadorCancha({
   subtitulo,
   autoUbicar = false,
   archivo = "formacion",
+  partidoId,
+  guardada,
+  previa,
+  esAdmin = false,
 }: {
   /** Uno (todo el plantel, o los convocados contra un rival) o dos (entre ellos). */
   equipos: EquipoCancha[];
@@ -67,19 +75,51 @@ export default function ArmadorCancha({
   /** Arrancar con todos ubicados (en un partido); si no, la cancha arranca vacía. */
   autoUbicar?: boolean;
   archivo?: string;
+  /** En un partido: para guardar la formación (solo el admin). */
+  partidoId?: string;
+  /** La formación que guardó el admin: arranca con esa; los demás la ven fija. */
+  guardada?: FormacionGuardada | null;
+  /** Para el admin sin guardada: la del último partido, para repetir las posiciones (sin los invitados). */
+  previa?: { formacion: FormacionGuardada; fecha: string } | null;
+  esAdmin?: boolean;
 }) {
+  const router = useRouter();
   const dosEquipos = equipos.length === 2;
   const numeros: Equipo[] = dosEquipos ? [1, 2] : [1];
   const mitadDe = (e: Equipo) => (dosEquipos ? (e === 1 ? "abajo" : "arriba") : "completa");
+  // El admin puede guardarla; los demás, si hay una guardada, la ven fija (sin mover nada).
+  const puedeGuardar = !!partidoId && esAdmin;
+  const fija = !!guardada && !puedeGuardar;
+  // Sin nada guardado, la cancha se llena sola para mirar; el admin, que la arma de verdad, no:
+  // arranca con las posiciones del partido anterior (si hay) o vacía, porque no sabemos dónde juega cada uno.
+  const llenaSola = autoUbicar && !puedeGuardar;
+  const base = guardada ?? (puedeGuardar ? (previa?.formacion ?? null) : null);
+  const [usandoPrevia, setUsandoPrevia] = useState(!guardada && puedeGuardar && !!previa);
 
   const [futbol, setFutbol] = useState(() =>
-    autoUbicar ? futbolPara(Math.max(...equipos.map((e) => e.jugadores.length))) : 5
+    base?.futbol ?? (autoUbicar ? futbolPara(Math.max(...equipos.map((e) => e.jugadores.length))) : 5)
   );
-  const [formacion, setFormacion] = useState(() => FORMACIONES_PRESET[futbol][0]);
-  const [customInput, setCustomInput] = useState("");
-  const [usandoCustom, setUsandoCustom] = useState(false);
+  const [formacion, setFormacion] = useState(() => base?.formacion ?? FORMACIONES_PRESET[futbol][0]);
+  // Invitados (gente que no es del grupo): el admin les pone un nombre en un lugar libre.
+  const [invitados, setInvitados] = useState<Record<string, { nombre: string; equipo: Equipo }>>(() => {
+    const inv: Record<string, { nombre: string; equipo: Equipo }> = {};
+    for (const [slot, lugar] of Object.entries(guardada?.lugares ?? {})) {
+      if ("invitado" in lugar) inv[`inv:${slot}`] = { nombre: lugar.invitado, equipo: slot.startsWith("e2-") ? 2 : 1 };
+    }
+    return inv;
+  });
+  const [nuevoInvitado, setNuevoInvitado] = useState<{ slotId: string; nombre: string } | null>(null);
+  const [avisar, setAvisar] = useState(true);
+  const [guardando, setGuardando] = useState(false);
+  const [mensaje, setMensaje] = useState<{ tipo: "ok" | "error"; texto: string } | null>(null);
+  // Una guardada con una formación que no está entre las de siempre arranca en "Otra".
+  const baseCustom = !!base && !FORMACIONES_PRESET[base.futbol]?.includes(base.formacion);
+  const [customInput, setCustomInput] = useState(baseCustom ? base!.formacion : "");
+  const [usandoCustom, setUsandoCustom] = useState(baseCustom);
   const [customError, setCustomError] = useState<string | null>(null);
-  const [posiciones, setPosiciones] = useState<Record<string, { xPct: number; yPct: number }>>({});
+  const [posiciones, setPosiciones] = useState<Record<string, { xPct: number; yPct: number }>>(() =>
+    Object.fromEntries(Object.entries(base?.posiciones ?? {}).map(([s, p]) => [s, { xPct: p.x, yPct: p.y }]))
+  );
   const [seleccion, setSeleccion] = useState<Seleccion | null>(null);
   const [arrastre, setArrastre] = useState<Arrastre | null>(null);
   const [exportando, setExportando] = useState(false);
@@ -92,12 +132,20 @@ export default function ArmadorCancha({
   const slotsBase = useMemo(() => slotsDe(lineas), [lineas, dosEquipos]); // eslint-disable-line react-hooks/exhaustive-deps
   const slots = useMemo(() => slotsBase.map((s) => ({ ...s, ...(posiciones[s.id] ?? {}) })), [slotsBase, posiciones]);
 
-  const jugadorPorId = useMemo(() => new Map(equipos.flatMap((e) => e.jugadores).map((j) => [j.id, j])), [equipos]);
+  // Los jugadores y los invitados (estos, como un perfil sin foto con su nombre).
+  const jugadorPorId = useMemo(() => {
+    const m = new Map<string, Profile>(equipos.flatMap((e) => e.jugadores).map((j) => [j.id, j]));
+    for (const [id, inv] of Object.entries(invitados)) {
+      m.set(id, { id, nombre: inv.nombre, apellido: "", apodo: inv.nombre, foto_url: null, created_at: "" });
+    }
+    return m;
+  }, [equipos, invitados]);
   const equipoDe = useMemo(() => {
     const m = new Map<string, Equipo>();
     equipos.forEach((e, i) => e.jugadores.forEach((j) => m.set(j.id, (i + 1) as Equipo)));
+    for (const [id, inv] of Object.entries(invitados)) m.set(id, inv.equipo);
     return m;
-  }, [equipos]);
+  }, [equipos, invitados]);
 
   const ubicarTodos = (ls: number[], ordenes?: Partial<Record<Equipo, string[]>>) => {
     const asign: Record<string, string> = {};
@@ -107,22 +155,39 @@ export default function ArmadorCancha({
     }
     return asign;
   };
-  const [asignaciones, setAsignaciones] = useState<Record<string, string>>(() =>
-    autoUbicar ? ubicarTodos(parseFormacion(FORMACIONES_PRESET[futbol][0]) ?? [futbol - 1]) : {}
-  );
+  const [asignaciones, setAsignaciones] = useState<Record<string, string>>(() => {
+    if (base) {
+      // La guardada (o la del partido anterior): los que siguen convocados, en una posición de su
+      // equipo, y los invitados (solo los de la guardada, con un id propio).
+      const equipoDeJugador = new Map<string, Equipo>();
+      equipos.forEach((e, i) => e.jugadores.forEach((j) => equipoDeJugador.set(j.id, (i + 1) as Equipo)));
+      const asign: Record<string, string> = {};
+      for (const [slot, lugar] of Object.entries(base.lugares)) {
+        if ("jugador" in lugar) {
+          const e = equipoDeJugador.get(lugar.jugador);
+          if (e && slot.startsWith(`e${e}-`)) asign[slot] = lugar.jugador;
+        }
+        if ("invitado" in lugar && guardada) asign[slot] = `inv:${slot}`;
+      }
+      return asign;
+    }
+    return llenaSola ? ubicarTodos(parseFormacion(FORMACIONES_PRESET[futbol][0]) ?? [futbol - 1]) : {};
+  });
 
   const enCancha = useMemo(() => new Set(Object.values(asignaciones)), [asignaciones]);
+  // Convocados que no están en la formación guardada (se sumaron después): en la vista fija, se nombran.
+  const sinUbicar = equipos.flatMap((e) => e.jugadores).filter((j) => !enCancha.has(j.id));
 
   /**
    * Cambia la formación conservando a los que ya estaban, en el mismo orden
    * (arquero, defensa… ataque): cada uno se desliza a su nuevo lugar. Con
-   * autoUbicar, los lugares nuevos se llenan con los que estaban afuera.
+   * llenaSola, los lugares nuevos se llenan con los que estaban afuera.
    */
   function reubicar(nuevasLineas: number[]) {
     const ordenes: Partial<Record<Equipo, string[]>> = {};
     for (const e of numeros) {
       const actual = ordenEnCancha(asignaciones, slotsBase.filter((s) => s.equipo === e));
-      const afuera = autoUbicar
+      const afuera = llenaSola
         ? equipos[e - 1].jugadores.map((j) => j.id).filter((id) => !actual.includes(id))
         : [];
       ordenes[e] = [...actual, ...afuera];
@@ -208,13 +273,72 @@ export default function ArmadorCancha({
   }
 
   function tocarPosicion(slotId: string) {
-    if (recienArrastro.current) return;
+    if (recienArrastro.current || fija) return;
     if (seleccion) {
       if (seleccion.slotId === slotId) return setSeleccion(null);
       return mover(seleccion.jugadorId, seleccion.slotId, slotId);
     }
     const ocupante = asignaciones[slotId];
     if (ocupante) setSeleccion({ jugadorId: ocupante, slotId });
+    // Un lugar libre: el admin le puede poner un invitado (alguien que no es del grupo).
+    else if (puedeGuardar) setNuevoInvitado({ slotId, nombre: "" });
+  }
+
+  function agregarInvitado() {
+    if (!nuevoInvitado) return;
+    const nombre = nuevoInvitado.nombre.trim().slice(0, MAX_NOMBRE_INVITADO);
+    const slot = slots.find((s) => s.id === nuevoInvitado.slotId);
+    if (!nombre || !slot) return setNuevoInvitado(null);
+    const id = `inv:${nuevoInvitado.slotId}:${Date.now()}`;
+    setInvitados((prev) => ({ ...prev, [id]: { nombre, equipo: slot.equipo } }));
+    setAsignaciones((prev) => ({ ...prev, [slot.id]: id }));
+    setNuevoInvitado(null);
+    tap();
+  }
+
+  /** La formación como se guarda: quién va en cada posición (jugador o invitado) y lo movido a mano. */
+  function comoGuardada(): FormacionGuardada {
+    const lugares: FormacionGuardada["lugares"] = {};
+    for (const [slot, id] of Object.entries(asignaciones)) {
+      lugares[slot] = invitados[id] ? { invitado: invitados[id].nombre } : { jugador: id };
+    }
+    const movidas = Object.fromEntries(Object.entries(posiciones).map(([s, p]) => [s, { x: p.xPct, y: p.yPct }]));
+    return { futbol, formacion: lineas.join("-"), lugares, posiciones: movidas };
+  }
+
+  async function guardar() {
+    if (!partidoId) return;
+    setGuardando(true);
+    setMensaje(null);
+    const r = await guardarFormacion({ partidoId, formacion: comoGuardada(), avisar });
+    setGuardando(false);
+    if ("error" in r && r.error) {
+      setMensaje({ tipo: "error", texto: r.error });
+      return;
+    }
+    exito();
+    setMensaje({ tipo: "ok", texto: avisar ? "Formación guardada. Les avisamos a los convocados." : "Formación guardada." });
+    router.refresh();
+  }
+
+  /** Saca a todos de la cancha (y los invitados) para ubicarlos de cero. */
+  function vaciar() {
+    setAsignaciones({});
+    setInvitados({});
+    setPosiciones({});
+    setSeleccion(null);
+    setUsandoPrevia(false);
+  }
+
+  async function borrarGuardada() {
+    if (!partidoId || !window.confirm("Se borra la formación guardada: los jugadores ya no la van a ver. ¿Seguir?")) return;
+    setGuardando(true);
+    const r = await borrarFormacion(partidoId);
+    setGuardando(false);
+    if ("error" in r && r.error) return setMensaje({ tipo: "error", texto: r.error });
+    vaciar();
+    setMensaje({ tipo: "ok", texto: "Listo: se borró la formación guardada." });
+    router.refresh();
   }
 
   function tocarBanco(jugadorId: string) {
@@ -285,7 +409,50 @@ export default function ArmadorCancha({
 
   return (
     <div onPointerMove={alMover} onPointerUp={alSoltar} onPointerCancel={() => setArrastre(null)} className="flex flex-col gap-4">
+      {/* El admin arranca con las posiciones del partido anterior: los que vuelven, en el mismo lugar. */}
+      {usandoPrevia && previa && (
+        <Card className="flex items-center justify-between gap-3 border-gold-500/20 px-4 py-3">
+          <p className="text-sm text-zinc-300">
+            Repetimos las posiciones del partido del{" "}
+            <span className="font-semibold text-white">{previa.fecha.slice(8, 10)}/{Number(previa.fecha.slice(5, 7))}</span>
+            {sinUbicar.length > 0 ? ". Los que no jugaron ese partido están abajo, por ubicar." : "."}
+          </p>
+          <button
+            type="button"
+            onClick={vaciar}
+            className="shrink-0 rounded-lg border border-border px-3 py-1.5 text-xs font-semibold text-zinc-300 hover:text-white"
+          >
+            Empezar vacía
+          </button>
+        </Card>
+      )}
+      {puedeGuardar && !guardada && !usandoPrevia && enCancha.size === 0 && (
+        <Card className="px-4 py-3 text-sm text-zinc-300">
+          Ubicá a cada uno en su posición: tocá a un jugador de abajo y después el lugar donde juega.
+        </Card>
+      )}
+      {fija && guardada && (
+        <Card className="flex items-center gap-3 border-primary-500/25 px-4 py-3">
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary-500/15 text-sm font-extrabold text-primary-400">
+            {guardada.futbol}
+          </span>
+          <p className="text-sm text-zinc-300">
+            Formación armada por el admin:{" "}
+            <span className="font-semibold text-white">
+              fútbol {guardada.futbol}, {guardada.formacion}
+            </span>
+            .
+            {sinUbicar.length > 0 && (
+              <span className="mt-1 block text-xs text-zinc-500">
+                También {sinUbicar.length === 1 ? "está convocado" : "están convocados"}: {sinUbicar.map((j) => j.apodo).join(", ")}.
+              </span>
+            )}
+          </p>
+        </Card>
+      )}
+      {!fija && (
       <Card className="flex flex-col gap-3 p-4">
+        {puedeGuardar && <p className="-mb-1 text-sm font-semibold text-white">¿De cuánto se juega?</p>}
         <div className="no-scrollbar -mx-1 flex gap-2 overflow-x-auto px-1">
           {FUTBOL_OPCIONES.map((n) => (
             <button key={n} type="button" onClick={() => elegirFutbol(n)} className={chip(futbol === n)}>
@@ -328,6 +495,7 @@ export default function ArmadorCancha({
           </div>
         )}
       </Card>
+      )}
 
       <div>
         {dosEquipos && (
@@ -354,9 +522,12 @@ export default function ArmadorCancha({
                 type="button"
                 data-slot-id={s.id}
                 onClick={() => tocarPosicion(s.id)}
-                aria-label={s.arquero ? "Arquero (vacío)" : "Posición vacía"}
+                disabled={fija}
+                aria-label={
+                  s.arquero ? "Arquero (vacío)" : puedeGuardar ? "Posición libre: tocá para poner un invitado" : "Posición vacía"
+                }
                 className={`absolute flex -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border-2 border-dashed text-[10px] font-bold transition ${
-                  seleccion && (equipoDe.get(seleccion.jugadorId) ?? 1) === s.equipo
+                  nuevoInvitado?.slotId === s.id || (seleccion && (equipoDe.get(seleccion.jugadorId) ?? 1) === s.equipo)
                     ? "animate-pulse border-white bg-white/25 text-white"
                     : "border-white/45 bg-black/15 text-white/70"
                 }`}
@@ -379,10 +550,13 @@ export default function ArmadorCancha({
                   data-slot-id={s.id}
                   onClick={() => tocarPosicion(s.id)}
                   onPointerDown={(e) => {
+                    if (fija) return;
                     (e.target as Element).setPointerCapture(e.pointerId);
                     setArrastre({ tipo: "cancha", slotId: s.id, pointerId: e.pointerId, movio: false });
                   }}
-                  className="absolute flex -translate-x-1/2 -translate-y-1/2 cursor-grab flex-col items-center gap-0.5 active:cursor-grabbing"
+                  className={`absolute flex -translate-x-1/2 -translate-y-1/2 flex-col items-center gap-0.5 ${
+                    fija ? "" : "cursor-grab active:cursor-grabbing"
+                  }`}
                   style={{
                     left: `${s.xPct}%`,
                     top: `${s.yPct}%`,
@@ -395,8 +569,9 @@ export default function ArmadorCancha({
                   {/* El marco del color del equipo (verde abajo, dorado arriba); blanco si está elegido. */}
                   <span
                     className={`rounded-full p-[2.5px] shadow-lg shadow-black/40 transition ${
-                      elegido ? "scale-110 bg-white" : COLOR_EQUIPO[equipo].marco
+                      elegido ? "scale-110 bg-white" : invitados[jugador.id] ? "bg-zinc-300" : COLOR_EQUIPO[equipo].marco
                     }`}
+                    title={invitados[jugador.id] ? "Invitado" : undefined}
                   >
                     <Avatar src={jugador.foto_url} alt={jugador.apodo} size={tamanio} className="ring-0" />
                   </span>
@@ -414,9 +589,13 @@ export default function ArmadorCancha({
         )}
         <div className="mt-2 flex items-center justify-between gap-3 px-1">
           <p className={`text-xs ${seleccion ? "text-primary-400" : "text-zinc-500"}`}>
-            {seleccion
-              ? "Tocá la posición donde lo querés (si está ocupada, cambian de lugar)."
-              : "Arrastrá a cualquiera para moverlo, o tocalo y después tocá dónde va."}
+            {fija
+              ? "Así forman en este partido."
+              : seleccion
+                ? "Tocá la posición donde lo querés (si está ocupada, cambian de lugar)."
+                : puedeGuardar
+                  ? "Arrastrá o tocá para mover. En un lugar libre (+) podés poner un invitado."
+                  : "Arrastrá a cualquiera para moverlo, o tocalo y después tocá dónde va."}
           </p>
           {seleccion?.slotId && (
             <button type="button" onClick={() => sacar(seleccion.slotId!)} className="shrink-0 text-xs font-medium text-zinc-400 hover:text-white">
@@ -426,23 +605,91 @@ export default function ArmadorCancha({
         </div>
       </div>
 
+      {/* El nombre de un invitado para el lugar libre que tocó el admin. */}
+      {nuevoInvitado && (
+        <Card className="entrada flex flex-col gap-2 border-white/20 p-4">
+          <p className="text-sm font-semibold text-white">Invitado en este lugar</p>
+          <p className="-mt-1 text-xs text-zinc-500">Alguien que no es del grupo: solo para que se vea en la cancha.</p>
+          <div className="flex gap-2">
+            <input
+              autoFocus
+              type="text"
+              value={nuevoInvitado.nombre}
+              maxLength={MAX_NOMBRE_INVITADO}
+              onChange={(e) => setNuevoInvitado({ ...nuevoInvitado, nombre: e.target.value })}
+              onKeyDown={(e) => e.key === "Enter" && agregarInvitado()}
+              placeholder="Nombre (por ejemplo, Primo de Juan)"
+              className="min-w-0 flex-1 rounded-xl border border-border bg-white/5 px-3.5 py-2 text-sm text-white outline-none placeholder:text-zinc-500 focus:border-primary-400/60 focus:ring-2 focus:ring-primary-400/20"
+            />
+            <Button type="button" size="sm" onClick={agregarInvitado} disabled={!nuevoInvitado.nombre.trim()}>
+              Poner
+            </Button>
+          </div>
+          <button type="button" onClick={() => setNuevoInvitado(null)} className="self-start text-xs text-zinc-500 hover:text-white">
+            Cancelar
+          </button>
+        </Card>
+      )}
+
+      {/* El admin guarda la formación (opcional): desde ahí todos la ven igual. */}
+      {puedeGuardar && (
+        <Card className="flex flex-col gap-3 p-4">
+          <label className="flex items-center gap-2 text-sm text-zinc-300">
+            <input
+              type="checkbox"
+              checked={avisar}
+              onChange={(e) => setAvisar(e.target.checked)}
+              className="h-4 w-4 accent-primary-500"
+            />
+            Avisar a los convocados
+          </label>
+          <Button type="button" onClick={guardar} disabled={guardando} className="w-full">
+            {guardando && <Pelotita />} {guardando ? "Guardando…" : guardada ? "Guardar cambios" : "Guardar formación"}
+          </Button>
+          {guardada && (
+            <button
+              type="button"
+              onClick={borrarGuardada}
+              disabled={guardando}
+              className="self-center text-xs font-medium text-zinc-500 hover:text-danger-400"
+            >
+              Borrar la formación guardada
+            </button>
+          )}
+          {mensaje && (
+            <p
+              className={`rounded-xl border px-3.5 py-2.5 text-sm ${
+                mensaje.tipo === "ok"
+                  ? "border-primary-500/20 bg-primary-500/10 text-primary-400"
+                  : "border-danger-500/20 bg-danger-500/10 text-danger-400"
+              }`}
+            >
+              {mensaje.texto}
+            </p>
+          )}
+          {!guardada && (
+            <p className="text-center text-[11px] text-zinc-500">
+              Hasta que la guardes, los jugadores ven La cancha armada sola, sin posiciones.
+            </p>
+          )}
+        </Card>
+      )}
+
       {/* Los que no están en la cancha, por equipo. */}
-      {numeros.map((e) => {
+      {(fija ? [] : numeros).map((e) => {
         const afuera = equipos[e - 1].jugadores.filter((j) => !enCancha.has(j.id));
-        if (afuera.length === 0 && (autoUbicar || dosEquipos)) return null;
+        if (afuera.length === 0 && (llenaSola || dosEquipos)) return null;
+        const equipoNombre = dosEquipos ? ` · ${equipos[e - 1].nombre}` : "";
         return (
           <Card key={e} className="p-4">
             <div className="mb-2 flex items-center justify-between gap-2">
               <p className={`text-xs font-semibold tracking-wide uppercase ${dosEquipos ? COLOR_EQUIPO[e].texto : "text-zinc-400"}`}>
-                {autoUbicar ? `Suplentes${dosEquipos ? ` · ${equipos[e - 1].nombre}` : ""}` : "Plantel"}
+                {llenaSola ? `Suplentes${equipoNombre}` : puedeGuardar ? `Por ubicar${equipoNombre}` : "Plantel"}
               </p>
-              {!autoUbicar && enCancha.size > 0 && (
+              {!llenaSola && enCancha.size > 0 && e === numeros[0] && (
                 <button
                   type="button"
-                  onClick={() => {
-                    setAsignaciones({});
-                    setSeleccion(null);
-                  }}
+                  onClick={vaciar}
                   className="flex items-center gap-1 text-xs font-medium text-zinc-500 hover:text-danger-400"
                 >
                   <IconTrash className="h-3.5 w-3.5" /> Vaciar cancha
