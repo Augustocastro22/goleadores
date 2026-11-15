@@ -28,6 +28,7 @@ export default function ConvocadosEditor({
   partidoHora,
   bloqueos,
   respuestas,
+  pendientesSoloLectura = false,
   unSoloEquipo = false,
   ocupados = [],
   exMiembroIds = [],
@@ -65,6 +66,8 @@ export default function ConvocadosEditor({
   bloqueos: Bloqueo[];
   /** Respuesta de cada convocado, si el grupo pide confirmación. */
   respuestas?: Record<string, Respuesta>;
+  /** "Sin responder" sin selector: se define en la tarjeta de los que no respondieron. */
+  pendientesSoloLectura?: boolean;
   /** En un desafío el Equipo 2 es el otro grupo: solo se elige quién juega. */
   unSoloEquipo?: boolean;
   /** Los que ese día ya están convocados en otro grupo. */
@@ -323,6 +326,7 @@ export default function ConvocadosEditor({
                           partidoId={partidoId}
                           jugadorId={jugador.id}
                           respuesta={respuestas[jugador.id]}
+                          pendienteSoloLectura={pendientesSoloLectura}
                         />
                       )}
                     </div>

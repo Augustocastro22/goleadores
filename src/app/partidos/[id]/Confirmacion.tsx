@@ -204,19 +204,25 @@ export function RespuestaSelect({
  * La respuesta de un convocado vista por el admin. Si el convocado ya dijo si
  * juega se muestra para leer: pisarla es la excepción (se lo avisó por otro
  * lado), así que cambiarla pide un toque en "Cambiar". Si no respondió, el
- * selector queda a mano para que la defina.
+ * selector queda a mano para que la defina, salvo que ya se pueda cargar el
+ * resultado: ahí se define en PendientesCard ("¿jugó o no?"), y acá solo se lee.
  */
 export function RespuestaAdmin({
   partidoId,
   jugadorId,
   respuesta,
+  pendienteSoloLectura = false,
 }: {
   partidoId: string;
   jugadorId: string;
   respuesta: Respuesta;
+  pendienteSoloLectura?: boolean;
 }) {
   const [cambiando, setCambiando] = useState(false);
 
+  if (respuesta === "pendiente" && pendienteSoloLectura) {
+    return <RespuestaBadge respuesta={respuesta} />;
+  }
   if (respuesta === "pendiente" || cambiando) {
     return <RespuestaSelect partidoId={partidoId} jugadorId={jugadorId} respuesta={respuesta} />;
   }

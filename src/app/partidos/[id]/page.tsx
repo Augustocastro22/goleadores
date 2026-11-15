@@ -391,6 +391,8 @@ export default async function PartidoDetailPage({
               ? Object.fromEntries(participantes.map((p) => [p.jugador_id, p.respuesta]))
               : undefined
           }
+          // Ya se puede cargar el resultado: a los que no respondieron se los define en la tarjeta de abajo.
+          pendientesSoloLectura={resultadoHabilitado}
           // Contra otro equipo se elige solo quién juega (en un grupo que todavía no eligió cómo
           // juega, como siempre: los dos equipos).
           unSoloEquipo={!!partido.desafio_id || (config.modo_juego !== null && !interno)}
@@ -411,8 +413,9 @@ export default async function PartidoDetailPage({
         />
       )}
 
-      {/* El día del partido (o después) el admin define a los que no respondieron. */}
-      {isAdmin && conConfirmacion && pendientes.length > 0 && partido.fecha <= hoy && (
+      {/* Cuando ya se puede cargar el resultado, el admin define acá a los que no respondieron
+          (hasta entonces lo hace desde la lista de convocados). */}
+      {isAdmin && conConfirmacion && pendientes.length > 0 && resultadoHabilitado && (
         <PendientesCard
           partidoId={id}
           pendientes={pendientes.map((p) => ({
