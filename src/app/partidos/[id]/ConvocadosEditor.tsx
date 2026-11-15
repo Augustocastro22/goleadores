@@ -10,6 +10,8 @@ import Button from "@/components/ui/Button";
 import Avatar from "@/components/ui/Avatar";
 import { actualizarConvocados, corregirJugaron } from "@/lib/actions/partidos";
 import { sortearEquipos } from "@/lib/sorteo";
+import { MIN_PARTIDOS, nivelDe as nivelDeJugador, puntajeEquipos, sortearParejos, type Niveles } from "@/lib/nivel";
+import { guardarNivelManual } from "@/lib/actions/admin";
 import { IconClose } from "@/components/icons";
 import { RespuestaAdmin, ResumenRespuestas } from "./Confirmacion";
 import NombresEquipos from "@/components/NombresEquipos";
@@ -29,6 +31,8 @@ export default function ConvocadosEditor({
   bloqueos,
   respuestas,
   pendientesSoloLectura = false,
+  niveles,
+  grupoId,
   unSoloEquipo = false,
   ocupados = [],
   exMiembroIds = [],
@@ -68,6 +72,14 @@ export default function ConvocadosEditor({
   respuestas?: Record<string, Respuesta>;
   /** "Sin responder" sin selector: se define en la tarjeta de los que no respondieron. */
   pendientesSoloLectura?: boolean;
+  /**
+   * Nivel de 0 a 100 de cada jugador con historial suficiente, y lo que vale
+   * el resto (ver lib/nivel.ts): para "Equipos parejos" y el puntaje de cada
+   * equipo. Sin esto (nadie con historial), solo el sorteo al azar.
+   */
+  niveles?: Niveles;
+  /** Para guardar el nivel a mano de los que no tienen historial. */
+  grupoId?: string;
   /** En un desafío el Equipo 2 es el otro grupo: solo se elige quién juega. */
   unSoloEquipo?: boolean;
   /** Los que ese día ya están convocados en otro grupo. */
@@ -186,13 +198,43 @@ export default function ConvocadosEditor({
     });
   }
 
-  /** Reparte al azar en los dos equipos a los convocados que no dijeron que no juegan. */
-  function sortear() {
+  /** Los que entran al sorteo y al puntaje: no dijeron que no juegan y siguen en el grupo. */
+  const cuenta = (id: string) => respuestas?.[id] !== "no_juega" && !exMiembros.has(id);
+
+  /** Reparte en los dos equipos a los convocados que cuentan: al azar o, con `parejos`, por nivel. */
+  function sortear(parejos = false) {
     setMessage(null);
     setAsignaciones((prev) => {
-      const ids = Object.keys(prev).filter((id) => respuestas?.[id] !== "no_juega" && !exMiembros.has(id));
-      return { ...prev, ...sortearEquipos(ids) };
+      const ids = Object.keys(prev).filter(cuenta);
+      return { ...prev, ...(parejos && conNiveles ? sortearParejos(ids, nivelDe) : sortearEquipos(ids)) };
     });
+  }
+
+  // Con alguien medido o con nivel a mano se puede emparejar; si no, todos valdrían lo mismo.
+  const conNiveles =
+    !!niveles && Object.keys(niveles.medidos).length + Object.keys(niveles.manuales).length > 0;
+  const nivelDe = (id: string) => (niveles ? nivelDeJugador(niveles, id) : 0);
+  /** Promedio de cada equipo y cuántos de los que cuentan valen el promedio (sin historial ni nivel a mano). */
+  function puntaje(asig: Record<string, Equipo>) {
+    const contados = Object.fromEntries(Object.entries(asig).filter(([id]) => cuenta(id)));
+    return {
+      equipos: puntajeEquipos(contados, nivelDe),
+      sinNivel: Object.keys(contados).filter(
+        (id) => niveles && !(id in niveles.medidos) && !(id in niveles.manuales)
+      ).length,
+      hayDos: Object.values(contados).includes(1) && Object.values(contados).includes(2),
+    };
+  }
+
+  const [guardandoNivel, setGuardandoNivel] = useState<string | null>(null);
+  async function cambiarNivel(jugadorId: string, nivel: number | null) {
+    if (!grupoId) return;
+    setMessage(null);
+    setGuardandoNivel(jugadorId);
+    const result = await guardarNivelManual({ grupoId, jugadorId, nivel, partidoId });
+    setGuardandoNivel(null);
+    if (result.error) setMessage({ type: "error", text: result.error });
+    else router.refresh();
   }
 
   async function handleGuardar() {
@@ -294,6 +336,14 @@ export default function ConvocadosEditor({
             </button>
           </Card>
         )}
+        {conNiveles && equiposActuales.length > 1 && (
+          <div className="mb-2">
+            <PuntajeLinea
+              {...puntaje(asignacionesIniciales)}
+              nombres={[equiposActuales[0].titulo, equiposActuales[1].titulo]}
+            />
+          </div>
+        )}
         <div className="flex flex-col gap-3">
           {equiposActuales.map((equipo) => (
             <div key={equipo.titulo}>
@@ -392,14 +442,35 @@ export default function ConvocadosEditor({
           {!jugaron && sinArmar && " Los equipos todavía no están armados: sortealos o elegí el equipo de cada uno."}
         </p>
         {!soloUno && !jugaron && (
-          <button
-            type="button"
-            onClick={sortear}
-            disabled={cantidad < 2}
-            className="mb-3 w-full rounded-xl border border-gold-500/30 bg-gold-500/10 px-4 py-2 text-sm font-semibold text-gold-400 transition hover:bg-gold-500/20 disabled:opacity-40"
-          >
-            Sortear equipos{respuestas ? " (entre los que no dijeron que no)" : ""}
-          </button>
+          <div className="mb-3 flex flex-col gap-2">
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => sortear()}
+                disabled={cantidad < 2}
+                className="flex-1 rounded-xl border border-gold-500/30 bg-gold-500/10 px-4 py-2 text-sm font-semibold text-gold-400 transition hover:bg-gold-500/20 disabled:opacity-40"
+              >
+                Sortear equipos
+              </button>
+              {conNiveles && (
+                <button
+                  type="button"
+                  onClick={() => sortear(true)}
+                  disabled={cantidad < 2}
+                  className="flex-1 rounded-xl border border-primary-500/30 bg-primary-500/10 px-4 py-2 text-sm font-semibold text-primary-400 transition hover:bg-primary-500/20 disabled:opacity-40"
+                >
+                  Equipos parejos
+                </button>
+              )}
+            </div>
+            {conNiveles && (
+              <PuntajeLinea
+                {...puntaje(asignaciones)}
+                nombres={[etiquetas?.[0] ?? "Eq. 1", etiquetas?.[1] ?? "Eq. 2"]}
+                explicar
+              />
+            )}
+          </div>
         )}
         <div className="flex flex-col gap-2">
           {jugadores.map((jugador) => {
@@ -424,6 +495,15 @@ export default function ConvocadosEditor({
                     </span>
                     <AvisosConvocado bloqueo={bloqueo} ocupado={ocupado} />
                     {exMiembro && <p className="truncate text-xs text-danger-400">Ya no está en el grupo</p>}
+                    {niveles && !soloUno && !jugaron && !exMiembro && (
+                      <NivelJugador
+                        apodo={jugador.apodo}
+                        medido={niveles.medidos[jugador.id]}
+                        manual={niveles.manuales[jugador.id]}
+                        guardando={guardandoNivel === jugador.id}
+                        onCambiar={grupoId ? (n) => cambiarNivel(jugador.id, n) : undefined}
+                      />
+                    )}
                   </div>
                 </div>
                 <div className="flex shrink-0 gap-1.5">
@@ -497,6 +577,92 @@ export default function ConvocadosEditor({
         </div>
       </Card>
     </div>
+  );
+}
+
+const decimal = (n: number) => n.toFixed(1).replace(".", ",");
+
+/** "Nivel: Equipo A 6,4 · Equipo B 6,3", el promedio de cada uno (ver lib/nivel.ts). */
+function PuntajeLinea({
+  equipos,
+  sinNivel,
+  hayDos,
+  nombres,
+  explicar = false,
+}: {
+  equipos: [number, number];
+  sinNivel: number;
+  hayDos: boolean;
+  nombres: [string, string];
+  explicar?: boolean;
+}) {
+  const explicacion = `Cada uno tiene un nivel del 1 al 10 según su % de puntos y sus goles por partido; con menos de ${MIN_PARTIDOS} partidos, el que le pongas a mano.`;
+  if (!hayDos) {
+    return explicar ? <p className="text-xs text-zinc-500">{explicacion}</p> : null;
+  }
+  return (
+    <div className="text-xs text-zinc-500">
+      <p>
+        Nivel: <span className="font-semibold text-primary-400">{nombres[0]} {decimal(equipos[0])}</span> ·{" "}
+        <span className="font-semibold text-gold-400">{nombres[1]} {decimal(equipos[1])}</span>
+      </p>
+      {(explicar || sinNivel > 0) && (
+        <p>
+          {explicar && `${explicacion} `}
+          {sinNivel > 0 &&
+            `${sinNivel === 1 ? "1 no tiene" : `${sinNivel} no tienen`} nivel todavía: ${
+              sinNivel === 1 ? "cuenta" : "cuentan"
+            } como el promedio.`}
+        </p>
+      )}
+    </div>
+  );
+}
+
+/**
+ * El nivel de un jugador al editar. Medido con su historial: solo se lee. Sin
+ * historial suficiente: el admin elige uno del 1 al 10 (se guarda para los
+ * próximos partidos).
+ */
+function NivelJugador({
+  apodo,
+  medido,
+  manual,
+  guardando,
+  onCambiar,
+}: {
+  apodo: string;
+  medido?: number;
+  manual?: number;
+  guardando: boolean;
+  onCambiar?: (nivel: number | null) => void;
+}) {
+  if (medido !== undefined) {
+    return <p className="text-xs text-zinc-500">Nivel {decimal(medido)}</p>;
+  }
+  return (
+    <label className="flex items-center gap-1.5 text-xs whitespace-nowrap text-zinc-500">
+      <span>Nivel</span>
+      <select
+        value={manual ?? ""}
+        disabled={guardando || !onCambiar}
+        aria-label={`Nivel de ${apodo}`}
+        onChange={(e) => onCambiar?.(e.target.value ? Number(e.target.value) : null)}
+        className={`field-sizing-content cursor-pointer rounded-md border bg-transparent px-1.5 py-0.5 text-xs font-semibold outline-none disabled:opacity-50 ${
+          manual ? "border-primary-500/30 text-primary-400" : "border-gold-500/30 text-gold-400"
+        }`}
+      >
+        <option value="" className="bg-surface text-white">
+          ?
+        </option>
+        {Array.from({ length: 10 }, (_, i) => i + 1).map((n) => (
+          <option key={n} value={n} className="bg-surface text-white">
+            {n}
+          </option>
+        ))}
+      </select>
+      {guardando && <span>Guardando…</span>}
+    </label>
   );
 }
 

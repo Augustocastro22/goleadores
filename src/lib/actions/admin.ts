@@ -356,3 +356,37 @@ export async function quitarLogoGrupo(grupoId: string) {
   revalidatePath("/", "layout");
   return { success: true };
 }
+
+/**
+ * El nivel a mano (1 a 10) de un jugador para "Equipos parejos", mientras no
+ * tiene historial suficiente (ver lib/nivel.ts). null lo borra.
+ */
+export async function guardarNivelManual({
+  grupoId,
+  jugadorId,
+  nivel,
+  partidoId,
+}: {
+  grupoId: string;
+  jugadorId: string;
+  nivel: number | null;
+  /** Para refrescar la página del partido desde donde se cambió. */
+  partidoId?: string;
+}) {
+  const { supabase, grupo } = await requireAdmin(grupoId);
+  if (!grupo) return { error: "Solo el admin puede ponerle un nivel a un jugador." };
+  if (nivel !== null && (!Number.isInteger(nivel) || nivel < 1 || nivel > 10)) {
+    return { error: "El nivel va del 1 al 10." };
+  }
+
+  const { error } =
+    nivel === null
+      ? await supabase.from("niveles_manuales").delete().eq("grupo_id", grupo.id).eq("jugador_id", jugadorId)
+      : await supabase
+          .from("niveles_manuales")
+          .upsert({ grupo_id: grupo.id, jugador_id: jugadorId, nivel, updated_at: new Date().toISOString() });
+  if (error) return { error: error.message };
+
+  if (partidoId) revalidatePath(`/partidos/${partidoId}`);
+  return { success: true };
+}

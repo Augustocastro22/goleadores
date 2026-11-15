@@ -17,6 +17,7 @@ import {
   votacionVencida,
 } from "@/lib/votacion";
 import { cerrarDesempatesVencidos, cerrarVotacionSiCorresponde } from "@/lib/votaciones";
+import { getNiveles } from "@/lib/nivel-db";
 import { formatearMomento, partidoYaPaso, puedeCargarResultado, resultadoHabilitadoDesde } from "@/lib/confirmacion";
 import type { Bloqueo, DesempatePartido, EstadoVotacion, Profile, RankingRow, Respuesta } from "@/lib/types";
 import Card from "@/components/ui/Card";
@@ -141,8 +142,9 @@ export default async function PartidoDetailPage({
 
   let bloqueos: Bloqueo[] = [];
   let ocupados: Ocupado[] = [];
+  let niveles: Awaited<ReturnType<typeof getNiveles>> | undefined;
   if (isAdmin && !partido.jugado) {
-    const [{ data: bloqueosData }, { data: ocupadosData }] = await Promise.all([
+    const [{ data: bloqueosData }, { data: ocupadosData }, nivelesData] = await Promise.all([
       supabase
         .from("bloqueos_disponibilidad")
         .select("*")
@@ -155,9 +157,16 @@ export default async function PartidoDetailPage({
         .returns<Bloqueo[]>(),
       // Los que ese día ya están convocados en un partido de otro grupo.
       supabase.rpc("get_ocupados_otro_grupo", { p_grupo_id: partido.grupo_id, p_fecha: partido.fecha }),
+      // Para "Equipos parejos": el nivel de cada uno según su historial (lib/nivel.ts).
+      getNiveles(
+        supabase,
+        partido.grupo_id,
+        todosLosJugadores.map((j) => j.id)
+      ),
     ]);
     bloqueos = bloqueosData ?? [];
     ocupados = (ocupadosData ?? []) as Ocupado[];
+    niveles = nivelesData;
   }
 
   // Desafío: el ida y vuelta del resultado entre los dos grupos.
@@ -393,6 +402,8 @@ export default async function PartidoDetailPage({
           }
           // Ya se puede cargar el resultado: a los que no respondieron se los define en la tarjeta de abajo.
           pendientesSoloLectura={resultadoHabilitado}
+          niveles={niveles}
+          grupoId={partido.grupo_id}
           // Contra otro equipo se elige solo quién juega (en un grupo que todavía no eligió cómo
           // juega, como siempre: los dos equipos).
           unSoloEquipo={!!partido.desafio_id || (config.modo_juego !== null && !interno)}
