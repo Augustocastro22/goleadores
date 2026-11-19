@@ -45,8 +45,9 @@ export default async function PartidosPage() {
     // Si todavía no existe la columna (0037), la consulta falla y no se pregunta nada.
     supabase.from("profiles").select("disponibilidad_modo").eq("id", user.id).maybeSingle(),
     // Para el cartel de sugerencias, que manda el mensaje sin pedir nombre ni email.
-    supabase.from("profiles").select("nombre, apellido").eq("id", user.id).maybeSingle(),
+    supabase.from("profiles").select("nombre, apellido, created_at").eq("id", user.id).maybeSingle(),
   ]);
+  const pedirSugerencia = miNombre !== null && cuentaConAntiguedad(miNombre.created_at);
   // Quien ya había cargado antes de que hubiera modos y todavía no respondió.
   const preguntarDisponibilidad = (misBloqueos ?? 0) > 0 && miPerfil !== null && miPerfil.disponibilidad_modo === null;
   // La pregunta única "¿Cómo juegan?" a los admins de un grupo que todavía no eligió.
@@ -159,11 +160,13 @@ export default async function PartidosPage() {
       {misBloqueos === 0 && <DisponibilidadBanner />}
       {preguntarDisponibilidad && <DisponibilidadModoBanner />}
       {preguntarModo && <PreguntaModoJuego grupoId={grupo.id} sugerido={sugerido} />}
-      <SugerenciasCartel
-        userId={user.id}
-        nombre={miNombre ? `${miNombre.nombre} ${miNombre.apellido}`.trim() : ""}
-        email={user.email ?? ""}
-      />
+      {pedirSugerencia && (
+        <SugerenciasCartel
+          userId={user.id}
+          nombre={`${miNombre.nombre} ${miNombre.apellido}`.trim()}
+          email={user.email ?? ""}
+        />
+      )}
 
       <div className="mb-6 flex items-center justify-between">
         <h1 className="text-2xl font-extrabold tracking-tight text-white">Partidos</h1>
@@ -333,6 +336,13 @@ export default async function PartidosPage() {
       )}
     </div>
   );
+}
+
+/** Días de cuenta antes de pedirle sugerencias: recién llegado, todavía no conoce la app. */
+const DIAS_ANTES_DE_PEDIR_SUGERENCIA = 7;
+
+function cuentaConAntiguedad(creadaEl: string) {
+  return Date.now() - new Date(creadaEl).getTime() >= DIAS_ANTES_DE_PEDIR_SUGERENCIA * 24 * 60 * 60 * 1000;
 }
 
 function ResumenStat({

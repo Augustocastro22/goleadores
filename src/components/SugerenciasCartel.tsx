@@ -72,37 +72,39 @@ export default function SugerenciasCartel({
     <div
       role="dialog"
       aria-label="Sugerencias"
-      // Arriba de la barra de abajo en el celular; en la compu, pegado al borde.
-      className="fixed inset-x-4 bottom-[calc(max(env(safe-area-inset-bottom),14px)_+_4.75rem)] z-30 mx-auto max-w-md md:bottom-6"
+      // En la esquina de abajo a la derecha: arriba de la barra en el celular; en la compu, pegado al borde.
+      className={`fixed right-4 bottom-[calc(max(env(safe-area-inset-bottom),14px)_+_4.75rem)] z-30 md:right-6 md:bottom-6 ${
+        abierto ? "w-[min(20rem,calc(100vw-2rem))]" : "w-60"
+      }`}
     >
-      <div className="entrada rounded-2xl border border-primary-500/40 bg-surface/95 p-4 shadow-2xl shadow-black/60 backdrop-blur-lg">
-        <div className="flex items-start gap-3">
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary-500/15 text-primary-400">
-            <IconFeedback className="h-6 w-6" />
+      <div className="entrada rounded-2xl border border-primary-500/50 bg-surface/95 p-3 shadow-xl shadow-primary-500/15 ring-1 ring-black/40 backdrop-blur-lg">
+        <div className="flex items-start gap-2.5">
+          <span className="relative flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary-500/20 text-primary-400">
+            {/* Un pulso suave para que se note sin ocupar lugar. */}
+            {!estado?.success && <span className="absolute inset-0 animate-ping rounded-full bg-primary-500/20" />}
+            <IconFeedback className="relative h-[18px] w-[18px]" />
           </span>
           <div className="min-w-0 flex-1">
-            <p className="text-base font-bold text-white">
-              {estado?.success ? "¡Gracias por la idea!" : "¿Qué le mejorarías a Goleadores?"}
+            <p className="text-sm leading-tight font-bold text-white">
+              {estado?.success ? "¡Gracias por la idea!" : "¿Qué le mejorarías?"}
             </p>
-            <p className="mt-0.5 text-sm text-zinc-400">
-              {estado?.success
-                ? "La leemos y te escribimos si hace falta."
-                : "La app la armamos con lo que nos cuentan. Mandanos una idea o algo que no te ande."}
+            <p className="mt-0.5 text-xs leading-snug text-zinc-400">
+              {estado?.success ? "La leemos y te escribimos si hace falta." : "Contanos una idea o algo que no te ande."}
             </p>
           </div>
           <button
             type="button"
             onClick={cerrar}
             aria-label="Cerrar"
-            className="-mt-1 -mr-1 shrink-0 rounded-lg p-1.5 text-zinc-500 transition hover:bg-white/5 hover:text-white"
+            className="-mt-1 -mr-1 shrink-0 rounded-lg p-1 text-zinc-500 transition hover:bg-white/5 hover:text-white"
           >
-            <IconClose className="h-5 w-5" />
+            <IconClose className="h-4 w-4" />
           </button>
         </div>
 
         {estado?.success ? null : abierto ? (
           <form
-            className="mt-3 flex flex-col gap-2"
+            className="mt-2.5 flex flex-col gap-2"
             onSubmit={(e) => {
               e.preventDefault();
               const formData = new FormData(e.currentTarget);
@@ -119,7 +121,8 @@ export default function SugerenciasCartel({
               rows={3}
               autoFocus
               placeholder="Contanos qué te gustaría que hiciera la app."
-              className="w-full rounded-xl border border-border bg-white/5 px-3.5 py-2.5 text-sm text-white outline-none transition placeholder:text-zinc-500 focus:border-primary-400/60 focus:ring-2 focus:ring-primary-400/20"
+              // Sin text-sm: con menos de 16px el iPhone hace zoom al escribir.
+              className="w-full rounded-xl border border-border bg-white/5 px-3 py-2 text-white outline-none transition placeholder:text-zinc-500 focus:border-primary-400/60 focus:ring-2 focus:ring-primary-400/20"
             />
             {/* Campo trampa para bots, como en /contacto. */}
             <input type="text" name="sitio_web" tabIndex={-1} autoComplete="off" className="hidden" aria-hidden="true" />
@@ -134,20 +137,17 @@ export default function SugerenciasCartel({
             </div>
           </form>
         ) : (
-          <div className="mt-3 flex gap-2">
+          <div className="mt-2.5">
             {nombre && email ? (
-              <Button type="button" onClick={() => setAbierto(true)} className="flex-1">
+              <Button type="button" size="sm" onClick={() => setAbierto(true)} className="w-full">
                 Mandar una idea
               </Button>
             ) : (
               // Sin nombre o email no se puede mandar desde acá: el formulario completo los pide.
-              <Link href="/contacto?motivo=idea" className={buttonClass("primary", "md", "flex-1")}>
+              <Link href="/contacto?motivo=idea" className={buttonClass("primary", "sm", "w-full")}>
                 Mandar una idea
               </Link>
             )}
-            <Button type="button" variant="ghost" onClick={cerrar}>
-              Ahora no
-            </Button>
           </div>
         )}
       </div>
