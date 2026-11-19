@@ -293,7 +293,9 @@ export async function getMetricas(admin: SupabaseClient) {
     gruposActivos,
     ultimosMensajes,
     totales: {
-      usuarios: perfiles.data.filter((p) => !p.eliminado_en).length,
+      // Como en admin.usuarios: solo perfiles con usuario de auth. Un perfil
+      // queda huérfano si la cuenta se borra desde el panel de Supabase.
+      usuarios: perfiles.data.filter((p) => !p.eliminado_en && (usuariosAuth.error || emailPorId.has(p.id))).length,
       grupos: grupos.data.length,
       partidosJugados: partidos.filter((p) => p.jugado).length,
     },
