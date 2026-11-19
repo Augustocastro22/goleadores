@@ -1,10 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { startTransition, useActionState, useState } from "react";
+import { startTransition, useActionState, useEffect, useState } from "react";
 import { enviarMensajeContacto } from "@/lib/actions/contacto";
 import { Input, Label } from "@/components/ui/Input";
 import Button from "@/components/ui/Button";
+import { marcarSugerenciasCartelVisto } from "@/components/SugerenciasCartel";
 
 type Resultado = { error?: string; success?: boolean } | null;
 
@@ -34,7 +35,10 @@ export default function ContactoForm({
   emailInicial,
   motivoInicial,
   modo,
+  userId,
 }: {
+  /** Con sesión: al mandar una sugerencia, deja de salir el cartel de Partidos. */
+  userId?: string;
   nombreInicial: string;
   emailInicial: string;
   motivoInicial: string;
@@ -46,6 +50,11 @@ export default function ContactoForm({
   );
   const motivos = MOTIVOS[modo];
   const [motivo, setMotivo] = useState(motivos.some((m) => m.value === motivoInicial) ? motivoInicial : "");
+
+  // Quien ya mandó una sugerencia no necesita la invitación de Partidos.
+  useEffect(() => {
+    if (estado?.success && userId && modo === "sugerencias") marcarSugerenciasCartelVisto(userId);
+  }, [estado, userId, modo]);
 
   if (estado?.success) {
     return (

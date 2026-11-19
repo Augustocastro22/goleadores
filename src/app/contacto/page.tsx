@@ -50,6 +50,7 @@ export default async function ContactoPage({
           emailInicial={user?.email ?? ""}
           motivoInicial={motivo ?? ""}
           modo={modo}
+          userId={user?.id}
         />
       </Card>
     </div>

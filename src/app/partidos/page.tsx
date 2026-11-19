@@ -8,6 +8,7 @@ import Badge from "@/components/ui/Badge";
 import { buttonClass } from "@/components/ui/Button";
 import { IconChevronRight, IconPlus } from "@/components/icons";
 import PushBanner from "@/components/PushBanner";
+import SugerenciasCartel from "@/components/SugerenciasCartel";
 import DisponibilidadBanner from "@/components/DisponibilidadBanner";
 import DisponibilidadModoBanner from "@/components/DisponibilidadModoBanner";
 import { hoyArgentina } from "@/lib/confirmacion";
@@ -21,8 +22,14 @@ import HeroProximoPartido, { type ConvocadoHero } from "@/components/partido/Her
 export default async function PartidosPage() {
   const { supabase, grupo, user } = await requireGrupo();
 
-  const [{ data: partidos }, { data: desafiosRaw }, config, { count: misBloqueos }, { data: miPerfil }] =
-    await Promise.all([
+  const [
+    { data: partidos },
+    { data: desafiosRaw },
+    config,
+    { count: misBloqueos },
+    { data: miPerfil },
+    { data: miNombre },
+  ] = await Promise.all([
     supabase
       .from("partidos")
       .select("*")
@@ -37,6 +44,8 @@ export default async function PartidosPage() {
       .eq("jugador_id", user.id),
     // Si todavía no existe la columna (0037), la consulta falla y no se pregunta nada.
     supabase.from("profiles").select("disponibilidad_modo").eq("id", user.id).maybeSingle(),
+    // Para el cartel de sugerencias, que manda el mensaje sin pedir nombre ni email.
+    supabase.from("profiles").select("nombre, apellido").eq("id", user.id).maybeSingle(),
   ]);
   // Quien ya había cargado antes de que hubiera modos y todavía no respondió.
   const preguntarDisponibilidad = (misBloqueos ?? 0) > 0 && miPerfil !== null && miPerfil.disponibilidad_modo === null;
@@ -150,6 +159,11 @@ export default async function PartidosPage() {
       {misBloqueos === 0 && <DisponibilidadBanner />}
       {preguntarDisponibilidad && <DisponibilidadModoBanner />}
       {preguntarModo && <PreguntaModoJuego grupoId={grupo.id} sugerido={sugerido} />}
+      <SugerenciasCartel
+        userId={user.id}
+        nombre={miNombre ? `${miNombre.nombre} ${miNombre.apellido}`.trim() : ""}
+        email={user.email ?? ""}
+      />
 
       <div className="mb-6 flex items-center justify-between">
         <h1 className="text-2xl font-extrabold tracking-tight text-white">Partidos</h1>
