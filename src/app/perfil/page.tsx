@@ -8,6 +8,7 @@ import PushSubscribe from "@/components/PushSubscribe";
 import { IconChevronRight, IconFeedback } from "@/components/icons";
 import Link from "next/link";
 import EliminarCuenta from "./EliminarCuenta";
+import { puedeVerMetricas } from "@/lib/metricas";
 
 export default async function PerfilPage() {
   const { supabase, user, grupo, grupos } = await getContexto();
@@ -61,6 +62,18 @@ export default async function PerfilPage() {
           </span>
           <IconChevronRight className="h-4 w-4 shrink-0 text-zinc-500" />
         </Link>
+        {puedeVerMetricas(user.email) && (
+          <Link
+            href="/metricas"
+            className="flex items-center justify-between gap-3 rounded-2xl border border-border bg-surface/80 px-5 py-4 transition hover:border-border-strong hover:bg-surface-2/80"
+          >
+            <span>
+              <span className="block text-sm font-semibold text-white">Métricas</span>
+              <span className="text-xs text-zinc-500">Uso de la app (solo lo ves vos)</span>
+            </span>
+            <IconChevronRight className="h-4 w-4 shrink-0 text-zinc-500" />
+          </Link>
+        )}
         <a
           href={INSTAGRAM_URL}
           target="_blank"

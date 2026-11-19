@@ -88,6 +88,9 @@ export async function eliminarCuenta(formData: FormData) {
   ]);
   const errorBorrado = borrados.find((r) => r.error)?.error;
   if (errorBorrado) return { error: errorBorrado.message };
+  // Los días que entró (para /metricas). Va aparte y sin cortar el borrado si
+  // falla: la tabla es de la migración 0043 y el resto no depende de ella.
+  await admin.from("visitas_diarias").delete().eq("jugador_id", user.id);
 
   await admin.storage.from("avatars").remove([`${user.id}/avatar.jpg`]);
 

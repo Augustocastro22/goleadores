@@ -7,5 +7,5 @@
 export const LEGAL = {
   responsable: "El equipo de Goleadores",
   /** Fecha de la última actualización de la política (AAAA-MM-DD). */
-  actualizada: "2026-10-02",
+  actualizada: "2026-11-19",
 };

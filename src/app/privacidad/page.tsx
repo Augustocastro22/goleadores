@@ -68,8 +68,9 @@ export default function PrivacidadPage() {
             </li>
             <li>
               <strong className="text-white">Datos técnicos:</strong> cookies necesarias para
-              mantener tu sesión abierta y recordar qué grupo estás mirando. No usamos cookies de
-              publicidad ni de seguimiento.
+              mantener tu sesión abierta y recordar qué grupo estás mirando, y los días en que
+              entrás a la app, para saber cuánta gente la usa. No usamos cookies de publicidad ni
+              de seguimiento.
             </li>
           </ul>
         </section>

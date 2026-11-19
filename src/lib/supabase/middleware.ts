@@ -2,6 +2,7 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { isRecoverySession } from "@/lib/recovery";
 import { GRUPO_COOKIE, GRUPO_COOKIE_OPTIONS } from "@/lib/grupo-cookie";
+import { diaArgentina, VISITA_COOKIE, VISITA_COOKIE_OPTIONS } from "@/lib/visitas";
 
 // No requieren sesión para poder verse.
 const NO_AUTH_REQUIRED_PATHS = [
@@ -87,6 +88,17 @@ export async function updateSession(request: NextRequest) {
       const url = request.nextUrl.clone();
       url.pathname = "/actualizar-password";
       return NextResponse.redirect(url);
+    }
+  }
+
+  // Anota que entró hoy (para /metricas): una vez por día y por navegador,
+  // el resto del día lo evita la cookie. Si falla (o la migración 0043 no
+  // está), no se guarda la cookie y se reintenta en la próxima pantalla.
+  if (user) {
+    const hoy = diaArgentina();
+    if (request.cookies.get(VISITA_COOKIE)?.value !== hoy) {
+      const { error } = await supabase.rpc("registrar_visita");
+      if (!error) supabaseResponse.cookies.set(VISITA_COOKIE, hoy, VISITA_COOKIE_OPTIONS);
     }
   }
 
